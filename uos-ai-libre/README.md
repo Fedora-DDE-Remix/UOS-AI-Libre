@@ -62,6 +62,18 @@ Or use the convenience script:
 ./build.sh
 ```
 
+For day-to-day development use the incremental debug build:
+
+```bash
+./build-debug.sh
+./build-debug/uos-ai-libre
+```
+
+It builds the Rust bridge with Cargo's `dev` profile and the Qt frontend into
+`build-debug/` with `CMAKE_BUILD_TYPE=Debug`. Both Cargo and Ninja caches are
+reused, so repeated runs only compile changed Rust crates, C++ sources or QML
+files. `build-debug/compile_commands.json` is generated for clangd/IDE use.
+
 Requirements: Qt 6.8 (Quick, Controls 2, Svg), CMake 3.21+, Ninja, a C++17
 compiler, Rust stable, and `cxxbridge-cmd` 1.0.205 for the header generator.
 

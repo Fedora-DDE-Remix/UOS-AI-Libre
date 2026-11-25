@@ -3,6 +3,7 @@ vendor/aish/target/
 aish-cxxbridge/target/
 aish-cxxbridge/generated/
 build/
+build-debug/
 *.o
 *.a
 *.so
