@@ -471,6 +471,7 @@ Rectangle {
     }
 
     function openPlusMenu() {
+        attachMenu.close()
         plusMenu.x = Math.max(8, Math.min(Overlay.overlay.width - plusMenu.width - 8,
                                          plusButtonPoint()))
         plusMenu.y = Math.max(8, plusButtonY() - 126)
@@ -514,7 +515,9 @@ Rectangle {
         width: 168
         padding: 0
         modal: false
-        closePolicy: Popup.CloseOnEscape
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        onClosed: attachMenu.close()
         background: Rectangle {
             radius: Theme.radiusMedium
             color: Theme.card
@@ -532,6 +535,7 @@ Rectangle {
                 showChevron: true
                 highlighted: attachMenu.opened
                 onClicked: {
+                    plusMenu.closePolicy = Popup.CloseOnEscape
                     attachMenu.x = plusMenu.x + plusMenu.width - 2
                     attachMenu.y = plusMenu.y + 8
                     attachMenu.open()
@@ -564,7 +568,13 @@ Rectangle {
         width: 150
         padding: 0
         modal: false
-        closePolicy: Popup.CloseOnEscape
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        onClosed: {
+            plusMenu.closePolicy = Popup.CloseOnEscape | Popup.CloseOnPressOutside
+            if (plusMenu.opened)
+                plusMenu.close()
+        }
         background: Rectangle {
             radius: Theme.radiusMedium
             color: Theme.card
@@ -600,6 +610,16 @@ Rectangle {
                                             ? app.lastError
                                             : "截图失败")
                 }
+            }
+        }
+    }
+
+    Connections {
+        target: Window.window
+        function onActiveChanged() {
+            if (Window.window && !Window.window.active) {
+                plusMenu.close()
+                attachMenu.close()
             }
         }
     }

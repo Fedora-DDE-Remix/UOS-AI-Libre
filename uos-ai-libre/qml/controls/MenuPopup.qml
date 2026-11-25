@@ -80,4 +80,12 @@ Popup {
     }
 
     onClosed: highlightedIndex = -1
+
+    Connections {
+        target: Window.window
+        function onActiveChanged() {
+            if (Window.window && !Window.window.active)
+                root.close()
+        }
+    }
 }
