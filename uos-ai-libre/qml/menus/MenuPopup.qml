@@ -6,6 +6,9 @@ Popup {
     id: root
     property var items: []
     property int menuWidth: 190
+    property bool showIcons: true
+    property bool checkLeft: false
+    property int highlightedIndex: -1
     signal itemClicked(int index)
 
     width: menuWidth
@@ -13,11 +16,26 @@ Popup {
     modal: false
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    background: Rectangle {
-        radius: Theme.radiusMedium
-        color: Theme.card
-        border.width: 1
-        border.color: Theme.border
+    background: Item {
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -9
+            radius: Theme.radiusLarge + 9
+            color: Theme.isDark ? "#40000000" : "#0D000000"
+        }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -4
+            radius: Theme.radiusLarge + 4
+            color: Theme.isDark ? "#4D000000" : "#16000000"
+        }
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusLarge
+            color: Theme.menuBackground
+            border.width: 1
+            border.color: Theme.menuBorder
+        }
     }
 
     contentItem: Column {
@@ -36,24 +54,29 @@ Popup {
                 Rectangle {
                     visible: modelData && modelData.separator === true
                     anchors.centerIn: parent
-                    width: parent.width - 16
+                    width: parent.width - 24
                     height: 1
-                    color: Theme.border
+                    color: Theme.menuBorder
                 }
 
                 MenuRow {
                     visible: !(modelData && modelData.separator === true)
                     width: parent.width
-                    icon: modelData && modelData.icon ? modelData.icon : ""
+                    icon: root.showIcons && modelData && modelData.icon ? modelData.icon : ""
                     label: modelData && modelData.label ? modelData.label : ""
                     shortcut: modelData && modelData.shortcut ? modelData.shortcut : ""
                     checked: modelData && modelData.checked === true
                     enabled: !(modelData && modelData.enabled === false)
                     danger: modelData && modelData.danger === true
                     showChevron: modelData && modelData.submenu === true
+                    checkLeft: root.checkLeft
+                    highlighted: root.highlightedIndex === index
+                    suppressHover: root.highlightedIndex >= 0 && root.highlightedIndex !== index
                     onClicked: root.itemClicked(index)
                 }
             }
         }
     }
+
+    onClosed: highlightedIndex = -1
 }

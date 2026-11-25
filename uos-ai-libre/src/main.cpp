@@ -141,6 +141,16 @@ int main(int argc, char *argv[]) {
                 QTimer::singleShot(200, root, [root]() {
                     QMetaObject::invokeMethod(root, "openThemeMenu");
                 });
+            } else if (page == QStringLiteral("context")) {
+                root->setProperty("activePage", QStringLiteral("chat"));
+                QTimer::singleShot(400, root, [root]() {
+                    QMetaObject::invokeMethod(root, "openHistoryContext");
+                });
+            } else if (page == QStringLiteral("rename")) {
+                root->setProperty("activePage", QStringLiteral("chat"));
+                QTimer::singleShot(400, root, [root]() {
+                    QMetaObject::invokeMethod(root, "startHistoryRename");
+                });
             } else if (page == QStringLiteral("composer")) {
                 root->setProperty("activePage", QStringLiteral("chat"));
                 QTimer::singleShot(250, root, [root]() {

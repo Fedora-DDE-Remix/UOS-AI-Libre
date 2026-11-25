@@ -30,6 +30,11 @@ QtObject {
     readonly property color border: isDark ? "#2C2C31" : "#E8E8EA"
     readonly property color borderStrong: isDark ? "#3A3A40" : "#D9D9DD"
 
+    // Menus are slightly darker than cards, like the UOS AI popups.
+    readonly property color menuBackground: isDark ? "#2A2A2C" : "#F0F0F1"
+    readonly property color menuBorder: isDark ? "#3B3B40" : "#E3E3E5"
+    readonly property color menuHighlightText: "#FFFFFF"
+
     readonly property color textPrimary: isDark ? "#F1F1F3" : "#1A1A1A"
     readonly property color textSecondary: isDark ? "#A8A8AF" : "#66666B"
     readonly property color textTertiary: isDark ? "#7C7C84" : "#99999F"

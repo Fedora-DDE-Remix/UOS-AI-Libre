@@ -6,9 +6,11 @@ Qt WebEngine, Electron or a browser runtime.
 
 The visual language follows UOS AI 3.3: a soft aurora sidebar, a centered
 welcome composer, suggestion cards, streaming Markdown answers, reasoning and
-tool cards, a preview panel and a settings overlay. Agent-specific behaviour
-(permissions, approvals, tool output, MCP/skills boundaries) follows aish rather
-than copying UOS AI internals.
+tool cards, a preview panel and a settings overlay. History items expose a
+three-dot action menu and inline rename; the application menu keeps the theme
+choices in a side submenu. Agent-specific behaviour (permissions, approvals,
+tool output, MCP/skills boundaries) follows aish rather than copying UOS AI
+internals.
 
 ## Architecture
 
@@ -95,8 +97,8 @@ AISH_CONFIG_DIR=/tmp/aish-test-config \
 ./build/uos-ai-libre
 ```
 
-Pages: `welcome`, `chat`, `settings`, `approval`, `menu`, `composer`, `tasks`,
-`knowledge`, `collapsed`. To load a session, set
+Pages: `welcome`, `chat`, `settings`, `approval`, `menu`, `theme`, `context`,
+`rename`, `composer`, `tasks`, `knowledge`, `collapsed`. To load a session, set
 `UOS_AI_LIBRE_SNAPSHOT_SESSION=<uuid>`. To make a real streaming request, set
 `UOS_AI_LIBRE_SNAPSHOT_PROMPT="..."`; the snapshot is taken after the turn
 finishes. `UOS_AI_LIBRE_THEME=light|dark` and
@@ -110,8 +112,8 @@ can finish in the background. Relaunching the app is single-instance: the new
 process sends `show` over a per-user local socket and exits, and the existing
 process creates a fresh window bound to the existing `ChatModel`.
 
-Use the tray or the application menu's **退出 UOS AI Libre** entry to stop the
-agent explicitly. Session-manager shutdown (`commitDataRequest` /
+Use the tray's **退出 UOS AI Libre** entry or `Ctrl+Q` to stop the agent
+explicitly. Session-manager shutdown (`commitDataRequest` /
 `saveStateRequest`) marks the session as ending and forces a clean process exit,
 which is allowed during logout/shutdown.
 
@@ -172,12 +174,16 @@ src/singleinstance.*   per-user local socket, reopen existing instance
 src/chatmodel.*        message rows, streaming text/reasoning/tools
 src/markdownmodel.*    incremental block parser and diffed list model
 src/iconprovider.*     tinted SVG icon provider (whitelisted local resources)
-qml/Main.qml           frameless window, navigation, menus, dialogs, toasts
+qml/Main.qml           frameless window, navigation, dialogs, toasts
 qml/Shell.qml          persistent tray shell and hidden-window notifications
-qml/pages/ChatPage.qml welcome/chat composition and session UI state
-qml/pages/SettingsPage.qml
-qml/components/        reusable visual pieces
 qml/Theme.qml          light/dark palette and metrics
+qml/pages/             ChatPage, SettingsPage and page-level placeholders
+qml/sidebar/           Sidebar, SidebarItem, HistoryRow, SessionMenu
+qml/chat/              Composer, messages, reasoning/tool cards, preview
+qml/markdown/          MarkdownView and block delegates
+qml/menus/             MenuPopup/MenuRow, AppMenu and its theme submenu
+qml/dialogs/           approval, confirm, model and about dialogs
+qml/common/            icons, text fields, spinner, toast, window buttons
 resources/             icons, logo, desktop entry
 tests/markdown_test.cpp
 ```

@@ -72,17 +72,21 @@ ApplicationWindow {
     }
 
     function openAppMenu() {
-        const point = menuButton.mapToItem(Overlay.overlay, 0, 0)
-        appMenu.open()
-        appMenu.x = Math.max(8, Math.min(Overlay.overlay.width - appMenu.width - 8,
-                                         point.x + menuButton.width - appMenu.width))
-        appMenu.y = point.y + menuButton.height + 6
+        mainMenu.openMenu()
     }
 
     function openThemeMenu() {
-        themeMenu.open()
-        themeMenu.x = Math.max(8, appMenu.x - themeMenu.width - 2)
-        themeMenu.y = appMenu.y + 70
+        mainMenu.openThemeSubmenu()
+    }
+
+    function openHistoryContext() {
+        if (app.sessions.length > 0)
+            sidebar.openContext(app.sessions[0], 212)
+    }
+
+    function startHistoryRename() {
+        if (app.sessions.length > 0)
+            sidebar.beginRename(app.sessions[0])
     }
 
     function toggleMaximize() {
@@ -103,6 +107,11 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+,"
         onActivated: window.activePage = "settings"
+    }
+
+    Shortcut {
+        sequence: StandardKey.Quit
+        onActivated: windowHost.quitApp()
     }
 
     Shortcut {
@@ -417,56 +426,13 @@ ApplicationWindow {
         }
     }
 
-    MenuPopup {
-        id: appMenu
-        parent: Overlay.overlay
-        menuWidth: 184
-        items: [
-            { label: "更新记录", icon: "history" },
-            { label: "设置", icon: "settings", shortcut: "Ctrl+," },
-            { label: "主题", icon: "sun", submenu: true },
-            { separator: true },
-            { label: "帮助", icon: "help" },
-            { label: "关于", icon: "info" },
-            { separator: true },
-            { label: "退出 UOS AI Libre", icon: "x", danger: true }
-        ]
-        onItemClicked: (index) => {
-            if (index === 0) {
-                appMenu.close()
-                updateDialog.open()
-            } else if (index === 1) {
-                appMenu.close()
-                window.activePage = "settings"
-            } else if (index === 2) {
-                window.openThemeMenu()
-            } else if (index === 4) {
-                appMenu.close()
-                helpDialog.open()
-            } else if (index === 5) {
-                appMenu.close()
-                aboutDialog.open()
-            } else if (index === 7) {
-                appMenu.close()
-                windowHost.quitApp()
-            }
-        }
-    }
-
-    MenuPopup {
-        id: themeMenu
-        parent: Overlay.overlay
-        menuWidth: 150
-        items: [
-            { label: "浅色", icon: "sun", checked: app.themeMode === 0 },
-            { label: "深色", icon: "moon", checked: app.themeMode === 1 },
-            { label: "跟随系统", icon: "system", checked: app.themeMode === 2 }
-        ]
-        onItemClicked: (index) => {
-            app.themeMode = index
-            themeMenu.close()
-            appMenu.close()
-        }
+    AppMenu {
+        id: mainMenu
+        anchorItem: menuButton
+        onUpdatesRequested: updateDialog.open()
+        onSettingsRequested: window.activePage = "settings"
+        onHelpRequested: helpDialog.open()
+        onAboutRequested: aboutDialog.open()
     }
 
     ConfirmDialog {
@@ -480,7 +446,7 @@ ApplicationWindow {
     ConfirmDialog {
         id: helpDialog
         title: "帮助"
-        message: "Enter 发送消息，Shift+Enter 换行。\nCtrl+N 新建对话，Ctrl+, 打开设置。\n点击工具卡片可查看参数与结果；工具执行前会请求审批。"
+        message: "Enter 发送消息，Shift+Enter 换行。\nCtrl+N 新建对话，Ctrl+, 打开设置，Ctrl+Q 退出。\n点击工具卡片可查看参数与结果；工具执行前会请求审批。"
         confirmText: "知道了"
         cancelText: "关闭"
     }

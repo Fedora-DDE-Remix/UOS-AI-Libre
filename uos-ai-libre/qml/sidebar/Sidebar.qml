@@ -8,6 +8,8 @@ Rectangle {
     property string activeSection: "chat"
     property bool collapsed: false
     property int cornerRadius: Theme.windowRadius
+    property string renamingSessionId: ""
+    property string renamingOriginal: ""
     signal newChatRequested()
     signal tasksRequested()
     signal knowledgeRequested()
@@ -194,67 +196,16 @@ Rectangle {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        delegate: Rectangle {
-            id: historyRow
+        delegate: HistoryRow {
             width: historyList.width
-            height: 28
-            radius: Theme.radiusSmall
-            property bool selected: modelData.session_id === app.sessionId
-            color: selected
-                   ? Theme.selected
-                   : (rowHover.hovered ? Theme.hover : "transparent")
-            Behavior on color { ColorAnimation { duration: Theme.durationFast } }
-
-            HoverHandler { id: rowHover }
-
-            Text {
-                x: 12
-                width: parent.width - 34
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.summary
-                color: historyRow.selected ? Theme.textPrimary : Theme.textSecondary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSizeBase
-                elide: Text.ElideRight
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            Item {
-                visible: rowHover.hovered
-                width: 22
-                height: 22
-                anchors.right: parent.right
-                anchors.rightMargin: 3
-                anchors.verticalCenter: parent.verticalCenter
-                AppIcon {
-                    anchors.centerIn: parent
-                    name: "more"
-                    size: 13
-                    color: Theme.iconSecondary
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        const point = historyRow.mapToItem(sidebar, 0, 0)
-                        sidebar.openContext(modelData, point.y + historyRow.height)
-                    }
-                }
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                cursorShape: Qt.PointingHandCursor
-                onClicked: (mouse) => {
-                    if (mouse.button === Qt.RightButton) {
-                        const point = historyRow.mapToItem(sidebar, 0, 0)
-                        sidebar.openContext(modelData, point.y + historyRow.height)
-                    } else {
-                        sidebar.sessionActivated(modelData.session_id)
-                    }
-                }
-            }
+            title: modelData.summary
+            selected: modelData.session_id === app.sessionId
+            renaming: sidebar.renamingSessionId === modelData.session_id
+            onActivated: sidebar.sessionActivated(modelData.session_id)
+            onMenuRequested: (sceneY) => sidebar.openContext(modelData, sceneY)
+            onRenameRequested: sidebar.beginRename(modelData)
+            onRenameCommitted: (text) => sidebar.commitRename(text)
+            onRenameCancelled: sidebar.cancelRename()
         }
 
         Text {
@@ -312,36 +263,51 @@ Rectangle {
     property string contextSessionId
     property string contextSessionTitle
 
-    function openContext(session, y) {
+    // sceneY is in window/scene coordinates, so no sidebar offset is needed.
+    function openContext(session, sceneY) {
         contextSessionId = session.session_id
         contextSessionTitle = session.summary
-        contextMenu.x = sidebar.width - contextMenu.width - 10
-        contextMenu.y = Math.max(0, Math.min(sidebar.height - 90, y + 2))
-        contextMenu.open()
+        const anchorX = sidebar.mapToItem(Overlay.overlay,
+                                          sidebar.width - 34, 0).x
+        sessionMenu.x = Math.max(8, Math.min(Overlay.overlay.width - sessionMenu.width - 8,
+                                               anchorX))
+        sessionMenu.y = Math.max(8, Math.min(Overlay.overlay.height - sessionMenu.height - 8,
+                                               sceneY - 6))
+        sessionMenu.open()
     }
 
-    MenuPopup {
-        id: contextMenu
-        menuWidth: 150
-        items: [
-            { label: "重命名", icon: "edit" },
-            { label: "删除", icon: "trash", danger: true }
-        ]
-        onItemClicked: (index) => {
-            contextMenu.close()
-            if (index === 0) {
-                renameDialog.openWith(sidebar.contextSessionTitle)
-            } else {
-                deleteConfirm.message = "确定删除“" + sidebar.contextSessionTitle + "”吗？删除后无法恢复。"
-                deleteConfirm.open()
-            }
+    function beginRename(session) {
+        contextSessionId = session.session_id
+        contextSessionTitle = session.summary
+        renamingOriginal = session.summary
+        renamingSessionId = session.session_id
+    }
+
+    function commitRename(text) {
+        if (renamingSessionId.length === 0)
+            return
+        const sessionId = renamingSessionId
+        const value = text.trim()
+        renamingSessionId = ""
+        if (value.length > 0 && value !== renamingOriginal)
+            app.renameSession(sessionId, value)
+    }
+
+    function cancelRename() {
+        renamingSessionId = ""
+    }
+
+    SessionMenu {
+        id: sessionMenu
+        parent: Overlay.overlay
+        onRenameRequested: sidebar.beginRename({
+            session_id: sidebar.contextSessionId,
+            summary: sidebar.contextSessionTitle
+        })
+        onDeleteRequested: {
+            deleteConfirm.message = "确定删除“" + sidebar.contextSessionTitle + "”吗？删除后无法恢复。"
+            deleteConfirm.open()
         }
-    }
-
-    RenameDialog {
-        id: renameDialog
-        initialText: sidebar.contextSessionTitle
-        onAccepted: (text) => app.renameSession(sidebar.contextSessionId, text)
     }
 
     ConfirmDialog {
