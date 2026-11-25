@@ -38,6 +38,10 @@ Rules that keep the UI maintainable:
 - Visual components are composable and unaware of the backend:
   `Composer`, `AssistantMessage`, `MarkdownView`, `ToolGroupCard`,
   `ReasoningCard`, `ApprovalDialog`, `PreviewPanel`, etc.
+- QML is grouped by domain. `controls/` holds reusable base controls such as
+  `AppButton` and `IconButton`; each page directory owns its skeleton and
+  page-private pieces. Variants are expressed as properties (for example
+  `AppButton.variant`) rather than deep inheritance chains.
 
 ## Build
 
@@ -174,16 +178,17 @@ src/singleinstance.*   per-user local socket, reopen existing instance
 src/chatmodel.*        message rows, streaming text/reasoning/tools
 src/markdownmodel.*    incremental block parser and diffed list model
 src/iconprovider.*     tinted SVG icon provider (whitelisted local resources)
-qml/Main.qml           frameless window, navigation, dialogs, toasts
-qml/Shell.qml          persistent tray shell and hidden-window notifications
-qml/Theme.qml          light/dark palette and metrics
-qml/pages/             ChatPage, SettingsPage and page-level placeholders
+qml/Theme.qml          light/dark palette and metrics (singleton)
+qml/controls/          AppButton, IconButton, AppIcon, text fields, menus,
+                       spinner, toast, window buttons and the application menu
+qml/pages/Main.qml     frameless application window and navigation
+qml/pages/Shell.qml    persistent tray shell and hidden-window notifications
+qml/pages/PlaceholderPage.qml
+qml/pages/chat/        ChatPage skeleton plus composer, messages and tool cards
+qml/pages/settings/    SettingsPage and its section placeholders
 qml/sidebar/           Sidebar, SidebarItem, HistoryRow, SessionMenu
-qml/chat/              Composer, messages, reasoning/tool cards, preview
 qml/markdown/          MarkdownView and block delegates
-qml/menus/             MenuPopup/MenuRow, AppMenu and its theme submenu
 qml/dialogs/           approval, confirm, model and about dialogs
-qml/common/            icons, text fields, spinner, toast, window buttons
 resources/             icons, logo, desktop entry
 tests/markdown_test.cpp
 ```

@@ -59,6 +59,7 @@ QtObject {
     readonly property color iconDisabled: isDark ? "#55555C" : "#BEBEC3"
 
     readonly property color danger: isDark ? "#FF6B6E" : "#E5484D"
+    readonly property color dangerHover: isDark ? "#FF8588" : "#F06A6E"
     readonly property color warning: isDark ? "#FFB84D" : "#D97706"
     readonly property color success: isDark ? "#4CD08A" : "#2BA471"
 

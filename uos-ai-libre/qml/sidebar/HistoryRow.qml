@@ -55,38 +55,17 @@ Rectangle {
         onDoubleClicked: root.renameRequested()
     }
 
-    Item {
+    IconButton {
         id: rowActions
         visible: root.actionsVisible && !root.renaming
         z: 2
-        width: 22
-        height: 22
+        icon: "more"
+        buttonSize: 22
+        iconSize: 12
         anchors.right: parent.right
         anchors.rightMargin: 5
         anchors.verticalCenter: parent.verticalCenter
-
-        Rectangle {
-            anchors.fill: parent
-            radius: 6
-            color: moreHover.hovered ? Theme.hover : "transparent"
-            border.width: 1
-            border.color: Theme.borderStrong
-        }
-
-        AppIcon {
-            anchors.centerIn: parent
-            name: "more"
-            size: 12
-            color: Theme.icon
-        }
-
-        HoverHandler { id: moreHover }
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.menuRequested(root.mapToItem(null, 0, 0).y)
-        }
+        onClicked: root.menuRequested(root.mapToItem(null, 0, 0).y)
     }
 
     Rectangle {

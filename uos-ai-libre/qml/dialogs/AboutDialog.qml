@@ -67,25 +67,12 @@ Popup {
             topPadding: 6
         }
 
-        Rectangle {
+        AppButton {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 90
-            height: 34
-            radius: Theme.radiusSmall
-            color: closeHover.hovered ? Theme.accentHover : Theme.accent
-            Text {
-                anchors.centerIn: parent
-                text: "关闭"
-                color: "#FFFFFF"
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSizeBase
-            }
-            HoverHandler { id: closeHover }
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.close()
-            }
+            text: "关闭"
+            minWidth: 90
+            variant: "primary"
+            onClicked: root.close()
         }
     }
 }

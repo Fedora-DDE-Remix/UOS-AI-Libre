@@ -159,28 +159,16 @@ Rectangle {
             font.weight: Font.Medium
         }
 
-        Item {
-            width: 26
-            height: 26
+        IconButton {
+            buttonSize: 26
+            icon: "history"
+            iconSize: 14
+            bordered: false
+            iconColor: Theme.iconSecondary
             anchors.right: parent.right
             anchors.rightMargin: 4
-            HoverHandler { id: historyHover }
-            Rectangle {
-                anchors.fill: parent
-                radius: Theme.radiusSmall
-                color: historyHover.hovered ? Theme.hover : "transparent"
-            }
-            AppIcon {
-                anchors.centerIn: parent
-                name: "history"
-                size: 14
-                color: Theme.iconSecondary
-            }
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: sidebar.toastRequested("历史对话按最近更新时间排序")
-            }
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: sidebar.toastRequested("历史对话按最近更新时间排序")
         }
     }
 

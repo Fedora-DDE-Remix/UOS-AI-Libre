@@ -184,70 +184,26 @@ Popup {
             anchors.rightMargin: 24
             spacing: 10
 
-            Rectangle {
-                width: 88
-                height: 34
-                radius: Theme.radiusSmall
-                border.width: 1
-                border.color: Theme.border
-                color: denyHover.hovered ? Theme.hover : "transparent"
-                Text {
-                    anchors.centerIn: parent
-                    text: root.blocked ? "知道了" : "拒绝"
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeBase
-                }
-                HoverHandler { id: denyHover }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.decide(3)
-                }
+            AppButton {
+                text: root.blocked ? "知道了" : "拒绝"
+                minWidth: 88
+                onClicked: root.decide(3)
             }
 
-            Rectangle {
+            AppButton {
                 visible: !root.blocked
-                width: 106
-                height: 34
-                radius: Theme.radiusSmall
-                color: onceHover.hovered ? Theme.accentHover : Theme.accent
-                Text {
-                    anchors.centerIn: parent
-                    text: "仅本次允许"
-                    color: "#FFFFFF"
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeBase
-                    font.weight: Font.Medium
-                }
-                HoverHandler { id: onceHover }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.decide(0)
-                }
+                text: "仅本次允许"
+                minWidth: 106
+                variant: "primary"
+                onClicked: root.decide(0)
             }
 
-            Rectangle {
+            AppButton {
                 visible: !root.blocked
-                width: 106
-                height: 34
-                radius: Theme.radiusSmall
-                color: rememberHover.hovered ? Theme.accentHover : Theme.accent
-                Text {
-                    anchors.centerIn: parent
-                    text: "本会话允许"
-                    color: "#FFFFFF"
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeBase
-                    font.weight: Font.Medium
-                }
-                HoverHandler { id: rememberHover }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.decide(1)
-                }
+                text: "本会话允许"
+                minWidth: 106
+                variant: "primary"
+                onClicked: root.decide(1)
             }
         }
     }

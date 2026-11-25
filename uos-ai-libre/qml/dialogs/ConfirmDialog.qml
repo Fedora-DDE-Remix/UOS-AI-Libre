@@ -68,56 +68,24 @@ Popup {
             anchors.rightMargin: 24
             spacing: 10
 
-            Rectangle {
-                width: 84
-                height: 34
-                radius: Theme.radiusSmall
-                color: cancelHover.hovered ? Theme.hover : "transparent"
-                border.width: 1
-                border.color: Theme.border
-                Text {
-                    anchors.centerIn: parent
-                    text: root.cancelText
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeBase
-                }
-                HoverHandler { id: cancelHover }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.decisionMade = true
-                        root.close()
-                        root.cancelled()
-                    }
+            AppButton {
+                text: root.cancelText
+                minWidth: 84
+                onClicked: {
+                    root.decisionMade = true
+                    root.close()
+                    root.cancelled()
                 }
             }
 
-            Rectangle {
-                width: 84
-                height: 34
-                radius: Theme.radiusSmall
-                color: root.danger
-                       ? (confirmHover.hovered ? "#F06A6E" : Theme.danger)
-                       : (confirmHover.hovered ? Theme.accentHover : Theme.accent)
-                Text {
-                    anchors.centerIn: parent
-                    text: root.confirmText
-                    color: "#FFFFFF"
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeBase
-                    font.weight: Font.Medium
-                }
-                HoverHandler { id: confirmHover }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.decisionMade = true
-                        root.close()
-                        root.accepted()
-                    }
+            AppButton {
+                text: root.confirmText
+                minWidth: 84
+                variant: root.danger ? "danger" : "primary"
+                onClicked: {
+                    root.decisionMade = true
+                    root.close()
+                    root.accepted()
                 }
             }
         }

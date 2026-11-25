@@ -28,6 +28,16 @@ Popup {
         modelField.forceInputFocus()
     }
 
+    function save() {
+        const model = modelField.text.trim()
+        const base = baseField.text.trim()
+        if (model.length === 0 || base.length === 0)
+            return
+        root.decisionMade = true
+        root.close()
+        root.saveRequested(model, base, keyField.text)
+    }
+
     background: Rectangle {
         radius: Theme.radiusLarge
         color: Theme.card
@@ -115,57 +125,17 @@ Popup {
             anchors.rightMargin: 26
             spacing: 10
 
-            Rectangle {
-                width: 82
-                height: 34
-                radius: Theme.radiusSmall
-                border.width: 1
-                border.color: Theme.border
-                color: cancelHover.hovered ? Theme.hover : "transparent"
-                Text {
-                    anchors.centerIn: parent
-                    text: "取消"
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeBase
-                }
-                HoverHandler { id: cancelHover }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.close()
-                }
+            AppButton {
+                text: "取消"
+                minWidth: 82
+                onClicked: root.close()
             }
 
-            Rectangle {
-                id: saveButton
-                width: 82
-                height: 34
-                radius: Theme.radiusSmall
-                color: saveHover.hovered ? Theme.accentHover : Theme.accent
-                function save() {
-                    const model = modelField.text.trim()
-                    const base = baseField.text.trim()
-                    if (model.length === 0 || base.length === 0)
-                        return
-                    root.decisionMade = true
-                    root.close()
-                    root.saveRequested(model, base, keyField.text)
-                }
-                Text {
-                    anchors.centerIn: parent
-                    text: "保存"
-                    color: "#FFFFFF"
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeBase
-                    font.weight: Font.Medium
-                }
-                HoverHandler { id: saveHover }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: saveButton.save()
-                }
+            AppButton {
+                text: "保存"
+                minWidth: 82
+                variant: "primary"
+                onClicked: root.save()
             }
         }
     }
