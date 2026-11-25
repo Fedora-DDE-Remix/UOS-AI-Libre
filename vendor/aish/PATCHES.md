@@ -40,3 +40,11 @@ before persisting, so the SQLite transcript round-trips a complete turn.
 Re-vendor from the fork, then re-apply these changes (or cherry-pick the matching
 commits from the fork). Keep `VENDORED_FROM` in sync. The frontend should pin a
 known commit; do not float on `main`.
+
+## 5. Shared config and session state
+
+`ChatConfig::from_aish_config()` loads `$AISH_CONFIG_DIR/config.yaml` (or the
+XDG default) and resolves the default `~/.local/share/aish/sessions.db` when
+the config does not override `session_db_path`. `ChatSession` writes both the
+append-only `ai_messages` transcript and the `sessions.state` snapshot, so the
+CLI's resume selector and the GUI see the same conversation.
