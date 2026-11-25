@@ -553,6 +553,34 @@ impl SessionStore {
         Ok(self.conn.last_insert_rowid())
     }
 
+    /// Return the first user-visible prompt so session lists can fall back to
+    /// a meaningful title when `sessions.state` has no `summary_preview`.
+    pub fn get_first_user_message(&self, session_uuid: &str) -> Result<Option<String>> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT content FROM ai_messages
+                 WHERE session_uuid = ?1 AND role = 'user'
+                 ORDER BY seq ASC LIMIT 1",
+            )
+            .map_err(|e| {
+                AishError::Session(format!("failed to prepare first user message: {e}"))
+            })?;
+        let mut rows = stmt
+            .query(params![session_uuid])
+            .map_err(|e| AishError::Session(format!("failed to query first user message: {e}")))?;
+        match rows.next() {
+            Ok(Some(row)) => row
+                .get(0)
+                .map(Some)
+                .map_err(|e| AishError::Session(format!("failed to read first user message: {e}"))),
+            Ok(None) => Ok(None),
+            Err(e) => Err(AishError::Session(format!(
+                "failed to read first user message: {e}"
+            ))),
+        }
+    }
+
     /// Read a session's full AI transcript in append order (oldest first).
     pub fn get_ai_messages(&self, session_uuid: &str) -> Result<Vec<SessionContextMessage>> {
         let mut stmt = self

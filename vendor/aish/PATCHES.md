@@ -56,3 +56,25 @@ When the first visible `ContentDelta` arrives, `aish-llm` now emits
 A GUI can collapse the thinking card exactly when the answer begins; if a
 provider interleaves more reasoning later, a new `ReasoningStart` segment is
 opened.
+
+## 7. Session management APIs for the headless client
+
+`ChatService` gained `list_sessions`, `resume_session`, `delete_session` and
+`rename_session`. Resuming rebuilds a live `ChatSession` around the persisted
+`ai_messages` transcript without creating a second session row, so the CLI and
+the GUI keep appending to the same conversation. `SessionStore` also gained
+`get_first_user_message` to give older CLI sessions a useful history title.
+
+## 8. Shared model configuration updates
+
+`ChatService::save_model_settings` edits only `model`, `api_base` and `api_key`
+in the raw `config.yaml` document (unknown keys are preserved) through
+`ConfigLoader::update_raw`, which writes atomically and preserves file mode.
+The bridge recreates the service after saving so the next session uses the new
+credentials; active sessions are intentionally dropped.
+
+## 9. Session metadata for the Qt history sidebar
+
+`list_sessions` returns a small JSON-friendly summary (session id, model,
+summary, created/updated timestamps). `config_info` exposes the current model,
+API base, database path and whether a key exists, but never the key itself.

@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use aish_core::{ContextToolCall, LlmEvent, LlmEventType, MemoryType};
+use aish_core::{AishError, ContextToolCall, LlmEvent, LlmEventType, MemoryType};
 use aish_llm::{
     ApprovalChoice, ApprovalMemory, ChatMessage, LlmSession, MessageContent,
     PreflightSecurityContext, ToolCall,
@@ -36,6 +36,7 @@ Be accurate and concise. If you use a tool, explain the result to the user.\n\
 When the user attaches an image, inspect the actual image content before answering.\n";
 
 const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_LIVE_SESSIONS: usize = 8;
 
 /// Configuration accepted by [`ChatService::new`].
 ///
@@ -258,6 +259,19 @@ impl ChatService {
             Uuid::new_v4().to_string()
         };
 
+        self.create_session_inner(session_id, model, Vec::new())
+    }
+
+    /// Build a live session around an existing transcript.
+    ///
+    /// Used both for new sessions (empty history) and for resuming a session
+    /// loaded from SQLite (full history, same session id).
+    fn create_session_inner(
+        &self,
+        session_id: String,
+        model: String,
+        history: Vec<ChatMessage>,
+    ) -> Result<String, String> {
         let mut llm = LlmSession::new(
             &self.config.api_base,
             &self.config.api_key,
@@ -349,7 +363,7 @@ impl ChatService {
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| DEFAULT_SYSTEM_PROMPT.to_string()),
             llm: Arc::new(llm),
-            history: Mutex::new(Vec::new()),
+            history: Mutex::new(history),
             running: AtomicBool::new(false),
             cancelled: AtomicBool::new(false),
             events: self.events.clone(),
@@ -357,10 +371,27 @@ impl ChatService {
             session_uuid: session_id.clone(),
         });
 
-        self.sessions
-            .lock()
-            .map_err(|_| "session map lock poisoned".to_string())?
-            .insert(session_id.clone(), session);
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.insert(session_id.clone(), session);
+            // A QML history sidebar can resume many old conversations over a
+            // long session. Keep only a bounded number of idle live sessions;
+            // older ones are reloaded from SQLite on demand.
+            if sessions.len() > MAX_LIVE_SESSIONS {
+                let idle: Vec<String> = sessions
+                    .iter()
+                    .filter(|(id, session)| {
+                        id.as_str() != session_id && !session.running.load(Ordering::SeqCst)
+                    })
+                    .map(|(id, _)| id.clone())
+                    .take(sessions.len() - MAX_LIVE_SESSIONS)
+                    .collect();
+                for id in idle {
+                    sessions.remove(&id);
+                }
+            }
+        } else {
+            return Err("session map lock poisoned".to_string());
+        }
 
         Ok(session_id)
     }
@@ -416,6 +447,207 @@ impl ChatService {
             .lock()
             .map(|history| history.clone())
             .map_err(|_| "session history lock poisoned".to_string())
+    }
+
+    /// Resume a persisted session and return its model plus transcript.
+    ///
+    /// The session id is preserved, so continuing the conversation appends to
+    /// the same rows the CLI and the GUI already share.
+    pub fn resume_session(&self, session_id: &str) -> Result<(String, Vec<ChatMessage>), String> {
+        if session_id.trim().is_empty() {
+            return Err("session id must not be empty".to_string());
+        }
+
+        if let Ok(sessions) = self.sessions.lock() {
+            if let Some(session) = sessions.get(session_id) {
+                let history = session
+                    .history
+                    .lock()
+                    .map(|history| history.clone())
+                    .map_err(|_| "session history lock poisoned".to_string())?;
+                return Ok((session.model.clone(), history));
+            }
+        }
+
+        let (model, history) = {
+            let Some(store) = &self.store else {
+                return Err("session database is not configured".to_string());
+            };
+            let store = store
+                .lock()
+                .map_err(|_| "session store lock poisoned".to_string())?;
+            let record = store
+                .get_session(session_id)
+                .map_err(|error| format!("failed to load session: {error}"))?
+                .ok_or_else(|| format!("session not found: {session_id}"))?;
+            let messages = store
+                .get_ai_messages(session_id)
+                .map_err(|error| format!("failed to load transcript: {error}"))?;
+            let history: Vec<ChatMessage> =
+                messages.into_iter().map(from_session_message).collect();
+            (record.model, history)
+        };
+
+        self.create_session_inner(session_id.to_string(), model.clone(), history.clone())?;
+        Ok((model, history))
+    }
+
+    /// List recent sessions for a history sidebar.
+    ///
+    /// Only metadata is returned; the transcript is loaded on demand by
+    /// [`Self::resume_session`].
+    pub fn list_sessions(&self, limit: usize) -> Result<Vec<Value>, String> {
+        let Some(store) = &self.store else {
+            return Ok(Vec::new());
+        };
+        let store = store
+            .lock()
+            .map_err(|_| "session store lock poisoned".to_string())?;
+        let records = store
+            .list_sessions(limit.clamp(1, 500))
+            .map_err(|error| format!("failed to list sessions: {error}"))?;
+        let mut sessions = Vec::with_capacity(records.len());
+        for record in records {
+            let snapshot = record.state_snapshot();
+            let summary = snapshot
+                .summary_preview
+                .clone()
+                .or_else(|| {
+                    store
+                        .get_first_user_message(&record.session_uuid)
+                        .ok()
+                        .flatten()
+                })
+                .map(|text| summarize(text.trim(), 60))
+                .unwrap_or_default();
+            let updated_at = snapshot.updated_at.unwrap_or(record.created_at);
+            sessions.push(json!({
+                "session_id": record.session_uuid,
+                "model": record.model,
+                "summary": summary,
+                "created_at": record.created_at.to_rfc3339(),
+                "updated_at": updated_at.to_rfc3339(),
+            }));
+        }
+        Ok(sessions)
+    }
+
+    /// Rename a session by updating the shared `summary_preview` field.
+    pub fn rename_session(&self, session_id: &str, title: &str) -> Result<(), String> {
+        let title = title.trim();
+        if title.is_empty() {
+            return Err("title must not be empty".to_string());
+        }
+        if title.chars().count() > 120 {
+            return Err("title is too long".to_string());
+        }
+        let Some(store) = &self.store else {
+            return Err("session database is not configured".to_string());
+        };
+        let store = store
+            .lock()
+            .map_err(|_| "session store lock poisoned".to_string())?;
+        let record = store
+            .get_session(session_id)
+            .map_err(|error| format!("failed to load session: {error}"))?
+            .ok_or_else(|| format!("session not found: {session_id}"))?;
+        let mut snapshot = record.state_snapshot();
+        snapshot.summary_preview = Some(title.to_string());
+        if snapshot.updated_at.is_none() {
+            snapshot.updated_at = Some(Utc::now());
+        }
+        store
+            .update_session_state(session_id, &snapshot)
+            .map_err(|error| format!("failed to rename session: {error}"))
+    }
+
+    /// Delete a persisted session. Running sessions are left untouched so a
+    /// turn cannot race the delete and recreate orphan transcript rows.
+    pub fn delete_session(&self, session_id: &str) -> Result<(), String> {
+        if let Ok(sessions) = self.sessions.lock() {
+            if let Some(session) = sessions.get(session_id) {
+                if session.running.load(Ordering::SeqCst) {
+                    return Err("session is still running".to_string());
+                }
+                session.cancel();
+            }
+        }
+        let Some(store) = &self.store else {
+            return Err("session database is not configured".to_string());
+        };
+        let store = store
+            .lock()
+            .map_err(|_| "session store lock poisoned".to_string())?;
+        store
+            .delete_session(session_id)
+            .map_err(|error| format!("failed to delete session: {error}"))?;
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.remove(session_id);
+        }
+        Ok(())
+    }
+
+    /// Safe, non-secret configuration summary for a settings page.
+    pub fn config_info(&self) -> Value {
+        json!({
+            "model": self.config.model,
+            "api_base": self.config.api_base,
+            "has_api_key": !self.config.api_key.trim().is_empty(),
+            "session_db_path": self.config.session_db_path,
+            "enable_tools": self.config.enable_tools,
+            "config_path": aish_config::ConfigLoader::default_config_path()
+                .to_string_lossy()
+                .to_string(),
+        })
+    }
+
+    /// Update the three model fields in the shared aish YAML config.
+    ///
+    /// The raw-document editor preserves keys the typed config does not model.
+    /// An empty `api_key` keeps the existing key instead of erasing it.
+    pub fn save_model_settings(
+        model: &str,
+        api_base: &str,
+        api_key: &str,
+    ) -> Result<String, String> {
+        let model = model.trim();
+        let api_base = api_base.trim();
+        if model.is_empty() || model.chars().count() > 200 {
+            return Err("model name is empty or too long".to_string());
+        }
+        if model.contains(['\n', '\r', '\0']) || api_base.contains(['\n', '\r', '\0']) {
+            return Err("model configuration contains invalid characters".to_string());
+        }
+        if !(api_base.starts_with("https://") || api_base.starts_with("http://")) {
+            return Err("API base must be an http(s) URL".to_string());
+        }
+        if api_key.chars().count() > 4096 || api_key.contains(['\n', '\r', '\0']) {
+            return Err("API key is too long or contains invalid characters".to_string());
+        }
+
+        let path = aish_config::ConfigLoader::default_config_path();
+        aish_config::ConfigLoader::update_raw(&path, |document| {
+            let map = document.as_mapping_mut().ok_or_else(|| {
+                AishError::Config(format!("config root is not a mapping: {}", path.display()))
+            })?;
+            map.insert(
+                serde_yaml::Value::String("model".to_string()),
+                serde_yaml::Value::String(model.to_string()),
+            );
+            map.insert(
+                serde_yaml::Value::String("api_base".to_string()),
+                serde_yaml::Value::String(api_base.to_string()),
+            );
+            if !api_key.trim().is_empty() {
+                map.insert(
+                    serde_yaml::Value::String("api_key".to_string()),
+                    serde_yaml::Value::String(api_key.to_string()),
+                );
+            }
+            Ok(())
+        })
+        .map_err(|error| format!("failed to save model configuration: {error}"))?;
+        Ok(path.to_string_lossy().to_string())
     }
 
     pub fn shutdown(&self) {
@@ -651,7 +883,6 @@ fn to_session_message(message: &ChatMessage) -> SessionContextMessage {
     }
 }
 
-#[allow(dead_code)]
 fn from_session_message(message: SessionContextMessage) -> ChatMessage {
     ChatMessage {
         role: message.role,
