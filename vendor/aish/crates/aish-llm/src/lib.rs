@@ -1,0 +1,76 @@
+// Suppress clippy lints that fire on Rust 1.95 stable but not on older versions.
+#![allow(
+    clippy::type_complexity,
+    clippy::redundant_closure,
+    clippy::match_like_matches_macro,
+    clippy::option_as_ref_deref,
+    clippy::field_reassign_with_default,
+    clippy::len_zero,
+    clippy::borrowed_box,
+    clippy::new_without_default,
+    clippy::needless_borrow,
+    clippy::manual_strip,
+    clippy::too_many_arguments
+)]
+
+pub mod agents;
+pub mod api;
+pub mod approval_memory;
+pub mod client;
+pub mod langfuse;
+pub mod llm_stream;
+pub mod model_id;
+pub mod models;
+pub mod oauth;
+pub mod openai_sse_bridge;
+pub mod probe;
+pub mod prompt;
+pub mod provider;
+pub mod providers;
+pub mod rotation;
+pub mod session;
+pub mod streaming;
+pub mod subsession;
+pub mod tool_context;
+pub mod types;
+pub mod usage;
+
+pub use agents::{
+    effective_max_turns, parent_has_skill_tool, resolve_tool_names_for_agent,
+    resolve_tools_for_agent, run_tool_loop_until_done, spawn, spawn_builtin, spawn_definition,
+    spawn_request, AgentDefinition, AgentRegistry, LoopOutcome, LoopStatus, SpawnConfig,
+    SpawnLabels, SpawnRequest, SpawnResult, ToolLoopConfig, ToolStrategy, GLOBAL_MAX_TURNS,
+};
+pub use api::{
+    resolve_anthropic_messages_url, resolve_api_dialect, stream_simple,
+    test_connection as test_api_connection, ApiDialect, StreamContext,
+};
+pub use approval_memory::{ApprovalChoice, ApprovalMemory};
+pub use client::{LlmClient, LlmResponse};
+pub use langfuse::{LangfuseClient, LangfuseConfig};
+pub use model_id::{normalize_model_for_provider, resolve_model_for_api, trim_model_name};
+pub use models::{
+    fetch_models_from_api, fetch_ollama_models, filter_by_tool_support, get_predefined_models,
+    model_supports_tools, ModelInfo,
+};
+pub use oauth::{
+    exchange_code_for_tokens, generate_pkce, generate_state, load_tokens, login_with_browser,
+    login_with_device_code, open_url, save_tokens, OAuthProviderSpec, OAuthTokens, PkcePair,
+};
+pub use probe::probe_live_tool_support;
+pub use prompt::{PromptAssembly, PromptBundle, PromptContext, ToolVisibilityPolicy};
+pub use provider::{
+    detect_provider, detect_provider_from_model, refine_provider_from_api_base, ProviderInfo,
+};
+pub use providers::{
+    OpenAiCompatProvider, ProviderCapabilities, ProviderMetadata, ProviderRegistry,
+};
+pub use rotation::{
+    ApiAccount, FailureKind, ResolvedCredential, RetryPolicy, RotationSnapshot, RotationState,
+};
+pub use session::LlmSession;
+pub use streaming::{SseEvent, StreamParser};
+pub use subsession::{SubSession, SubSessionConfig};
+pub use tool_context::{ToolContext, ToolExecutionPolicy};
+pub use types::*;
+pub use usage::{TokenStats, TokenUsage};

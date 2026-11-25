@@ -1,0 +1,829 @@
+use aish_i18n;
+use aish_llm::{Tool, ToolResult};
+
+use super::prompt;
+use crate::fs::SharedSnapshotStore;
+use std::io::Read;
+use std::path::Path;
+
+/// Upper bound on total file bytes we are willing to read into memory and
+/// return inline. Files larger than this are read by range (offset/limit)
+/// or truncated with a notice so the model knows to fetch the remainder.
+const MAX_READ_BYTES: usize = 256 * 1024;
+
+/// Default number of lines returned when no explicit limit is given and the
+/// file exceeds MAX_READ_BYTES. Keeps a single read within the byte budget
+/// while still returning a useful window of content.
+const DEFAULT_TRUNCATE_LINES: usize = 500;
+
+/// Upper bound on a single materialized line in the large-file path. A line
+/// longer than this is clipped in the output; without the cap one pathological
+/// line (e.g. a multi-gigabyte single-line log) would exhaust memory.
+const MAX_LINE_BYTES: usize = 16 * 1024;
+
+/// Read file content tool.
+pub struct ReadFileTool {
+    store: Option<SharedSnapshotStore>,
+}
+
+impl Default for ReadFileTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ReadFileTool {
+    pub fn new() -> Self {
+        Self { store: None }
+    }
+
+    pub fn with_store(store: SharedSnapshotStore) -> Self {
+        Self { store: Some(store) }
+    }
+}
+
+impl Tool for ReadFileTool {
+    fn name(&self) -> &str {
+        "read_file"
+    }
+
+    fn description(&self) -> &str {
+        prompt::DESCRIPTION
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        prompt::parameters()
+    }
+
+    fn prompt(&self) -> &str {
+        prompt::PROMPT
+    }
+
+    fn execute(&self, args: serde_json::Value) -> ToolResult {
+        let path = match args.get("path").and_then(|p| p.as_str()) {
+            Some(p) => p,
+            None => return ToolResult::error(aish_i18n::t("tools.fs.read_file.missing_path")),
+        };
+
+        // Open once and validate the opened descriptor. Opening with
+        // O_NONBLOCK on Unix prevents a path swapped for a FIFO between the
+        // type check and the read from stalling the session (issue #686).
+        let mut file = match open_read(path) {
+            Ok(file) => file,
+            Err(e) => {
+                let mut args_map = std::collections::HashMap::new();
+                args_map.insert("path".to_string(), path.to_string());
+                args_map.insert("error".to_string(), e.to_string());
+                return ToolResult::error(aish_i18n::t_with_args(
+                    "tools.fs.read_file.read_failed",
+                    &args_map,
+                ));
+            }
+        };
+        let metadata = match file.metadata() {
+            Ok(metadata) => metadata,
+            Err(e) => {
+                let mut args_map = std::collections::HashMap::new();
+                args_map.insert("path".to_string(), path.to_string());
+                args_map.insert("error".to_string(), e.to_string());
+                return ToolResult::error(aish_i18n::t_with_args(
+                    "tools.fs.read_file.read_failed",
+                    &args_map,
+                ));
+            }
+        };
+
+        // Reject non-regular files before reading. Directories, FIFOs,
+        // sockets and devices are not readable as bounded text and should be
+        // handled through shell commands.
+        if !metadata.file_type().is_file() {
+            let mut args_map = std::collections::HashMap::new();
+            args_map.insert("path".to_string(), path.to_string());
+            return ToolResult::error(aish_i18n::t_with_args(
+                "tools.fs.read_file.unsupported_file_type",
+                &args_map,
+            ));
+        }
+
+        let file_size = metadata.len() as usize;
+        let offset = args.get("offset").and_then(|o| o.as_u64()).unwrap_or(0) as usize;
+        let limit = args
+            .get("limit")
+            .and_then(|l| l.as_u64())
+            .map(|l| l as usize);
+
+        // Large file path: stream only the requested line range instead of
+        // loading the whole file into memory. When no range is given, return
+        // a bounded head window and tell the model how to read the rest.
+        if file_size > MAX_READ_BYTES {
+            return self.read_large_file(path, file, file_size, offset, limit);
+        }
+
+        // Normal path: file fits in the byte budget, read it all from the
+        // already-validated descriptor.
+        let mut raw_bytes = Vec::with_capacity(file_size);
+        if let Err(e) = file.read_to_end(&mut raw_bytes) {
+            let mut args_map = std::collections::HashMap::new();
+            args_map.insert("path".to_string(), path.to_string());
+            args_map.insert("error".to_string(), e.to_string());
+            return ToolResult::error(aish_i18n::t_with_args(
+                "tools.fs.read_file.read_failed",
+                &args_map,
+            ));
+        }
+
+        let content = match String::from_utf8(raw_bytes) {
+            Ok(s) => s,
+            Err(e) => {
+                let mut args_map = std::collections::HashMap::new();
+                args_map.insert("path".to_string(), path.to_string());
+                args_map.insert("error".to_string(), e.to_string());
+                return ToolResult::error(aish_i18n::t_with_args(
+                    "tools.fs.read_file.decode_failed",
+                    &args_map,
+                ));
+            }
+        };
+
+        let lines: Vec<&str> = content.lines().collect();
+        if lines.is_empty() {
+            return ToolResult::success(aish_i18n::t("tools.fs.read_file.empty_file"));
+        }
+
+        if offset >= lines.len() {
+            let mut args_map = std::collections::HashMap::new();
+            args_map.insert("offset".to_string(), offset.to_string());
+            args_map.insert("length".to_string(), lines.len().to_string());
+            return ToolResult::error(aish_i18n::t_with_args(
+                "tools.fs.read_file.offset_exceeds_length",
+                &args_map,
+            ));
+        }
+
+        let selected: Vec<String> = lines
+            .iter()
+            .skip(offset)
+            .take(limit.unwrap_or(usize::MAX))
+            .enumerate()
+            .map(|(i, line)| format!("{:>6}\t{}", offset + i + 1, line))
+            .collect();
+
+        let body = selected.join("\n");
+
+        // Stamp a snapshot tag so a later edit_file can detect stale content.
+        if let Some(store) = &self.store {
+            let tag = store
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .record_read(Path::new(path), &content);
+            ToolResult::success(format!("[{}#{}]\n{}", path, tag, body))
+        } else {
+            ToolResult::success(body)
+        }
+    }
+}
+
+impl ReadFileTool {
+    /// Read a large file by streaming only the requested line range. Memory
+    /// is bounded per line: a single line longer than `MAX_LINE_BYTES` is
+    /// truncated in the output instead of being materialized whole.
+    fn read_large_file(
+        &self,
+        path: &str,
+        file: std::fs::File,
+        file_size: usize,
+        offset: usize,
+        limit: Option<usize>,
+    ) -> ToolResult {
+        use std::io::BufReader;
+
+        let mut reader = BufReader::new(file);
+        let effective_limit = limit.unwrap_or(DEFAULT_TRUNCATE_LINES);
+
+        // Skip `offset` lines, then collect up to `effective_limit` lines,
+        // capping each materialized line at MAX_LINE_BYTES.
+        // Cap the pre-allocation too: a caller-supplied `limit` must not
+        // itself trigger a huge up-front allocation.
+        let mut collected: Vec<String> =
+            Vec::with_capacity(effective_limit.min(DEFAULT_TRUNCATE_LINES));
+        let mut line_no = 0usize; // 0-based index of the current line
+        let mut total_lines = 0usize;
+        loop {
+            // Read one line with bounded memory: `read_until` would buffer an
+            // entire pathological line (e.g. a multi-gigabyte single-line
+            // log) before truncating it, exhausting memory even when the
+            // caller asked for `limit=1`.
+            let (line_bytes, clipped) = match read_line_bounded(&mut reader) {
+                Ok(Some(line)) => line,
+                Ok(None) => break,
+                Err(e) => {
+                    let mut args_map = std::collections::HashMap::new();
+                    args_map.insert("path".to_string(), path.to_string());
+                    args_map.insert("error".to_string(), e.to_string());
+                    return ToolResult::error(aish_i18n::t_with_args(
+                        "tools.fs.read_file.decode_failed",
+                        &args_map,
+                    ));
+                }
+            };
+            total_lines += 1;
+            let in_window = line_no >= offset && collected.len() < effective_limit;
+            if in_window {
+                let line = match String::from_utf8(line_bytes) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        let mut args_map = std::collections::HashMap::new();
+                        args_map.insert("path".to_string(), path.to_string());
+                        args_map.insert("error".to_string(), e.to_string());
+                        return ToolResult::error(aish_i18n::t_with_args(
+                            "tools.fs.read_file.decode_failed",
+                            &args_map,
+                        ));
+                    }
+                };
+                if clipped {
+                    collected.push(format!(
+                        "{:>6}\t{} [... line truncated at {} bytes ...]",
+                        line_no + 1,
+                        line,
+                        MAX_LINE_BYTES
+                    ));
+                } else {
+                    collected.push(format!("{:>6}\t{}", line_no + 1, line));
+                }
+            }
+            line_no += 1;
+        }
+
+        if collected.is_empty() {
+            let mut args_map = std::collections::HashMap::new();
+            args_map.insert("offset".to_string(), offset.to_string());
+            args_map.insert("length".to_string(), total_lines.to_string());
+            return ToolResult::error(aish_i18n::t_with_args(
+                "tools.fs.read_file.offset_exceeds_length",
+                &args_map,
+            ));
+        }
+
+        let body = collected.join("\n");
+
+        // Build a truncation notice when we didn't return the whole file.
+        let truncated = (offset > 0) || (collected.len() < total_lines);
+        let header = if truncated {
+            let mut args_map = std::collections::HashMap::new();
+            args_map.insert("path".to_string(), path.to_string());
+            args_map.insert("size".to_string(), file_size.to_string());
+            args_map.insert("lines".to_string(), total_lines.to_string());
+            args_map.insert("shown".to_string(), collected.len().to_string());
+            args_map.insert("offset".to_string(), offset.to_string());
+            aish_i18n::t_with_args("tools.fs.read_file.large_file_truncated", &args_map)
+        } else {
+            String::new()
+        };
+
+        // Large-file reads are partial windows; a tag computed on the window
+        // would never match the full disk content. Emit a tagless header and
+        // say so: the model must not pass a `tag` to edit_file for this file
+        // (edit_file rejects malformed tags and line-range edits skip the
+        // tag entirely).
+        let tag_suffix = if self.store.is_some() {
+            let mut args_map = std::collections::HashMap::new();
+            args_map.insert("path".to_string(), path.to_string());
+            let no_tag = aish_i18n::t_with_args("tools.fs.read_file.large_file_no_tag", &args_map);
+            format!("[{}] {}\n", path, no_tag)
+        } else {
+            String::new()
+        };
+        if truncated {
+            ToolResult::success(format!("{}{}{}", tag_suffix, header, body))
+        } else {
+            ToolResult::success(format!("{}{}", tag_suffix, body))
+        }
+    }
+}
+
+/// Length of a UTF-8 sequence from its lead byte, if the byte can start one.
+fn utf8_char_len(lead: u8) -> Option<usize> {
+    match lead {
+        0x00..=0x7F => Some(1),
+        0xC2..=0xDF => Some(2),
+        0xE0..=0xEF => Some(3),
+        0xF0..=0xF4 => Some(4),
+        _ => None,
+    }
+}
+
+/// Clip `raw` to at most `MAX_LINE_BYTES` without splitting a valid UTF-8
+/// character.
+///
+/// When the prefix ends mid-character, the crossing character is dropped only
+/// if the retained lookahead proves it is valid. Malformed boundary sequences
+/// such as `E4 FF` or `F0 9F 98 41` are left in place so the caller still
+/// reports a decode error (issue #682). Returns whether the line was clipped.
+fn clip_line_to_utf8(raw: &mut Vec<u8>) -> bool {
+    if raw.len() <= MAX_LINE_BYTES {
+        return false;
+    }
+
+    match std::str::from_utf8(&raw[..MAX_LINE_BYTES]) {
+        Ok(_) => raw.truncate(MAX_LINE_BYTES),
+        Err(e) if e.error_len().is_none() => {
+            let start = e.valid_up_to();
+            // Validate only the character that crosses the boundary, not the
+            // whole suffix (which may itself end mid-character at the retain
+            // limit).
+            let crossing = utf8_char_len(raw[start])
+                .and_then(|len| raw.get(start..start + len))
+                .is_some_and(|bytes| std::str::from_utf8(bytes).is_ok());
+            if crossing {
+                // The crossing character is complete and valid, so dropping
+                // it leaves a valid prefix.
+                raw.truncate(start);
+            } else {
+                // Not enough lookahead to complete the character, or the
+                // sequence is malformed: keep the bounded prefix and let the
+                // caller report the decode error.
+                raw.truncate(MAX_LINE_BYTES);
+            }
+        }
+        Err(_) => raw.truncate(MAX_LINE_BYTES),
+    }
+    true
+}
+
+/// Open `path` for reading without blocking on a FIFO.
+///
+/// On Unix, `O_NONBLOCK` makes a read-only FIFO open return immediately even
+/// when no writer exists; it has no effect on regular files. The caller
+/// checks the opened descriptor's type, so a path swapped after the check
+/// cannot stall the session (issue #686).
+fn open_read(path: &str) -> std::io::Result<std::fs::File> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(path)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::OpenOptions::new().read(true).open(path)
+    }
+}
+
+/// Read one newline-terminated line while keeping memory bounded.
+///
+/// At most `MAX_LINE_BYTES + 4` bytes are retained: three lookahead bytes to
+/// validate a 4-byte UTF-8 character crossing the clip boundary, plus one byte
+/// of CRLF margin. The remainder of an oversized line is consumed and
+/// discarded so line numbering, `offset` and `limit` stay correct. Returns
+/// `None` on a clean EOF between lines, otherwise the line bytes without their
+/// terminator plus whether the line had to be clipped.
+fn read_line_bounded<R: std::io::BufRead>(
+    reader: &mut R,
+) -> std::io::Result<Option<(Vec<u8>, bool)>> {
+    // Keep up to three lookahead bytes past the clip point so a 4-byte
+    // UTF-8 character crossing the boundary can be validated, plus one byte
+    // of CRLF margin.
+    const RETAIN_LIMIT: usize = MAX_LINE_BYTES + 4;
+
+    let mut raw: Vec<u8> = Vec::with_capacity(128);
+    let mut saw_bytes = false;
+
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            break;
+        }
+        saw_bytes = true;
+
+        let take = available
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(available.len(), |i| i + 1);
+        let room = RETAIN_LIMIT.saturating_sub(raw.len());
+        let keep = take.min(room);
+        raw.extend_from_slice(&available[..keep]);
+        let at_newline = available[take - 1] == b'\n';
+        reader.consume(take);
+        if at_newline {
+            break;
+        }
+    }
+
+    if !saw_bytes {
+        return Ok(None);
+    }
+
+    if raw.last() == Some(&b'\n') {
+        raw.pop();
+        if raw.last() == Some(&b'\r') {
+            raw.pop();
+        }
+    }
+    let clipped = clip_line_to_utf8(&mut raw);
+    Ok(Some((raw, clipped)))
+}
+
+/// Path-restricted wrapper around [`ReadFileTool`] for SSH sessions.
+pub struct SshReadFileTool {
+    inner: ReadFileTool,
+    offload_root: std::path::PathBuf,
+}
+
+impl SshReadFileTool {
+    pub fn new() -> Self {
+        let offload_root = std::env::temp_dir().join("aish-offload");
+        std::fs::create_dir_all(&offload_root).expect("failed to create aish offload directory");
+        let canonical_root = std::fs::canonicalize(&offload_root)
+            .expect("failed to canonicalize aish offload directory");
+        Self {
+            inner: ReadFileTool::new(),
+            offload_root: canonical_root,
+        }
+    }
+}
+
+impl Tool for SshReadFileTool {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn description(&self) -> &str {
+        self.inner.description()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        self.inner.parameters()
+    }
+
+    fn prompt(&self) -> &str {
+        self.inner.prompt()
+    }
+
+    fn execute(&self, args: serde_json::Value) -> ToolResult {
+        let path = match args.get("path").and_then(|p| p.as_str()) {
+            Some(p) => p,
+            None => return ToolResult::error(aish_i18n::t("tools.fs.read_file.missing_path")),
+        };
+        let canonical = match std::fs::canonicalize(path) {
+            Ok(c) => c,
+            Err(e) => {
+                let mut args_map = std::collections::HashMap::new();
+                args_map.insert("path".to_string(), path.to_string());
+                args_map.insert("error".to_string(), e.to_string());
+                return ToolResult::error(aish_i18n::t_with_args(
+                    "tools.fs.read_file.read_failed",
+                    &args_map,
+                ));
+            }
+        };
+        if !canonical.starts_with(&self.offload_root) {
+            return ToolResult::error(aish_i18n::t("tools.fs.read_file.access_denied"));
+        }
+        let mut safe_args = args;
+        if let Some(obj) = safe_args.as_object_mut() {
+            obj.insert(
+                "path".to_string(),
+                serde_json::Value::String(canonical.to_string_lossy().into_owned()),
+            );
+        }
+        self.inner.execute(safe_args)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aish_llm::Tool;
+    use std::fs;
+
+    fn temp_dir() -> tempfile::TempDir {
+        tempfile::tempdir().expect("failed to create temp dir")
+    }
+
+    #[test]
+    fn test_read_file_with_line_numbers() {
+        let dir = temp_dir();
+        let file_path = dir.path().join("test.txt");
+        fs::write(&file_path, "hello\nworld\nfoo").unwrap();
+
+        let tool = ReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": file_path.to_str().unwrap()
+        }));
+
+        assert!(result.ok);
+        assert_eq!(result.output, "     1\thello\n     2\tworld\n     3\tfoo");
+    }
+
+    #[test]
+    fn test_read_file_with_offset() {
+        let dir = temp_dir();
+        let file_path = dir.path().join("test.txt");
+        fs::write(&file_path, "line1\nline2\nline3\nline4\nline5").unwrap();
+
+        let tool = ReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": file_path.to_str().unwrap(),
+            "offset": 2,
+            "limit": 2
+        }));
+
+        assert!(result.ok);
+        assert_eq!(result.output, "     3\tline3\n     4\tline4");
+    }
+
+    #[test]
+    fn test_read_file_large_file_truncated_with_notice() {
+        aish_i18n::set_locale("en-US");
+
+        let dir = temp_dir();
+        let file_path = dir.path().join("big.txt");
+        // Exceed MAX_READ_BYTES (256 KiB) to trigger the large-file path.
+        // 30000 lines × ~20 bytes each ≈ 600 KB.
+        let big_content: String = (0..30000)
+            .map(|i| format!("line_{i:05}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&file_path, &big_content).unwrap();
+        let tool = ReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": file_path.to_str().unwrap()
+        }));
+
+        assert!(
+            result.ok,
+            "large file should not be rejected: {}",
+            result.output
+        );
+        // Default truncation: first 500 lines + a notice.
+        assert!(
+            result.output.contains("line_00000"),
+            "should contain the first line"
+        );
+        assert!(
+            result.output.contains("line_00499"),
+            "should contain line 500 (0-based offset 499)"
+        );
+        assert!(
+            !result.output.contains("line_00500"),
+            "should not contain line 501 — truncated"
+        );
+    }
+
+    #[test]
+    fn test_read_file_large_file_with_offset_and_limit() {
+        aish_i18n::set_locale("en-US");
+
+        let dir = temp_dir();
+        let file_path = dir.path().join("big.txt");
+        let big_content: String = (0..30000)
+            .map(|i| format!("line_{i:05}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&file_path, &big_content).unwrap();
+
+        let tool = ReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": file_path.to_str().unwrap(),
+            "offset": 1000,
+            "limit": 3
+        }));
+
+        assert!(result.ok);
+        assert!(result.output.contains("line_01000"));
+        assert!(result.output.contains("line_01002"));
+        assert!(!result.output.contains("line_01003"));
+    }
+
+    #[test]
+    fn test_read_line_bounded_discards_rest_of_oversized_line() {
+        // A line far larger than the retention cap must still be consumed in
+        // full (so following lines are counted correctly) while only a
+        // bounded prefix stays in memory.
+        let input_len = MAX_READ_BYTES + 4 * 1024 * 1024;
+        let mut input = std::io::Cursor::new(vec![b'A'; input_len]);
+        let (line, clipped) = super::read_line_bounded(&mut input).unwrap().unwrap();
+        assert!(clipped, "oversized line should report clipping");
+        assert_eq!(line.len(), MAX_LINE_BYTES);
+        assert_eq!(
+            input.position() as usize,
+            input_len,
+            "the whole line must be consumed, not just the retained prefix"
+        );
+        assert!(
+            super::read_line_bounded(&mut input).unwrap().is_none(),
+            "clean EOF should yield None"
+        );
+    }
+
+    #[test]
+    fn test_read_line_bounded_keeps_short_lines_intact() {
+        let mut input = std::io::Cursor::new(b"hello\r\nworld\n".to_vec());
+
+        let (line, clipped) = super::read_line_bounded(&mut input).unwrap().unwrap();
+        assert_eq!(line, b"hello");
+        assert!(!clipped);
+
+        let (line, clipped) = super::read_line_bounded(&mut input).unwrap().unwrap();
+        assert_eq!(line, b"world");
+        assert!(!clipped);
+
+        assert!(super::read_line_bounded(&mut input).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_read_file_large_single_line_is_clipped() {
+        aish_i18n::set_locale("en-US");
+
+        let dir = temp_dir();
+        let file_path = dir.path().join("single-line.log");
+        // One line well past the large-file threshold; the old read_until
+        // path buffered the entire line before truncating it.
+        let mut content = vec![b'A'; MAX_READ_BYTES + 1024 * 1024];
+        content.push(b'\n');
+        fs::write(&file_path, &content).unwrap();
+
+        let tool = ReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": file_path.to_str().unwrap(),
+            "offset": 0,
+            "limit": 1
+        }));
+
+        assert!(result.ok, "{}", result.output);
+        assert!(
+            result.output.contains("line truncated"),
+            "expected truncation notice, got: {}",
+            result.output
+        );
+        // The returned payload is capped by MAX_LINE_BYTES regardless of how
+        // large the source line is.
+        assert!(
+            result.output.len() < MAX_LINE_BYTES + 1024,
+            "output should stay bounded, got {} bytes",
+            result.output.len()
+        );
+    }
+
+    #[test]
+    fn test_read_file_skips_oversized_line_outside_window() {
+        aish_i18n::set_locale("en-US");
+
+        let dir = temp_dir();
+        let file_path = dir.path().join("skip-single-line.log");
+        let mut content = vec![b'B'; MAX_READ_BYTES + 1024];
+        content.push(b'\n');
+        content.extend_from_slice(b"second-line\n");
+        fs::write(&file_path, &content).unwrap();
+
+        let tool = ReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": file_path.to_str().unwrap(),
+            "offset": 1,
+            "limit": 1
+        }));
+
+        assert!(result.ok, "{}", result.output);
+        assert!(
+            result.output.contains("second-line"),
+            "expected the second line, got: {}",
+            result.output
+        );
+        assert!(
+            !result.output.contains("line truncated"),
+            "an out-of-window oversized line should not affect the result: {}",
+            result.output
+        );
+    }
+
+    #[test]
+    fn test_ssh_read_file_rejects_paths_outside_offload_root() {
+        aish_i18n::set_locale("en-US");
+
+        let dir = temp_dir();
+        let file_path = dir.path().join("outside.txt");
+        fs::write(&file_path, "secret").unwrap();
+
+        let tool = SshReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": file_path.to_str().unwrap()
+        }));
+
+        assert!(!result.ok);
+        assert!(
+            result.output.contains("Access denied"),
+            "Expected access denied error, got: {}",
+            result.output
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_read_file_rejects_fifo_without_blocking() {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        aish_i18n::set_locale("en-US");
+        let dir = temp_dir();
+        let pipe = dir.path().join("wait.pipe");
+        let cpath = CString::new(pipe.as_os_str().as_bytes()).unwrap();
+        let rc = unsafe { libc::mkfifo(cpath.as_ptr(), 0o600) };
+        assert_eq!(rc, 0, "mkfifo failed: {}", std::io::Error::last_os_error());
+
+        let tool = ReadFileTool::new();
+        let started = std::time::Instant::now();
+        let result = tool.execute(serde_json::json!({
+            "path": pipe.to_str().unwrap()
+        }));
+        let elapsed = started.elapsed();
+
+        assert!(!result.ok, "FIFO must be rejected: {}", result.output);
+        assert!(
+            result.output.contains("not a regular file"),
+            "expected a clear non-regular-file error, got: {}",
+            result.output
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(1),
+            "FIFO read must not block (took {elapsed:?})"
+        );
+    }
+
+    #[test]
+    fn test_read_file_large_utf8_line_is_clipped_at_char_boundary() {
+        aish_i18n::set_locale("en-US");
+        let dir = temp_dir();
+        let file_path = dir.path().join("chinese.log");
+        // 360 KB of valid UTF-8 on a single line, above MAX_READ_BYTES.
+        let content = format!("{}\n", "中文运维".repeat(30000));
+        fs::write(&file_path, &content).unwrap();
+
+        let tool = ReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": file_path.to_str().unwrap(),
+            "offset": 0,
+            "limit": 1
+        }));
+
+        assert!(
+            result.ok,
+            "valid UTF-8 must not fail to decode when clipped: {}",
+            result.output
+        );
+        assert!(
+            result.output.contains("line truncated"),
+            "expected a truncation notice, got: {}",
+            result.output
+        );
+        assert!(
+            result.output.contains("中文运维"),
+            "clipped line should keep complete characters"
+        );
+    }
+
+    #[test]
+    fn clip_line_to_utf8_handles_valid_and_malformed_boundaries() {
+        // A valid 4-byte character crossing the boundary is dropped.
+        let mut valid = vec![b'A'; MAX_LINE_BYTES - 1];
+        valid.extend_from_slice("😀".as_bytes());
+        assert!(clip_line_to_utf8(&mut valid));
+        assert_eq!(valid.len(), MAX_LINE_BYTES - 1);
+        assert!(std::str::from_utf8(&valid).is_ok());
+
+        // Incomplete lead byte followed by an invalid continuation.
+        let mut bad = vec![b'A'; MAX_LINE_BYTES - 1];
+        bad.extend_from_slice(&[0xE4, 0xFF]);
+        assert!(clip_line_to_utf8(&mut bad));
+        assert_eq!(bad.len(), MAX_LINE_BYTES);
+        assert!(std::str::from_utf8(&bad).is_err());
+
+        // Three continuation bytes followed by an invalid fourth byte.
+        let mut bad4 = vec![b'A'; MAX_LINE_BYTES - 1];
+        bad4.extend_from_slice(&[0xF0, 0x9F, 0x98, 0x41]);
+        assert!(clip_line_to_utf8(&mut bad4));
+        assert_eq!(bad4.len(), MAX_LINE_BYTES);
+        assert!(std::str::from_utf8(&bad4).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_read_file_follows_symlink_to_regular_file() {
+        aish_i18n::set_locale("en-US");
+        let dir = temp_dir();
+        let real = dir.path().join("real.txt");
+        let link = dir.path().join("link.txt");
+        fs::write(&real, "hello\n").unwrap();
+        std::os::unix::fs::symlink("real.txt", &link).unwrap();
+
+        let tool = ReadFileTool::new();
+        let result = tool.execute(serde_json::json!({
+            "path": link.to_str().unwrap()
+        }));
+
+        assert!(result.ok, "symlink read failed: {}", result.output);
+        assert!(result.output.contains("hello"));
+    }
+}

@@ -1,0 +1,967 @@
+# aish bash rc wrapper
+# This file is used as rcfile for interactive bash
+
+# Disable readline — the frontend (aish) handles all display and editing.
+# Without readline, bash uses the simple line reader which does not emit
+# extra newlines on Enter, preventing spurious blank lines in PTY output.
+# Tab forwarding temporarily re-enables readline via `set -o emacs` in the PTY layer.
+set +o emacs
+set +o vi
+
+# Enable job control so Ctrl+Z suspends foreground jobs
+set -m
+
+# Source user's bashrc if exists
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
+
+# Source system bashrc if exists
+if [ -f /etc/bash.bashrc ]; then
+    source /etc/bash.bashrc
+fi
+
+case ":${HISTCONTROL:-}:" in
+    *:ignorespace:*|*:ignoreboth:*)
+        ;;
+    "::")
+        HISTCONTROL="ignorespace"
+        ;;
+    *)
+        HISTCONTROL="${HISTCONTROL}:ignorespace"
+        ;;
+esac
+
+# Set up exit code tracking
+__aish_last_exit_code=0
+__AISH_PROTOCOL_VERSION=1
+__AISH_CONTROL_FD="${AISH_CONTROL_FD:-}"
+__AISH_AT_PROMPT=0
+__AISH_CANCEL_ACTIVE=0
+__AISH_CANCEL_DEBUG_GUARD=0
+__AISH_CANCEL_SAVED_INT_TRAP=
+__AISH_CANCEL_SAVED_INT_ACTION=
+__AISH_CANCEL_SAVED_INT_MODE=unset
+__AISH_CANCEL_TEMP_INT_TRAP=
+__AISH_CANCEL_INT_TRAP_RECHECK=0
+__AISH_ORIGINAL_DEBUG_ACTION=
+__AISH_ORIGINAL_DEBUG_MODE=unset
+__AISH_CANCEL_SAVED_DEBUG_ACTION=
+__AISH_CANCEL_SAVED_DEBUG_MODE=unset
+__AISH_TRAP_WRAPPER_ACTIVE=0
+__AISH_USER_DEBUG_ACTIVE=0
+__AISH_CANCEL_MARKER=
+__AISH_CANCEL_SOURCE_ACTIVE=0
+__AISH_CANCEL_SAVED_FUNCTRACE=0
+__AISH_CANCEL_SAVED_ERREXIT=0
+__AISH_CANCEL_SAVED_EXTDEBUG=0
+__AISH_CANCEL_ABORT=0
+__AISH_CANCEL_ABORT_STATUS=
+__AISH_CANCEL_DEBUG_CLEANUP=0
+__AISH_BACKEND_SETUP=0
+__AISH_BACKEND_TRACE_FUNCTIONS=1
+__AISH_BACKEND_ENABLE_ECHO=1
+
+__aish_json_escape() {
+    local value="$1"
+    # Use C locale so [:cntrl:] is exactly 0x00-0x1F + 0x7F and the
+    # substitution stays in-process (no per-call fork to tr).
+    local LC_ALL=C
+    value=${value//\\/\\\\}
+    value=${value//\"/\\\"}
+    value=${value//$'\n'/\\n}
+    value=${value//$'\r'/\\r}
+    value=${value//$'\t'/\\t}
+    # Strip C0 control chars (0x00-0x1F) and DEL (0x7F).  JSON forbids
+    # their literal form (RFC 8259 §7), and command text occasionally
+    # carries stray bytes — e.g. Ctrl-U (0x15) the frontend prepends to
+    # clear stale PTY line-discipline input.  Without this strip, the
+    # Rust control-event parser rejects the whole line as malformed.
+    #
+    # Known limitation: the range is broader than strictly needed for
+    # the prefix case, so any literal control bytes embedded inside a
+    # user command (e.g. `echo "$(printf 'a\tb')"` carries a raw \t)
+    # are silently dropped from the emitted event.  This is acceptable
+    # because (a) the prefix is the dominant source of stray C0 bytes,
+    # (b) the event is for UI display/telemetry only and not authoritative,
+    # and (c) tightening the strip to "first byte only" would require
+    # bash-side state tracking not worth the complexity.
+    value=${value//[[:cntrl:]]/}
+    printf '%s' "$value"
+}
+
+__aish_emit_control_line() {
+    local payload="$1"
+    if [[ ! "$__AISH_CONTROL_FD" =~ ^[0-9]+$ ]]; then
+        return 0
+    fi
+
+    printf '%s\n' "$payload" >&${__AISH_CONTROL_FD} 2>/dev/null || true
+}
+
+__aish_emit_session_ready() {
+    local ts cwd_json payload
+    ts=$(date +%s)
+    cwd_json=$(__aish_json_escape "$PWD")
+    printf -v payload \
+        '{"version":%s,"type":"session_ready","ts":%s,"shell_pid":%s,"cwd":"%s","shlvl":%s}' \
+        "$__AISH_PROTOCOL_VERSION" "$ts" "$$" "$cwd_json" "${SHLVL:-0}"
+    __aish_emit_control_line "$payload"
+}
+
+__aish_emit_prompt_ready() {
+    local exit_code="$1"
+    local ts cwd_json interrupted command_seq payload
+    ts=$(date +%s)
+    cwd_json=$(__aish_json_escape "$PWD")
+    interrupted=false
+    if [[ "$exit_code" == "130" ]]; then
+        interrupted=true
+    fi
+
+    command_seq=null
+    if [[ -n "${__AISH_ACTIVE_COMMAND_SEQ:-}" ]]; then
+        command_seq="${__AISH_ACTIVE_COMMAND_SEQ}"
+    fi
+
+    printf -v payload \
+        '{"version":%s,"type":"prompt_ready","ts":%s,"command_seq":%s,"exit_code":%s,"cwd":"%s","shlvl":%s,"interrupted":%s}' \
+        "$__AISH_PROTOCOL_VERSION" "$ts" "$command_seq" "$exit_code" "$cwd_json" "${SHLVL:-0}" "$interrupted"
+    __aish_emit_control_line "$payload"
+    unset __AISH_ACTIVE_COMMAND_SEQ
+    unset __AISH_ACTIVE_COMMAND_TEXT
+}
+
+__aish_emit_command_started() {
+    local command="$1"
+    local ts command_json command_seq payload
+    ts=$(date +%s)
+    command_json=$(__aish_json_escape "$command")
+
+    command_seq=null
+    if [[ -n "${__AISH_ACTIVE_COMMAND_SEQ:-}" ]]; then
+        command_seq="${__AISH_ACTIVE_COMMAND_SEQ}"
+    fi
+
+    printf -v payload \
+        '{"version":%s,"type":"command_started","ts":%s,"command_seq":%s,"command":"%s","cwd":"%s","shlvl":%s}' \
+        "$__AISH_PROTOCOL_VERSION" "$ts" "$command_seq" "$command_json" "$(__aish_json_escape "$PWD")" "${SHLVL:-0}"
+    __aish_emit_control_line "$payload"
+}
+
+__aish_int_trap_action() {
+    local definition="$1"
+    if [[ -z "$definition" ]]; then
+        return 0
+    fi
+
+    # `trap -p` returns shell-escaped syntax. Parse its three words without
+    # evaluating the saved action; it runs only when the corresponding signal
+    # arrives and the command was not cancelled by aish.
+    eval "set -- $definition"
+    printf '%s' "${3-}"
+}
+
+__aish_return_status() {
+    return "$1"
+}
+
+__aish_abort_backend_source() {
+    __AISH_CANCEL_SOURCE_ACTIVE=0
+    __AISH_CANCEL_ABORT=1
+    __AISH_CANCEL_ABORT_STATUS=130
+    __AISH_CANCEL_DEBUG_CLEANUP=0
+    shopt -s extdebug
+    set -e
+    return 0
+}
+
+__aish_run_saved_trap_action() {
+    local entry_status="$1"
+    local action="$2"
+    local had_errexit=0
+    [[ "$-" == *e* ]] && had_errexit=1
+    __AISH_USER_DEBUG_ACTIVE=1
+    set +e
+    __aish_return_status "$entry_status"
+    eval "$action"
+    if [[ "$had_errexit" == "1" && "$-" != *e* ]]; then
+        set -e
+    fi
+    __AISH_USER_DEBUG_ACTIVE=0
+}
+
+__aish_backend_int_handler() {
+    local entry_status="$1"
+    if [[ -n "${__AISH_CANCEL_MARKER:-}" && -s "${__AISH_CANCEL_MARKER}" ]]; then
+        if [[ "${__AISH_CANCEL_SOURCE_ACTIVE:-0}" == "1" ]]; then
+            __aish_abort_backend_source
+            return 130
+        fi
+        return 0
+    fi
+
+    case "$__AISH_CANCEL_SAVED_INT_MODE" in
+        unset)
+            __aish_abort_backend_source
+            return 130
+            ;;
+        ignored)
+            return 0
+            ;;
+        action)
+            __aish_run_saved_trap_action "$entry_status" "$__AISH_CANCEL_SAVED_INT_ACTION"
+            ;;
+    esac
+}
+
+__aish_set_debug_trap() {
+    local action="$1"
+    if [[ "$action" == "-" ]]; then
+        __AISH_ORIGINAL_DEBUG_ACTION=
+        __AISH_ORIGINAL_DEBUG_MODE=unset
+    elif [[ -z "$action" ]]; then
+        __AISH_ORIGINAL_DEBUG_ACTION=
+        __AISH_ORIGINAL_DEBUG_MODE=ignored
+    else
+        __AISH_ORIGINAL_DEBUG_ACTION="$action"
+        __AISH_ORIGINAL_DEBUG_MODE=action
+    fi
+    if [[ "${__AISH_CANCEL_ACTIVE:-0}" == "1" ]]; then
+        __AISH_CANCEL_SAVED_DEBUG_ACTION=$__AISH_ORIGINAL_DEBUG_ACTION
+        __AISH_CANCEL_SAVED_DEBUG_MODE=$__AISH_ORIGINAL_DEBUG_MODE
+    fi
+    builtin trap '__aish_on_debug' DEBUG
+}
+
+__aish_set_backend_int_trap() {
+    local action="$1"
+    if [[ "$action" == "-" ]]; then
+        __AISH_CANCEL_SAVED_INT_TRAP=
+        __AISH_CANCEL_SAVED_INT_ACTION=
+        __AISH_CANCEL_SAVED_INT_MODE=unset
+    else
+        __AISH_CANCEL_SAVED_INT_ACTION="$action"
+        if [[ -z "$action" ]]; then
+            __AISH_CANCEL_SAVED_INT_MODE=ignored
+        else
+            __AISH_CANCEL_SAVED_INT_MODE=action
+        fi
+        printf -v __AISH_CANCEL_SAVED_INT_TRAP 'trap -- %q INT' "$action"
+    fi
+    __aish_install_backend_int_trap
+}
+
+__aish_print_saved_trap() {
+    local signal="$1" mode action name
+    case "$signal" in
+        DEBUG|SIGDEBUG)
+            mode=$__AISH_ORIGINAL_DEBUG_MODE
+            action=$__AISH_ORIGINAL_DEBUG_ACTION
+            name=DEBUG
+            ;;
+        INT|SIGINT|2)
+            if [[ "${__AISH_CANCEL_ACTIVE:-0}" == "1" ]]; then
+                mode=$__AISH_CANCEL_SAVED_INT_MODE
+                action=$__AISH_CANCEL_SAVED_INT_ACTION
+            else
+                builtin trap -p "$signal"
+                return 0
+            fi
+            name=INT
+            ;;
+        *)
+            builtin trap -p "$signal"
+            return 0
+            ;;
+    esac
+
+    [[ "$mode" == "unset" ]] && return 0
+    local quoted
+    printf -v quoted '%q' "$action"
+    printf 'trap -- %s %s\n' "$quoted" "$name"
+}
+
+# Keep Bash's private dispatchers installed while preserving the trap action
+# requested by user commands. The user actions are chained from __aish_on_debug
+# and __aish_backend_int_handler instead of replacing those cancellation hooks.
+trap() {
+    if [[ "${1-}" == "-p" ]]; then
+        shift
+        if (($# == 0)); then
+            local installed_traps
+            installed_traps=$(builtin trap -p)
+            while IFS= read -r installed_trap; do
+                case "$installed_trap" in
+                    *" DEBUG"|*" SIGDEBUG") continue ;;
+                    *" INT"|*" SIGINT")
+                        [[ "${__AISH_CANCEL_ACTIVE:-0}" == "1" ]] && continue
+                        ;;
+                esac
+                printf '%s\n' "$installed_trap"
+            done <<< "$installed_traps"
+            __aish_print_saved_trap DEBUG
+            if [[ "${__AISH_CANCEL_ACTIVE:-0}" == "1" ]]; then
+                __aish_print_saved_trap INT
+            fi
+            return 0
+        fi
+        local signal
+        for signal in "$@"; do
+            __aish_print_saved_trap "$signal"
+        done
+        return 0
+    fi
+
+    if [[ "${1-}" == "-l" ]]; then
+        builtin trap "$@"
+        return $?
+    fi
+    if (($# < 2)); then
+        builtin trap "$@"
+        return $?
+    fi
+
+    local action="$1"
+    shift
+    if [[ "$action" == "--" ]]; then
+        action="${1-}"
+        shift
+    fi
+    local signal status=0
+    local -a other_signals=()
+    __AISH_TRAP_WRAPPER_ACTIVE=1
+    for signal in "$@"; do
+        case "$signal" in
+            DEBUG|SIGDEBUG)
+                __aish_set_debug_trap "$action"
+                ;;
+            INT|SIGINT|2)
+                if [[ "${__AISH_CANCEL_ACTIVE:-0}" == "1" ]]; then
+                    __aish_set_backend_int_trap "$action"
+                else
+                    other_signals+=("$signal")
+                fi
+                ;;
+            *)
+                other_signals+=("$signal")
+                ;;
+        esac
+    done
+    if ((${#other_signals[@]} > 0)); then
+        builtin trap "$action" "${other_signals[@]}" || status=$?
+    fi
+    __AISH_TRAP_WRAPPER_ACTIVE=0
+    return "$status"
+}
+
+__aish_install_backend_int_trap() {
+    local handler='__aish_backend_int_handler "$?"'
+    builtin trap "$handler" INT
+    __AISH_CANCEL_TEMP_INT_TRAP=$(builtin trap -p INT)
+}
+
+__aish_begin_backend_command() {
+    # Backend commands can read terminal input (for example through `read` or
+    # Python's input()). Re-enable PTY echo until PROMPT_COMMAND restores the
+    # silent aish prompt.
+    if [[ "${__AISH_BACKEND_ENABLE_ECHO:-1}" == "1" ]]; then
+        stty echo 2>/dev/null || true
+    fi
+    __AISH_CANCEL_SAVED_INT_TRAP=$(builtin trap -p INT)
+    __AISH_CANCEL_SAVED_INT_ACTION=$(__aish_int_trap_action "$__AISH_CANCEL_SAVED_INT_TRAP")
+    if [[ -z "$__AISH_CANCEL_SAVED_INT_TRAP" ]]; then
+        __AISH_CANCEL_SAVED_INT_MODE=unset
+    elif [[ -z "$__AISH_CANCEL_SAVED_INT_ACTION" ]]; then
+        __AISH_CANCEL_SAVED_INT_MODE=ignored
+    else
+        __AISH_CANCEL_SAVED_INT_MODE=action
+    fi
+    __AISH_CANCEL_SAVED_DEBUG_ACTION=$__AISH_ORIGINAL_DEBUG_ACTION
+    __AISH_CANCEL_SAVED_DEBUG_MODE=$__AISH_ORIGINAL_DEBUG_MODE
+    __AISH_CANCEL_INT_TRAP_RECHECK=0
+    __AISH_CANCEL_SOURCE_ACTIVE=1
+    __AISH_CANCEL_ACTIVE=1
+    __AISH_CANCEL_ABORT_STATUS=
+    __AISH_CANCEL_DEBUG_GUARD=0
+    if [[ "$-" == *T* ]]; then
+        __AISH_CANCEL_SAVED_FUNCTRACE=1
+    else
+        __AISH_CANCEL_SAVED_FUNCTRACE=0
+    fi
+    if [[ "$-" == *e* ]]; then
+        __AISH_CANCEL_SAVED_ERREXIT=1
+    else
+        __AISH_CANCEL_SAVED_ERREXIT=0
+    fi
+    if shopt -q extdebug; then
+        __AISH_CANCEL_SAVED_EXTDEBUG=1
+    else
+        __AISH_CANCEL_SAVED_EXTDEBUG=0
+    fi
+    __aish_install_backend_int_trap
+    # The DEBUG hook must see trap changes made inside user-defined functions
+    # as well as at the source-file's top level.
+    if [[ "${__AISH_BACKEND_TRACE_FUNCTIONS:-1}" == "1" ]]; then
+        set -o functrace
+    fi
+    __AISH_AT_PROMPT=0
+    __aish_emit_command_started "${__AISH_ACTIVE_COMMAND_TEXT:-}"
+}
+
+__aish_finish_backend_command() {
+    local exit_code="$1"
+    local was_cancelled="${__AISH_CANCEL_ABORT:-0}"
+    if [[ -n "${__AISH_CANCEL_ABORT_STATUS:-}" ]]; then
+        exit_code=$__AISH_CANCEL_ABORT_STATUS
+    fi
+    __AISH_CANCEL_SOURCE_ACTIVE=0
+    __AISH_CANCEL_ACTIVE=0
+    __AISH_CANCEL_ABORT=0
+    __AISH_CANCEL_ABORT_STATUS=
+    __AISH_CANCEL_DEBUG_CLEANUP=0
+    if [[ -n "$__AISH_CANCEL_SAVED_INT_TRAP" ]]; then
+        eval "$__AISH_CANCEL_SAVED_INT_TRAP"
+    else
+        builtin trap - INT
+    fi
+    __AISH_CANCEL_TEMP_INT_TRAP=
+    __AISH_CANCEL_MARKER=
+    if [[ "$__AISH_CANCEL_SAVED_FUNCTRACE" == "0" ]]; then
+        set +o functrace
+    fi
+    if [[ "$__AISH_CANCEL_SAVED_ERREXIT" == "1" ]]; then
+        set -e
+    else
+        set +e
+    fi
+    if [[ "$was_cancelled" == "1" ]]; then
+        if [[ "$__AISH_CANCEL_SAVED_EXTDEBUG" == "1" ]]; then
+            shopt -s extdebug
+        else
+            shopt -u extdebug
+        fi
+    fi
+    return "$exit_code"
+}
+
+__aish_rewrite_last_history_entry() {
+    local seq="${__AISH_ACTIVE_COMMAND_SEQ:-}"
+    local original_command="${__AISH_ACTIVE_COMMAND_TEXT:-}"
+    local history_line history_index history_command
+
+    if [[ -z "$seq" ]]; then
+        return 0
+    fi
+
+    history_line=$(builtin history 1 2>/dev/null || true)
+    if [[ "$history_line" =~ ^[[:space:]]*([0-9]+)[[:space:]]+(.*)$ ]]; then
+        history_index="${BASH_REMATCH[1]}"
+        history_command="${BASH_REMATCH[2]}"
+
+        if [[ "$history_command" == __AISH_ACTIVE_COMMAND_SEQ=* ]]; then
+            builtin history -d "$history_index" 2>/dev/null || true
+            if [[ -z "$original_command" ]]; then
+                original_command="${history_command#*; }"
+            fi
+        fi
+    fi
+
+    if [[ "$seq" == -* ]]; then
+        return 0
+    fi
+
+    if [[ -z "$original_command" ]]; then
+        return 0
+    fi
+
+    builtin history -s "$original_command" 2>/dev/null || true
+}
+
+__aish_emit_shell_exiting() {
+    local exit_code="$1"
+    local ts payload
+    ts=$(date +%s)
+    printf -v payload \
+        '{"version":%s,"type":"shell_exiting","ts":%s,"exit_code":%s}' \
+        "$__AISH_PROTOCOL_VERSION" "$ts" "$exit_code"
+    __aish_emit_control_line "$payload"
+}
+
+__aish_on_exit() {
+    local exit_code=$?
+    __aish_emit_shell_exiting "$exit_code"
+}
+
+__aish_on_debug() {
+    local entry_status=$?
+    if [[ "${__AISH_TRAP_WRAPPER_ACTIVE:-0}" == "1" || "${__AISH_USER_DEBUG_ACTIVE:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    if [[ "${__AISH_CANCEL_ACTIVE:-0}" == "1" ]]; then
+        if [[ "${__AISH_CANCEL_ABORT:-0}" == "1" ]]; then
+            if [[ "${__AISH_CANCEL_DEBUG_CLEANUP:-0}" == "1" ]]; then
+                return 0
+            fi
+            case "$BASH_COMMAND" in
+                __aish_finish_backend_command*|__aish_prompt_command*)
+                    __AISH_CANCEL_DEBUG_CLEANUP=1
+                    return 0
+                    ;;
+            esac
+            return 1
+        fi
+        if [[ "${__AISH_CANCEL_DEBUG_GUARD:-0}" != "1" ]]; then
+            __AISH_CANCEL_DEBUG_GUARD=1
+            case "$BASH_COMMAND" in
+                "set -T"|"set -o functrace"|"set -o functrace "*)
+                    __AISH_CANCEL_SAVED_FUNCTRACE=1
+                    ;;
+                "set +T"|"set +o functrace"|"set +o functrace "*)
+                    __AISH_CANCEL_SAVED_FUNCTRACE=0
+                    ;;
+            esac
+            if [[ "${__AISH_BACKEND_TRACE_FUNCTIONS:-1}" == "1" && "$-" != *T* ]]; then
+                __AISH_CANCEL_SAVED_FUNCTRACE=0
+                set -o functrace
+            fi
+            if [[ "$-" == *e* ]]; then
+                __AISH_CANCEL_SAVED_ERREXIT=1
+            else
+                __AISH_CANCEL_SAVED_ERREXIT=0
+            fi
+            if shopt -q extdebug; then
+                __AISH_CANCEL_SAVED_EXTDEBUG=1
+            else
+                __AISH_CANCEL_SAVED_EXTDEBUG=0
+            fi
+            if [[ "${__AISH_CANCEL_INT_TRAP_RECHECK:-0}" == "1" ]]; then
+                local current_int_trap
+                current_int_trap=$(builtin trap -p INT)
+                if [[ "$current_int_trap" != "$__AISH_CANCEL_TEMP_INT_TRAP" ]]; then
+                    __AISH_CANCEL_SAVED_INT_TRAP="$current_int_trap"
+                    __AISH_CANCEL_SAVED_INT_ACTION=$(
+                        __aish_int_trap_action "$__AISH_CANCEL_SAVED_INT_TRAP"
+                    )
+                    if [[ -z "$__AISH_CANCEL_SAVED_INT_TRAP" ]]; then
+                        __AISH_CANCEL_SAVED_INT_MODE=unset
+                    elif [[ -z "$__AISH_CANCEL_SAVED_INT_ACTION" ]]; then
+                        __AISH_CANCEL_SAVED_INT_MODE=ignored
+                    else
+                        __AISH_CANCEL_SAVED_INT_MODE=action
+                    fi
+                    __aish_install_backend_int_trap
+                fi
+                __AISH_CANCEL_INT_TRAP_RECHECK=0
+            fi
+            case "$BASH_COMMAND" in
+                builtin\ trap*) __AISH_CANCEL_INT_TRAP_RECHECK=1 ;;
+            esac
+            __AISH_CANCEL_DEBUG_GUARD=0
+        fi
+        if [[ "$__AISH_CANCEL_SAVED_DEBUG_MODE" == "action" ]]; then
+            __aish_run_saved_trap_action "$entry_status" "$__AISH_CANCEL_SAVED_DEBUG_ACTION"
+        fi
+        return 0
+    fi
+
+    if [[ "${__AISH_BACKEND_SETUP:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    if [[ "$__AISH_ORIGINAL_DEBUG_MODE" == "action" ]]; then
+        __aish_run_saved_trap_action "$entry_status" "$__AISH_ORIGINAL_DEBUG_ACTION"
+    fi
+
+    if [[ "${__AISH_AT_PROMPT:-0}" != "1" ]]; then
+        return 0
+    fi
+
+    case "$BASH_COMMAND" in
+        __aish_begin_backend_command*|__aish_finish_backend_command*|__AISH_BACKEND_SETUP=*|__AISH_CANCEL_MARKER=* )
+            return 0
+            ;;
+        __aish_prompt_command*|__aish_on_debug*|__aish_emit_*|__aish_json_escape*|__aish_complete*|_aish_*|trap* )
+            return 0
+            ;;
+        __AISH_ACTIVE_COMMAND_SEQ=* )
+            return 0
+            ;;
+        __AISH_ACTIVE_COMMAND_TEXT=* )
+            return 0
+            ;;
+    esac
+
+    # Re-enable echo for the duration of the user command.
+    #
+    # The local PTY keeps -echo at the aish prompt so the frontend owns
+    # display (injected command lines must not bounce back via master_fd).
+    # Once a real command starts, cooked-mode children need kernel ECHO:
+    # `aish update`'s read_line confirm, bash `read`, python input(), ssh
+    # remote readline inheritance, nested shells without their own
+    # echo, etc.  Without this, keystrokes are accepted but invisible —
+    # users report "无法输入".
+    #
+    # Programs that need silent input (sudo/passwd) turn ECHO off
+    # themselves.  __aish_prompt_command re-disables ECHO when the
+    # command finishes and the aish prompt returns.
+    stty echo 2>/dev/null || true
+
+    __AISH_AT_PROMPT=0
+    if [[ -n "${__AISH_ACTIVE_COMMAND_TEXT:-}" ]]; then
+        __aish_emit_command_started "$__AISH_ACTIVE_COMMAND_TEXT"
+    else
+        __aish_emit_command_started "$BASH_COMMAND"
+    fi
+    return 0
+}
+
+__aish_prompt_command() {
+    local exit_code=$?
+    if [[ "${__AISH_CANCEL_ACTIVE:-0}" == "1" && -n "${__AISH_CANCEL_ABORT_STATUS:-}" ]]; then
+        exit_code=$__AISH_CANCEL_ABORT_STATUS
+    fi
+    __aish_last_exit_code=$exit_code
+    # `errexit` can stop the backend wrapper line when cancellation happens
+    # inside a user function. Finish the command here if its inline cleanup
+    # was skipped, then restore the original shell options and INT trap.
+    if [[ "${__AISH_CANCEL_ACTIVE:-0}" == "1" ]]; then
+        __aish_finish_backend_command "$exit_code" || true
+    fi
+    __aish_rewrite_last_history_entry
+    # Call original PROMPT_COMMAND if it exists
+    if [[ -n "$__AISH_ORIGINAL_PROMPT_COMMAND" ]]; then
+        eval "$__AISH_ORIGINAL_PROMPT_COMMAND"
+    fi
+    # Keep PS1 empty — prompt rendering is handled by the Python frontend.
+    PS1=''
+    # Re-disable echo after the user command (DEBUG trap re-enabled it).
+    # The frontend handles all display at the aish prompt itself.
+    stty -echo -echonl 2>/dev/null || true
+    __AISH_AT_PROMPT=1
+    __aish_emit_prompt_ready "$exit_code"
+}
+
+# Save original PROMPT_COMMAND before we override it
+__AISH_ORIGINAL_PROMPT_COMMAND="$PROMPT_COMMAND"
+
+# Keep the backend prompt silent by default; only enable the custom aish
+# prompt when AISH_ENABLE_CUSTOM_PROMPT=1 is set.
+PROMPT_COMMAND='__aish_prompt_command'
+
+__AISH_ORIGINAL_DEBUG_TRAP=$(builtin trap -p DEBUG)
+__AISH_ORIGINAL_DEBUG_ACTION=$(__aish_int_trap_action "$__AISH_ORIGINAL_DEBUG_TRAP")
+if [[ -z "$__AISH_ORIGINAL_DEBUG_TRAP" ]]; then
+    __AISH_ORIGINAL_DEBUG_MODE=unset
+elif [[ -z "$__AISH_ORIGINAL_DEBUG_ACTION" ]]; then
+    __AISH_ORIGINAL_DEBUG_MODE=ignored
+else
+    __AISH_ORIGINAL_DEBUG_MODE=action
+fi
+builtin trap '__aish_on_exit' EXIT
+builtin trap '__aish_on_debug' DEBUG
+
+# Disable terminal echo — the frontend (aish) handles all display.
+# This prevents the PTY line discipline from echoing user input back
+# through master_fd, which would cause commands to appear twice.
+stty -echo -echonl 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Helper: append '/' to entries that are directories.
+# Reads from stdin, one candidate per line.
+# ---------------------------------------------------------------------------
+__aish_mark_dirs() {
+    local entry
+    while IFS= read -r entry; do
+        [[ -z "$entry" ]] && continue
+        if [[ "$entry" == */ ]]; then
+            printf '%s\n' "$entry"
+        elif [[ -d "$entry" ]]; then
+            printf '%s/\n' "$entry"
+        else
+            printf '%s\n' "$entry"
+        fi
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Tab completion for aish frontend (bash is the single source of truth).
+# Usage: __aish_complete REQUEST_ID "command line" CURSOR_POINT
+# Emits completion_result JSON on the control pipe.
+# ---------------------------------------------------------------------------
+
+__AISH_COMP_DISPLAY=()
+__AISH_COMP_REPLACEMENT=()
+
+_aish_reset_candidates() {
+    __AISH_COMP_DISPLAY=()
+    __AISH_COMP_REPLACEMENT=()
+}
+
+_aish_add_candidate() {
+    local raw="$1"
+    local cur="${2:-}"
+    local as_command="${3:-0}"
+    local display="" replacement="" base="" existing
+
+    [[ -z "$raw" ]] && return 0
+
+    if [[ "$raw" == */ ]]; then
+        replacement="$raw"
+    elif [[ -d "$raw" ]]; then
+        replacement="${raw}/"
+    else
+        replacement="$raw"
+        [[ "$replacement" != *' ' ]] && replacement+=" "
+    fi
+
+    if [[ -n "$cur" && "$replacement" == "$cur" ]]; then
+        return 0
+    fi
+    for existing in "${__AISH_COMP_REPLACEMENT[@]}"; do
+        if [[ "$existing" == "$replacement" ]]; then
+            return 0
+        fi
+    done
+
+    if [[ "$as_command" == 1 ]]; then
+        display="${raw% }"
+    else
+        base="${raw%/}"
+        base="${base##*/}"
+        [[ -z "$base" ]] && base="${raw%/}"
+        if [[ "$raw" == */ || -d "$raw" ]]; then
+            display="${base}/"
+        else
+            display="$base"
+        fi
+    fi
+
+    __AISH_COMP_DISPLAY+=("$display")
+    __AISH_COMP_REPLACEMENT+=("$replacement")
+}
+
+__aish_emit_completion_result() {
+    local request_id="$1"
+    local word_start="$2"
+    local parts=() i payload candidates_json
+
+    for (( i=0; i<${#__AISH_COMP_DISPLAY[@]}; i++ )); do
+        parts+=("{\"display\":\"$(__aish_json_escape "${__AISH_COMP_DISPLAY[$i]}")\",\"replacement\":\"$(__aish_json_escape "${__AISH_COMP_REPLACEMENT[$i]}")\"}")
+    done
+
+    if ((${#parts[@]} > 0)); then
+        local IFS=,
+        candidates_json="[${parts[*]}]"
+    else
+        candidates_json="[]"
+    fi
+
+    printf -v payload \
+        '{"version":%s,"type":"completion_result","request_id":%s,"word_start":%s,"candidates":%s}' \
+        "$__AISH_PROTOCOL_VERSION" "$request_id" "$word_start" "$candidates_json"
+    __aish_emit_control_line "$payload"
+}
+
+_aish_is_path_like() {
+    local token="$1"
+    [[ -z "$token" ]] && return 1
+    [[ "$token" == /* || "$token" == ./* || "$token" == ../* || "$token" == ~* || "$token" == */ ]] && return 0
+    return 1
+}
+
+# Maximum candidates emitted per completion (large dirs like /usr/bin/).
+__AISH_COMPLETION_LIMIT=100
+
+# readline sorts matches before display; COMPREPLY/compgen keep readdir order.
+_aish_sort_compreply() {
+    ((${#COMPREPLY[@]} < 2)) && return 0
+    mapfile -t COMPREPLY < <(
+        printf '%s\n' "${COMPREPLY[@]}" \
+            | LC_COLLATE="${LC_COLLATE:-${LC_ALL:-C}}" sort
+    )
+}
+
+__aish_load_bash_completion() {
+    [[ -n "${__AISH_BASH_COMP_LOADED:-}" ]] && return 0
+    if [[ -f /usr/share/bash-completion/bash_completion ]]; then
+        # shellcheck source=/dev/null
+        source /usr/share/bash-completion/bash_completion
+    elif [[ -f /etc/bash_completion ]]; then
+        # shellcheck source=/dev/null
+        source /etc/bash_completion
+    fi
+    __AISH_BASH_COMP_LOADED=1
+}
+
+_aish_resolve_compreply() {
+    local item="$1" cur="$2" dir=""
+
+    [[ -z "$item" ]] && return 0
+    if [[ "$item" == /* || "$item" == ~* || "$item" == ./* || "$item" == ../* ]]; then
+        printf '%s' "$item"
+        return 0
+    fi
+
+    if [[ "$cur" == */ ]]; then
+        dir="$cur"
+    elif [[ "$cur" == */* ]]; then
+        dir="${cur%/*}/"
+    elif [[ -n "$cur" && -d "$cur" ]]; then
+        dir="${cur}/"
+    else
+        dir="./"
+    fi
+    printf '%s' "${dir}${item}"
+}
+
+_aish_set_comp_context() {
+    local comp_line="$1"
+    local cursor="$2"
+    local -a words=()
+    local -a word_starts=()
+    local i=0 word="" start=0 ch="" cword=0 pos=0
+
+    for (( i=0; i<${#comp_line}; i++ )); do
+        ch="${comp_line:$i:1}"
+        if [[ "$ch" == " " || "$ch" == $'\t' ]]; then
+            if [[ -n "$word" ]]; then
+                words+=("$word")
+                word_starts+=("$start")
+                word=""
+            fi
+        else
+            if [[ -z "$word" ]]; then
+                start=$i
+            fi
+            word+="$ch"
+        fi
+    done
+    if [[ -n "$word" ]]; then
+        words+=("$word")
+        word_starts+=("$start")
+    fi
+
+    if (( cursor > 0 )) && [[ "${comp_line:$((cursor-1)):1}" == " " ]]; then
+        words+=("")
+        word_starts+=("$cursor")
+    fi
+
+    COMP_LINE="$comp_line"
+    COMP_POINT="$cursor"
+    COMP_WORDS=("${words[@]}")
+
+    for (( i=0; i<${#words[@]}; i++ )); do
+        pos=$(( pos + ${#words[i]} + 1 ))
+        if (( pos > cursor )); then
+            cword=$i
+            break
+        fi
+        cword=$i
+    done
+    COMP_CWORD=$cword
+
+    __AISH_COMP_WORDS=("${words[@]}")
+    __AISH_COMP_WORD_STARTS=("${word_starts[@]}")
+    __AISH_COMP_CWORD=$cword
+}
+
+_aish_invoke_native_completion() {
+    local cmd="$1"
+    local cword="$2"
+    local cur="$3"
+    local comp_spec="" func_name=""
+
+    COMPREPLY=()
+
+    if (( cword == 0 )); then
+        local entry
+        if _aish_is_path_like "$cur"; then
+            while IFS= read -r entry; do
+                [[ -z "$entry" ]] && continue
+                COMPREPLY+=("$entry")
+            done < <(compgen -f -- "$cur" 2>/dev/null | __aish_mark_dirs)
+        else
+            while IFS= read -r entry; do
+                [[ -z "$entry" ]] && continue
+                COMPREPLY+=("$entry")
+            done < <(compgen -c -- "$cur" 2>/dev/null)
+        fi
+        return 0
+    fi
+
+    if declare -F _comp_load &>/dev/null; then
+        _comp_load -- "$cmd" 2>/dev/null || true
+    fi
+    if ! complete -p "$cmd" &>/dev/null && declare -F _completion_loader &>/dev/null; then
+        _completion_loader "$cmd" 2>/dev/null || true
+    fi
+    comp_spec=$(complete -p "$cmd" 2>/dev/null || true)
+
+    if [[ "$comp_spec" =~ -F[[:space:]]+([^[:space:]]+) ]]; then
+        func_name="${BASH_REMATCH[1]}"
+        "$func_name" "$cmd" 2>/dev/null || true
+    elif [[ "$comp_spec" =~ -C[[:space:]]+([^[:space:]]+) ]]; then
+        func_name="${BASH_REMATCH[1]}"
+        COMPREPLY=( $(compgen -W "$(eval "$func_name")" -- "$cur") )
+    elif declare -F _comp_compgen_filedir &>/dev/null; then
+        local wcur="" wprev="" wwords=() wcword=0
+        _comp_get_words -n "<>&" wcur wprev wwords wcword 2>/dev/null || true
+        _comp_compgen_filedir 2>/dev/null || true
+    else
+        local entry
+        while IFS= read -r entry; do
+            [[ -z "$entry" ]] && continue
+            COMPREPLY+=("$entry")
+        done < <(compgen -f -- "$cur" 2>/dev/null | __aish_mark_dirs)
+    fi
+}
+
+_aish_compreply_to_candidates() {
+    local cur="$1"
+    local item resolved count=0
+
+    for item in "${COMPREPLY[@]}"; do
+        if _aish_is_path_like "$cur" || _aish_is_path_like "$item" || \
+           [[ "$item" == */* || "$item" == /* ]]; then
+            resolved=$(_aish_resolve_compreply "$item" "$cur")
+            _aish_add_candidate "$resolved" "$cur"
+        else
+            _aish_add_candidate "$item" "$cur" 1
+        fi
+        count=$(( count + 1 ))
+        if (( count >= __AISH_COMPLETION_LIMIT )); then
+            break
+        fi
+    done
+}
+
+__aish_complete() {
+    local request_id="${1:-0}"
+    local comp_line="${2:-}"
+    local cursor="${3:-0}"
+    local cmd="" cur="" word_start=0
+
+    _aish_reset_candidates
+    __aish_load_bash_completion
+
+    _aish_set_comp_context "$comp_line" "$cursor"
+
+    if ((${#__AISH_COMP_WORDS[@]} == 0)); then
+        __aish_emit_completion_result "$request_id" 0
+        return 0
+    fi
+
+    word_start=${__AISH_COMP_WORD_STARTS[$__AISH_COMP_CWORD]:-0}
+    cmd="${__AISH_COMP_WORDS[0]:-}"
+    cur="${__AISH_COMP_WORDS[$__AISH_COMP_CWORD]:-}"
+
+    _aish_invoke_native_completion "$cmd" "$__AISH_COMP_CWORD" "$cur"
+    _aish_sort_compreply
+    _aish_compreply_to_candidates "$cur"
+
+    __aish_emit_completion_result "$request_id" "$word_start"
+}
+
+__aish_emit_session_ready

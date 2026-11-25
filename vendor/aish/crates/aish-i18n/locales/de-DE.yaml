@@ -1,0 +1,1799 @@
+cli:
+  app_help: "AI Shell - Eine Shell mit integrierten LLM-Funktionen"
+  help_option_help: "Diese Hilfe anzeigen und beenden."
+  run_command_help: "AI Shell starten"
+  info_command_help: "Informationen zu AI Shell anzeigen"
+  check_langfuse_command_help: "Langfuse-Konfiguration prüfen"
+  setup_command_help: "Interaktive Einrichtung ausführen und beenden"
+  check_tool_support_command_help: "Live-Prüfung der Tool-Call-Unterstützung debuggen"
+  detach_hint: "Getrennt. `aish -c` ausfuehren, um wieder zu verbinden."
+  resume_failed: "Sitzung konnte nicht fortgesetzt werden: {error}"
+
+  uninstall:
+    cancelled: "Abgebrochen."
+
+  option:
+    model: "Zu verwendendes LLM-Modell; kann auch über AISH_MODEL oder die Konfigurationsdatei gesetzt werden."
+    api_key: "API-Schlüssel für den LLM-Anbieter; kann auch über AISH_API_KEY oder Anbieter-Umgebungsvariablen gesetzt werden."
+    api_base: "API-Basis-URL für den LLM-Anbieter; kann auch über AISH_API_BASE oder die Konfigurationsdatei gesetzt werden."
+    config: "Pfad zur Konfigurationsdatei (Standard: ~/.config/aish/config.yaml)."
+
+  setup:
+    api_base_prompt: "OpenAI-kompatible API-Basis-URL eingeben (https://.../v1)"
+    provider_header: "Anbieter wählen"
+    provider_filter_prompt: "Suchen:"
+    provider_filter_hint: "↑/↓ wählen · Enter bestätigen · tippen zum Suchen"
+    select_hint: "↑/↓ wählen · Enter bestätigen · Esc abbrechen"
+    provider_endpoint_header: "API-Endpunkt für {provider} wählen"
+    search_matches: " ({count} Treffer)"
+    search_matches_one: " ({count} Treffer)"
+    provider_hints:
+      openrouter: "API-Schlüssel · Multi-Modell-Gateway"
+      openai: "Direkter API-Schlüssel"
+      anthropic: "Claude · OpenAI-kompatibler Endpoint"
+      deepseek: "API-Schlüssel"
+      gemini: "Gemini · API-Schlüssel"
+      google: "Google AI · API-Schlüssel"
+      xai: "Grok · API-Schlüssel"
+      minimax: "M2.5 · Global / CN"
+      moonshot: "Kimi · Global / CN"
+      zai: "GLM · Coding Plan / Global / CN"
+      qianfan: "Qianfan · API-Schlüssel"
+      mistral: "API-Schlüssel"
+      together: "Open-Source-Modelle · API-Schlüssel"
+      huggingface: "Inference API · HF-Token"
+      qwen: "Qwen · Standard / Coding Plan"
+      kilocode: "API-Schlüssel"
+      ollama: "Lokale Open-Source-Modelle · Key meist optional"
+      vllm: "Self-hosted · OpenAI-kompatibel"
+      ai_gateway: "Unified Gateway · API-Schlüssel"
+      azure: "Benutzerdefinierter Endpoint · API-Schlüssel"
+      bedrock: "Benutzerdefinierter Endpoint · API-Schlüssel"
+      custom: "Beliebiger OpenAI-kompatibler chat/completions-Endpoint"
+    provider_custom_note: "OpenAI-kompatibel"
+    provider_preset_base: "Voreingestellte API-Basis"
+    custom_api_base_placeholder: "https://api.example.com/v1"
+    provider_custom_api_base_required: "API-Basis ist erforderlich"
+    provider_custom_api_base_invalid: "Ungültige API-Basis-URL (https://... verwenden)"
+    filter_no_results: "Keine Treffer"
+    api_key_env_found: "Erkannt {env_key}: {masked}"
+    api_key_env_hint: "Mit Enter den erkannten Schlüssel verwenden oder einen neuen eingeben."
+    api_key_prompt: "API-Schlüssel eingeben"
+    model_custom_prompt: "Modellname eingeben (back zum Anbieterwechsel)"
+    api_key_required: "API-Schlüssel ist erforderlich"
+    model_header: "Anbieter: {provider}"
+    model_filter_prompt: "Suchen:"
+    model_filter_hint: "↑/↓ wählen · Enter bestätigen · tippen zum Suchen · Esc abbrechen"
+    model_custom_option: "Benutzerdefiniertes Modell..."
+    model_custom_required: "Modellname ist erforderlich"
+    model_custom_saved_as: "Wird gespeichert als: {model}"
+    model_discover_in_progress: "Verfügbare Modelle werden ermittelt..."
+    model_discover_failed: "Modelle konnten nicht ermittelt werden: {reason}"
+    verify_title: "Verifizierung"
+    verify_connectivity_in_progress: "Konnektivität wird geprüft..."
+    verify_tool_in_progress: "Prüfen, ob die API tools-Parameter akzeptiert..."
+    verify_simple_success: "API-Prüfungen bestanden"
+    verify_simple_failed_with_reason: "Verifizierung fehlgeschlagen: {reason}"
+    verify_failed_unknown: "unbekannter Fehler"
+    verify_tool_not_detected: "Tool-Unterstützung nicht erkannt"
+    verify_http_error: "HTTP {status} von {url}: {detail}"
+    verify_connect_timeout: "Zeitüberschreitung nach {timeout}s bei Verbindung zu {url}"
+    verify_connect_refused: "Verbindung abgelehnt oder nicht erreichbar: {url}"
+    verify_request_failed: "Anfrage fehlgeschlagen: {detail}"
+    verify_http_client_build_failed: "HTTP-Client konnte nicht erstellt werden: {detail}"
+    verify_tool_http_error: "HTTP {status} — Tool-Unterstützung nicht erkannt: {detail}"
+    verify_tool_timeout: "Zeitüberschreitung nach {timeout}s bei Tool-Unterstützungsprüfung"
+    verify_tool_request_failed: "Anfrage bei Tool-Unterstützungsprüfung fehlgeschlagen: {detail}"
+    action_header: "Nächste Aktion:"
+    action_retry_model: "Anderes Modell wählen"
+    action_retry_api_base: "API-Basis erneut eingeben"
+    action_retry_api_key: "API-Schlüssel erneut eingeben"
+    action_change_provider: "Anbieter wechseln"
+    action_continue: "Trotzdem fortfahren (nicht empfohlen)"
+    action_exit: "Einrichtung beenden"
+    saved_to: "Konfiguration gespeichert unter {path}"
+    saved_with_warning_to: "Konfiguration gespeichert unter {path} (tools-Parameter nicht verifiziert)"
+    non_interactive: "Nicht-interaktive Umgebung; Einrichtung kann nicht ausgeführt werden"
+    cancelled: "Einrichtung abgebrochen"
+    required_cancelled: "Erforderliche Konfiguration fehlt; Vorgang beendet"
+    connectivity_ok: "Verbindung OK ({}ms)"
+    setup_complete_hint: "Sie koennen nun \x1b[1maish\x1b[0m starten."
+
+  startup:
+    label:
+      skills: "Skills"
+    goodbye: "👋 Auf Wiedersehen!"
+    config_file_error: "❌ Fehler in der Konfigurationsdatei: {error}"
+    config_file_hint: "💡 Mit --config einen gültigen Pfad zur Konfigurationsdatei angeben"
+
+  langfuse:
+    incomplete: "⚠️  Die Langfuse-Konfiguration ist unvollständig"
+    missing: "   Fehlt: {var}"
+    complete: "✅ Die Langfuse-Konfiguration ist vollständig"
+    script_failed: "Langfuse-Prüfskript fehlgeschlagen: {error}"
+    script_not_found: "check_langfuse.py-Skript nicht gefunden"
+    run_from_root: "Bitte diesen Befehl im Projektstamm ausführen"
+
+  parse_errors:
+    title: "Fehler"
+    option_requires_argument: "Option {option} erfordert ein Argument."
+    no_such_option: "Unbekannte Option: {option}"
+    missing_parameter: "Fehlender Parameter: {param}"
+    invalid_value_for_option: "Ungültiger Wert für {option}: {reason}"
+    generic: "Ungültige Argumente: {message}"
+
+status:
+  session: "Chat"
+  live_session: "Term"
+  model: "Modell"
+  host: "Host"
+  up: "Laufzeit"
+  services: "Dienste"
+  errors_today: "Fehler heute"
+  na: "k.A."
+
+  instructions: "Anweisungen"
+  instructions_none: "keine geladen"
+  instructions_loaded: "{count} Datei(en) geladen"
+shell:
+  interrupted: "Unterbrochen"
+  ctrl_c_again: "Erneut Strg+C innerhalb 1s zum Beenden"
+  exiting: "Shell wird beendet..."
+  confirm_dialog_title: "Tool-Ausführung"
+  confirm_dialog_tool: "Tool:"
+  confirm_dialog_command: "Befehl:"
+  confirm_dialog_options: "[y] Einmal erlauben   [a] Diese Sitzung merken   [r] KI um anderen Weg bitten   [n] Ablehnen"
+  confirm_dialog_question: "Deine Wahl (Standard n):"
+  confirm_choice_once: "Einmal erlauben"
+  confirm_choice_remember: "Diese Sitzung merken"
+  confirm_choice_reply: "KI um anderen Weg bitten"
+  confirm_choice_deny: "Ablehnen"
+  forget_approvals_cleared: "{count} gespeicherte Genehmigung(en) für diese Sitzung gelöscht"
+  instructions_toggled: "Projekt-AGENTS.md-Anweisungen für diese Sitzung: {state}"
+  welcome2:
+    header: ">_ AI Shell {version}"
+    model_hint: "(mit /model wechseln)"
+    label:
+      model: "Modell"
+      config: "Konfig"
+    quick_start:
+      title: " Schnellstart:"
+      item1_prefix: "Native Shell-Befehle: "
+      cmd_ls: "ls"
+      cmd_top: "top"
+      cmd_vim: "vim"
+      cmd_ssh: "ssh"
+      item1_suffix: " usw."
+      item2_prefix: "KI fragen: "
+      item2_example: "Mit ; beginnen, z. B. ; wie finde ich große Dateien"
+      item3_prefix: "Hilfe:"
+      item3_suffix_1: "Gib "
+      item3_keyword: "help"
+      item3_suffix_2: " ein, um integrierte Hilfe und Verwendung zu sehen."
+    risk: "Von der KI erzeugte Inhalte können riskant sein; bitte sorgfältig prüfen."
+    skills_loaded_suffix: " geladen"
+
+  update_available:
+    title: "Update verfügbar"
+    version_line: "Neue Version {latest} verfügbar"
+    run_prefix: "Befehl:"
+
+  slash:
+    help: "Hilfeinformationen anzeigen"
+    model: "KI-Modell anzeigen oder wechseln"
+    setup: "Setup-Assistenten öffnen"
+    setting: "Interaktiven Einstellungsbereich öffnen"
+    plan: "Planmodus steuern"
+    token: "Token-Nutzung anzeigen"
+    resume: "Vorherige Sitzung fortsetzen"
+    feedback: "Feedback geben"
+    quit: "AI Shell beenden"
+    record: "Terminalsitzung aufzeichnen (start/stop)"
+    doctor: "Systemdiagnose ausführen"
+    diagnose: "Diagnose des letzten fehlgeschlagenen Befehls"
+    status: "Systemumgebungsstatus anzeigen"
+    live_sessions: "Aktive PTY-Sitzungen auflisten"
+    kill_live_sessions: "PTY-Sitzung(en) nach ID beenden"
+    audit: "Audit-Protokoll abfragen (wer/wann/was/KI-Vorschlag/Bestaetigung)"
+    forget-approvals: "Gemerkte Befehlsgenehmigungen löschen (diese Sitzung)"
+    skill: "Skills durchsuchen, installieren, vertrauen, verifizieren; Registries verwalten"
+    export: "Sitzung als Markdown exportieren (Geheimnisse standardmäßig geschwärzt; --raw überspringt)"
+    report: "Schreibt die letzte Antwort in eine HTML-Seite und öffnet sie auf einer Desktop-Sitzung"
+    fork: "Aktuelle Sitzung abzweigen"
+    sessions: "Sitzungsbaum anzeigen"
+    rollback: "KI-Dateibearbeitungen dieser Sitzung prüfen und zurückrollen (edit_file/write_file)"
+    undo: "Letzte KI-Dateiänderung rückgängig machen (edit_file/write_file)"
+    memory: "Langfristige Erinnerungen anzeigen, verifizieren oder löschen"
+    compact: "KI-Kontext jetzt komprimieren (optionaler Fokus)"
+    instructions: "Projekt-AGENTS.md-Anweisungsladen umschalten (on/off/status; nur diese Sitzung)"
+    mcp: "MCP-Server und ihre Tools prüfen, neu laden und neu verbinden"
+
+  slash_group:
+    diagnostics: "Diagnose"
+    sessions: "Sitzungen"
+    model_settings: "Modell & Einstellungen"
+    skills: "Fähigkeiten"
+    files_memory: "Dateien & Erinnerungen"
+    record_share: "Aufnahme & Teilen"
+    security_audit: "Sicherheit & Audit"
+    exit: "Beenden"
+
+  slash_status:
+    reason_diagnose_no_failure: "Kein fehlgeschlagener Befehl zum Diagnostizieren"
+    reason_audit_disabled: "Audit-Speicher ist deaktiviert"
+    reason_undo_empty: "Keine Dateiänderungen zum Rückgängigmachen"
+    reason_pty_daemon_disabled: "PTY-Daemon ist nicht aktiviert"
+    undo_count: "{count} Änderung(en) rückgängig machbar"
+    plan_planning: "Planung"
+    plan_normal: "Normal"
+
+  mcp:
+    no_servers: "MCP: keine Server konfiguriert. Fügen Sie der Konfiguration einen `mcp.servers`-Eintrag hinzu."
+    disabled_hint: "MCP ist konfiguriert, aber inaktiv. Setzen Sie `mcp.enabled: true` und aktivieren Sie mindestens einen Server."
+    config_warning: "MCP-Konfigurationswarnung: {warning}"
+    status_line: "{name} [{transport}] {status} · Tools: {tools} · Vertrauen: {trust} · Nebenwirkungen: {side_effects}"
+    endpoint: "  Endpunkt: {endpoint}"
+    failure: "  Fehler: {reason}"
+    tool_line: "  {name} ({side_effects}) — {description}"
+    tools_header: "Von `{server}` bereitgestellte Tools ({count}):"
+    server_connecting: "`{server}` verbindet noch; bitte gleich erneut versuchen (`/mcp status` zeigt den Zustand)."
+    unknown_server: "Unbekannter MCP-Server: {server}"
+    no_tools: "MCP-Server `{server}` stellt keine Tools bereit."
+    summary: "MCP: {connected}/{total} Server verbunden, {tools} Tool(s) verfügbar."
+    runtime_unavailable: "MCP-Laufzeit ist noch nicht verfügbar; versuchen Sie es erneut, sobald die Shell läuft."
+    reload_header: "MCP-Server werden neu geladen..."
+    reload_done: "MCP-Server neu geladen."
+    reconnect_started: "MCP-Server `{server}` wird neu verbunden..."
+    reconnect_done: "MCP-Server `{server}` neu verbunden."
+    reconnect_failed: "MCP-Server `{server}` fehlgeschlagen: {reason}"
+    confirm_message: "MCP-Server `{server}` möchte Tool `{tool}` aufrufen (deklarierte Nebenwirkungen: {side_effects}).\nArgumente: {args}"
+    blocked_message: "Die MCP-Richtlinie hat Tool `{tool}` auf Server `{server}` blockiert."
+    alternative_hint: "Einmal genehmigen, oder `trust: allow` zusammen mit `side_effects: read` für Server `{server}` setzen, damit schreibgeschützte Tools nicht mehr nachfragen."
+    invalid_action: "Ungültige MCP-Aktion; erwartet: list, describe oder call."
+    tool_required: "Für diese Aktion ist ein MCP-Toolname erforderlich."
+    reason_server: "MCP-Aufruf an Server `{server}`, Tool `{tool}`"
+    reason_side_effects: "Deklarierte Nebenwirkungen `{declared}`; Server meldete `{reported}`"
+    reason_arguments: "Argumente: {args}"
+    reason_trust: "Vertrauensstufe: {trust}"
+    call_failed: "MCP-Aufruf an Server `{server}`, Tool `{tool}` fehlgeschlagen: {detail}"
+    needs_async: "Dieses MCP-Tool benötigt eine Async-Laufzeit; rufen Sie es über die normale Tool-Schleife auf."
+    help_hint: "Führen Sie `/mcp add` aus, um den ersten MCP-Server einzurichten."
+    unknown_subcommand: "Unbekannter `/mcp`-Unterbefehl: {sub}"
+    missing_server_arg: "`/mcp {sub}` fehlt ein erforderliches Argument (ein Servername)."
+    config_write_failed: "Schreiben von config.yaml fehlgeschlagen; die Änderung wurde zurückgenommen: {error}"
+    tool_detail_header: "MCP-Tool `{server}`/`{tool}`"
+    tool_detail_description: "  Beschreibung: {description}"
+    tool_detail_side_effects: "  Nebenwirkungen: deklariert {declared} · gemeldet {reported} · wirksam {effective}"
+    tool_detail_trust: "  Vertrauen: {trust} → {verdict}"
+    tool_detail_schema: "  inputSchema:\n{schema}"
+    tool_unknown: "MCP-Server `{server}` stellt kein Tool namens `{tool}` bereit."
+    verdict_allow: "ohne Rückfrage erlaubt"
+    verdict_confirm: "fragt nach Bestätigung"
+    verdict_block: "durch Richtlinie blockiert"
+    add_cancelled: "Hinzufügen des MCP-Servers abgebrochen; es wurde nichts geschrieben."
+    added: "MCP-Server `{server}` [{transport}] hinzugefügt ({status})."
+    add_failed: "Hinzufügen des MCP-Servers fehlgeschlagen: {error}"
+    removed: "MCP-Server `{server}` entfernt."
+    remove_failed: "Entfernen des MCP-Servers fehlgeschlagen: {error}"
+    enabled: "MCP-Server `{server}` aktiviert ({status})."
+    disabled: "MCP-Server `{server}` deaktiviert; seine Tools wurden abgemeldet."
+    already_enabled: "MCP-Server `{server}` ist bereits aktiviert."
+    already_disabled: "MCP-Server `{server}` ist bereits deaktiviert."
+    toggle_failed: "Ändern des MCP-Serverstatus fehlgeschlagen: {error}"
+    trust_updated: "Vertrauen für `{tool}` auf `{server}` auf {level} gesetzt."
+    trust_failed: "Setzen des MCP-Vertrauens fehlgeschlagen: {error}"
+    test_ok: "MCP-Server `{server}` OK (Version {version}), {tools} Tool(s) verfügbar."
+    test_tool_line: "  {name} — {description}"
+    test_failed: "Test des MCP-Servers `{server}` fehlgeschlagen: {error}"
+    test_tip_not_found: "Hinweis: Der Befehl konnte nicht gestartet werden — prüfen Sie den Pfad und ob er installiert ist."
+    test_tip_refused: "Hinweis: Die Verbindung wurde abgelehnt — läuft der Server und stimmen URL/Port?"
+    test_tip_timeout: "Hinweis: Der Server antwortete nicht rechtzeitig; versuchen Sie `/mcp reconnect` oder erhöhen Sie `request_timeout_ms`."
+    test_tip_auth: "Hinweis: Authentifizierung fehlgeschlagen — prüfen Sie Token/Header dieses Servers."
+    menu_title: "MCP-Menü"
+    menu_question: "Was möchten Sie mit MCP tun?"
+    menu_add: "MCP-Server hinzufügen (Assistent)"
+    menu_tools: "Tools"
+    menu_tools_list: "Alle Tools auflisten"
+    menu_test: "Verbindung testen"
+    menu_trust: "Vertrauen setzen"
+    menu_toggle: "Server aktivieren/deaktivieren"
+    menu_reconnect: "Server neu verbinden"
+    menu_reload: "Alle Server neu laden"
+    menu_remove: "Server entfernen"
+    menu_help: "Hilfe"
+    menu_remove_confirm_title: "MCP-Server entfernen"
+    menu_remove_confirm_question: "MCP-Server `{server}` entfernen und seine Tools abmelden?"
+    menu_remove_confirm_yes: "Ja, entfernen"
+    menu_remove_confirm_no: "Nein, abbrechen"
+    pick_server_title: "MCP-Server auswählen"
+    pick_server_question: "Welchen Server?"
+    pick_tool_title: "MCP-Tool auswählen"
+    pick_tool_question: "Welches Tool?"
+    pick_tool_any: "* (alle Tools)"
+    pick_level_title: "Vertrauensstufe"
+    pick_level_question: "Wie viel Vertrauen sollen Aufrufe erhalten?"
+    menu_cancelled: "MCP-Menü abgebrochen; nichts wurde geändert."
+    add:
+      name_prompt: "Servername"
+      transport_title: "MCP-Server hinzufügen"
+      transport_question: "Welchen Transport verwendet dieser Server?"
+      command_prompt: "Startbefehl (z. B. npx)"
+      args_prompt: "Zusätzliche Argumente, durch Leerzeichen getrennt (optional)"
+      url_prompt: "Server-URL (z. B. https://example.com/mcp)"
+      token_prompt: "Bearer-Token (optional; wird in der Konfiguration gespeichert)"
+      trust_title: "Vertrauensstufe"
+      trust_question: "Wie sehr sollen Aufrufe an diesen Server vertraut werden?"
+      expose_title: "Tool-Bereitstellung"
+      expose_question: "Wie sollen die Tools dieses Servers dem Modell bereitgestellt werden?"
+      side_effects_title: "Deklarierte Nebenwirkungen"
+      side_effects_question: "Was können die Tools dieses Servers tun?"
+      confirm_title: "Neuen MCP-Server bestätigen"
+      confirm_summary: "Diesen Server hinzufügen?\n\n{summary}"
+      confirm_yes: "Ja, hinzufügen"
+      confirm_no: "Nein, abbrechen"
+    help: |-
+      `/mcp` ohne Argumente öffnet ein Menü mit neun Zeilen (1-9 zum Auswählen, dann Aktion → Server → Tool); die Unterbefehle unten bleiben gleichwertig.
+      MCP-Client-Befehle:
+        /mcp | /mcp status | /mcp list   Alle konfigurierten Server anzeigen
+        /mcp help                        Diese Hilfe anzeigen
+        /mcp tools [server]              Tools eines Servers oder aller auflisten
+        /mcp tool <server> <tool>        Schema und Vertrauensurteil eines Tools anzeigen
+        /mcp add                         Interaktiver Assistent (Name, Transport, Vertrauen...)
+        /mcp add <name> -- <cmd> [args]  stdio-Server schnell hinzufügen
+        /mcp add <name> --url <url>      HTTP-Server schnell hinzufügen
+        /mcp remove | rm <name>          Einen Server entfernen
+        /mcp enable <name>               Server aktivieren (verbindet sofort)
+        /mcp disable <name>              Server deaktivieren (meldet seine Tools ab)
+        /mcp trust <server> <tool|*> <ask|allow|block>
+                                         Vertrauen für ein Tool oder einen ganzen Server setzen
+        /mcp test <name>                 Einmal verbinden und Tools auflisten, ohne zu aktivieren
+        /mcp reload                      Alle Server gemäß Konfiguration neu verbinden
+        /mcp reconnect <server>          Einen Server neu verbinden
+      Schnell-Hinzufügen-Optionen: --transport stdio|http, --url <url>, --token <t>, --trust ask|allow|block,
+        --side-effects read|network|write|unknown, --timeout <ms>, --max-output <bytes>,
+        --expose gateway|tools, --env KEY=VALUE, --header KEY=VALUE und `-- <command> [args...]` für stdio.
+      Jede Änderung schreibt config.yaml atomar neu (unbekannte Schlüssel bleiben erhalten, Kommentare nicht) und wirkt sofort.
+      Gateway-Tools (eines pro Server) akzeptieren ein `action`:
+        action: "list"                        Tools des Servers auflisten
+        action: "describe", tool: "<name>"    Ein Tool beschreiben
+        action: "call", tool: "<name>", args: {...}   Ein Tool aufrufen
+      Vertrauensmodell: Ein Aufruf wird nur automatisch genehmigt, wenn der Server `trust: allow` ist und die wirksamen Nebenwirkungen `read` sind; `unknown`/`write`/`network` fragen immer, und `trust: block` wird direkt abgelehnt.
+
+  feedback:
+    select_type: "Feedback-Typ auswählen"
+    type_bug: "Fehlerbericht"
+    type_feature: "Feature-Wunsch"
+    type_question: "Frage"
+    confirm_title: "Gesammelte Informationen überprüfen"
+    confirm_question: "Die folgenden Informationen werden an das Issue angehängt. Protokolle können sensible Daten enthalten."
+    confirm: "Bestätigen und öffnen"
+    without_logs: "Ohne Protokolle öffnen"
+    cancel: "Abbrechen"
+    opening: "GitHub Issue wird geöffnet..."
+    failed: "Browser konnte nicht geöffnet werden: {error}"
+    visit: "Besuchen: {url}"
+    log_unavailable: "(Protokolldatei nicht gefunden)"
+    logs_included: "enthalten (letzte 30 Zeilen, bereinigt)"
+    logs_truncated: "Hinweis: Logs wurden aufgrund der URL-Längenbegrenzung gekürzt"
+    body_summary: "## Summary"
+    body_steps: "## Steps to reproduce"
+    body_expected: "## Expected behavior"
+    body_actual: "## Actual behavior"
+    body_environment: "## Environment"
+    body_version: "- AISH version: {version}"
+    body_os: "- Operating system: {os}"
+    body_model: "- AI Model / Provider: {model} / {provider}"
+    body_logs: "## Logs"
+    body_feature_summary: "## Feature summary"
+    body_use_case: "## Use case"
+    body_proposed_solution: "## Proposed solution"
+    body_alternatives: "## Alternatives considered"
+    body_question: "## Question"
+
+  security:
+    panel_title:
+      blocked: "🛑 Sicherheitsblockierung"
+      notice: "🔐 Sicherheitshinweis"
+      confirm: "🔐 Bestätigung erforderlich"
+    title:
+      blocked: "🛑 Sicherheitsblockierung: {tool}"
+      notice: "🔐 Sicherheitshinweis: {tool}"
+      confirm: "🔐 Bestätigung erforderlich: {tool}"
+    label:
+      description: "Beschreibung"
+      command: "Befehl"
+      target: "Ziel"
+      content_preview: "Inhaltsvorschau"
+      fallback_hint: "Hinweis"
+      risk_level: "Risikostufe"
+      reasons: "Grund"
+      rule: "Regel"
+      matched_paths: "Pfade"
+      alternatives: "Alternativen"
+      impact: "Auswirkung"
+      no_additional_info: "Keine weiteren Informationen verfügbar."
+    fallback:
+      sandbox_execute_failed: "Die Vorabausführung des Befehls ist fehlgeschlagen; das Risiko kann nicht bewertet werden. Bitte vor der echten Ausführung bestätigen."
+      sandbox_timeout: "Die Vorabausführung des Befehls hat das Zeitlimit überschritten; das Risiko kann nicht bewertet werden. Bitte vor der echten Ausführung bestätigen."
+      sandbox_ipc_timeout: "Zeitüberschreitung beim Warten auf die Vorabbewertung des Befehls; das Risiko kann nicht bewertet werden. Bitte vor der echten Ausführung bestätigen."
+      generic: "Die Risikobewertung des Befehls konnte nicht abgeschlossen werden. Bitte vor der echten Ausführung bestätigen."
+    alternative:
+      generic: "Bitte prüfen Sie diesen Befehl manuell und verifizieren Sie die Auswirkungen vor der Ausführung."
+      etc_manual: "Wenn Sie Dateien unter /etc ändern müssen, bevorzugen Sie einen manuellen Änderungsprozess mit Backups/Change-Management."
+    options_header: "Optionen"
+    option:
+      approve: "Genehmigen"
+      approve_remember: "Ja, und für diesen Befehl nicht erneut fragen"
+      cancel: "Abbrechen"
+    choice_prompt: "Ihre Auswahl (Standard: n): "
+
+  exit_goodbye: "Shell wird beendet. Auf Wiedersehen!"
+  exit_daemon_hint: "※ Tipp: Strg+Q zum Trennen (Sitzung bleibt aktiv), dann aish -c zum Neuverbinden"
+  command_cancelled: "Befehl abgebrochen"
+  error_correction:
+    press_semicolon_hint: "Die Befehlsausführung ist fehlgeschlagen. ; für Schnellreparatur oder /diagnose für Diagnose."
+    corrected_command_label: "Vorgeschlagene Korrektur:"
+    corrected_command_title: "💡 Korrigierter Befehl:"
+    confirm_execute_prefix: "Ausführen: "
+    confirm_execute_suffix: "? (Y/n): "
+    no_valid_command: "Korrekter Befehl konnte nicht ermittelt werden"
+    retry_hint: "Geben Sie ';' für eine weitere Schnellreparatur oder '/diagnose' für Diagnose ein"
+    same_as_failed: "Der Korrekturvorschlag ist identisch mit dem fehlgeschlagenen Befehl; Wiederholung wird verweigert"
+  failure_diagnose:
+    no_failure: "Kein fehlgeschlagener Befehl zum Diagnostizieren. Führen Sie zuerst einen fehlgeschlagenen Befehl aus, dann /diagnose."
+    report_title: "── Diagnosebericht ──"
+    root_cause: "Fehlerursache:"
+    confidence: "Vertrauen:"
+    confidence_high: "hoch"
+    confidence_medium: "mittel"
+    confidence_low: "niedrig"
+    evidence: "Diagnosenachweise:"
+    suggested_fix: "Vorgeschlagene Reparatur:"
+    no_suggested_fix: "Keine zuverlässige Reparaturlösung"
+    verify_commands: "Verifikationsbefehle nach Reparatur:"
+    risk_notes: "Risikohinweise:"
+    fix_not_auto_executable: "Der vorgeschlagene Fix ist kein einzelner ausführbarer Befehl; Bestätigung/Ausführung wird übersprungen. Bitte manuell laut Bericht anwenden."
+    fix_has_alternatives: "Der Bericht nennt mehrere Fix-Pfade; Bestätigung/Ausführung wird übersprungen. Bitte anhand der Risikohinweise manuell wählen."
+    confirm_fix_prefix: "Vorgeschlagenen Fix ausführen "
+    confirm_fix_suffix: "? [y/N] "
+    fix_cancelled: "Abgebrochen. Manuell ausführen: {command}"
+    verifying: "Verifikation läuft…"
+    no_verify_commands: "Keine Verifikationsbefehle im Bericht; Verifikation übersprungen"
+    verify_blocked: "Blockiert (nicht schreibgeschützt): {command} ({reason})"
+    verify_passed: "Bestanden: {command} (Exit {exit_code})"
+    verify_failed: "Nicht bestanden: {command} (Exit {exit_code})"
+    conclusion_fixed: "Fazit: Problem behoben"
+    conclusion_partial: "Fazit: einige Prüfungen fehlgeschlagen; Problem möglicherweise nicht vollständig behoben"
+    conclusion_unknown: "Fazit: nicht bestimmbar"
+    error: "Diagnose fehlgeschlagen: {error}"
+    parse_format_error: "Diagnosebericht konnte nicht aus der Modellausgabe gelesen werden. Bitte /diagnose erneut versuchen."
+    parse_prose_fallback: "Hinweis: Das Modell lieferte Klartext statt eines strukturierten Berichts."
+    no_evidence: "(nicht angegeben)"
+  nl_detection:
+    confirm_ask_ai: "Das sieht nach einer natürlichen Sprachfrage aus. KI fragen? (Y/n)"
+  error:
+    load_script_failed: "Skript '{script}' konnte nicht geladen werden: {error}"
+    pty_error: "PTY-Fehler: {error}"
+    restart_bash_failed: "bash-Neustart fehlgeschlagen: {error}"
+    execution_error: "❌ Fehler während der Ausführung: {error}"
+    pty_decode_error: "PTY-Ausgabedekodierungsfehler abgefangen: {error}"
+    potential_error: "🚀 Mögliches Problem erkannt: {reason}, Lösung wird versucht..."
+    llm_error_title: "❌ LLM-Anfrage fehlgeschlagen"
+    llm_error_message: "Fehler: {error}"
+    empty_response: "Der Anbieter hat keine Antwort geliefert. Prüfe den ausgewählten Anbieter oder das Modell und versuche es erneut."
+    incomplete_response: "Der Anbieter hat die Antwort vorzeitig beendet. Prüfe das Ausgabelimit oder versuche ein anderes Modell."
+    partial_turn_saved: "Die abgeschlossenen Werkzeugschritte dieses Durchgangs wurden gespeichert ({steps} Schritte). Die Arbeit vor dem Fehler geht nicht verloren; geben Sie eine neue Aufgabe ein oder ;retry, um ab dem gespeicherten Punkt fortzufahren."
+    partial_turn_saved_limit: "Die abgeschlossenen Werkzeugschritte dieses Durchgangs wurden vor dem Stopp am Iterationslimit gespeichert ({steps} Schritte). Die Arbeit bleibt erhalten; geben Sie eine neue Aufgabe ein oder ;retry, um ab dem gespeicherten Punkt fortzufahren."
+    llm_error_details_title: "Debug-Details"
+    tool_args_json_invalid_hint: "❌ Anfrage fehlgeschlagen, bitte erneut versuchen."
+  prompt:
+    confirm_execute: "?Diesen Befehl ausführen? [y/n]:"
+    ai_hint: "; verwenden, um die KI zu fragen"
+  model:
+    current: "Aktuelles Modell: {model}"
+    unset: "nicht gesetzt"
+    invalid: "Der Modellname darf nicht leer sein"
+    switching: "Modell wird validiert: {model}"
+    switch_same: "Modell unverändert: {model}"
+    switch_saved: "Zu {model} gewechselt · {account} · als Standard gespeichert"
+    switch_session_ok: "Zu {model} gewechselt · {account} · nur diese Sitzung (Standard unveraendert)"
+    switch_session_only: "Fuer diese Sitzung zu {model} · {account} gewechselt; Standardmodell NICHT gespeichert"
+    verify_failed: "Modellvalidierung fehlgeschlagen: {reason}"
+    picker_title: "Modell / Konto wechseln"
+    picker_subtitle: "↑↓ Auswaehlen, Enter wechseln"
+    fetch_partial_subtitle: "Modellliste konnte fuer einige Endpoints nicht abgerufen werden — {errors}"
+    fetching: "Modellliste wird abgerufen: {base}"
+    picker_search: "Modelle oder URLs suchen..."
+    picker_footer: "Esc Abbrechen"
+    action_add: "neu"
+    action_del: "loeschen"
+    action_toggle: "an/aus"
+    action_edit: "bearbeiten"
+    edit_label: "Modellname"
+    edit_desc: "Modell dieses Kontos"
+    edited: "'{name}' Modell auf {model} aktualisiert"
+    cannot_remove_primary: "Das primaere Modell kann nicht entfernt werden"
+    switched_account: "Zu '{name}' gewechselt (Modell: {model})"
+    fallback_badge: "Fallback"
+    primary_badge: "Primär"
+    recent_badge: "kuerzlich"
+    current_badge: "aktuell"
+    unverified_badge: "unbestaetigt"
+    action_session: "nur Sitzung"
+    action_fallback: "Fallback"
+    fallback_not_switchable: "Fallback-Modell '{model}' ist nicht direkt umschaltbar; wird nur versucht, wenn das primaere versagt"
+    fallback_add_label: "Fallback-Modellname"
+    fallback_add_desc: "Modell, das versucht wird, wenn das primaere versagt"
+    fallback_added: "Fallback '{model}' hinzugefuegt"
+    fallback_removed: "Fallback '{model}' entfernt"
+    fallback_exists: "Fallback '{model}' existiert bereits"
+    action_manage: "verwalten"
+    manage_title: "Konten & Fallback"
+    manage_search: "Suchen..."
+    manage_subtitle: "d markierten Eintrag loeschen"
+    manage_footer: "Esc zurueck"
+    manage_empty: "Keine Konten oder Fallbacks zu verwalten"
+
+  accounts:
+    list_title: "Rotationskonten"
+    primary: "  [0] primär    key={key}...  {state}"
+    key_preview: "key={key}..."
+    unset: "(nicht gesetzt)"
+    enabled: "aktiviert"
+    disabled: "deaktiviert"
+    added: "Konto '{name}' hinzugefügt ({count} zusätzliche Konten)"
+    removed: "Konto '{name}' entfernt"
+    already_exists: "Konto '{name}' existiert bereits"
+    toggled: "{action} Konto '{name}'"
+    no_extra_remove: "keine zusätzlichen Konten zu entfernen"
+    no_extra_toggle: "keine zusätzlichen Konten umzuschalten"
+    no_account_named: "kein Konto namens '{name}'"
+    no_extra_hint: "  (keine zusätzlichen Konten; füge eins hinzu mit /accounts add <name> <key>)"
+    usage_add: "Verwendung: /accounts add <name> <api_key> [api_base]"
+    usage_remove: "Verwendung: /accounts remove <name>"
+    usage_enable: "Verwendung: /accounts enable|disable <name>"
+    unknown_sub: "unbekannter Unterbefehl '{sub}'. Versuche /accounts help"
+    help_1: "/accounts                       Rotationskonten auflisten"
+    help_2: "/accounts add <name> <key> [base]"
+    help_3: "/accounts remove <name>"
+    help_4: "/accounts enable|disable <name>"
+    help_5: "(ohne Argumente wird ein interaktives Menü geöffnet)"
+    name_label: "Kontoname"
+    name_desc: "kurze Bezeichnung, z.B. 'team-b'"
+    key_label: "API-Schlüssel"
+    key_desc: "der Schlüssel für dieses Konto"
+    base_label: "API-Base (optional)"
+    base_desc: "Endpunkt überschreiben; leer = wie primär"
+    custom_model: "Benutzerdefiniert (manuell eingeben)"
+    model_label: "Modell"
+    model_desc: "Von diesem Endpunkt verwendeter Modellname"
+    select_model: "Modell zur Überprüfung wählen"
+    no_models: "Keine Modelle aufgelistet; verwende primäres Modell '{model}'"
+    fetch_failed: "Modelle konnten nicht abgerufen werden: {error}"
+    verifying: "Verbindung wird überprüft..."
+    connected: "Verbunden ({latency}ms) - Modell: {model}"
+    tool_yes: "Tool-Aufrufe: unterstützt"
+    tool_no: "Tool-Aufrufe: nicht unterstützt"
+    verify_failed: "Verbindungsprüfung fehlgeschlagen: {error}"
+    verify_failed_title: "Überprüfung fehlgeschlagen"
+    save_anyway: "Trotzdem speichern"
+    cancel_add: "Abbrechen"
+    usage_use: "Verwendung: /accounts use <Name>"
+    switched: "Zu '{name}' gewechselt (Modell: {model})"
+    no_extra_use: "Keine zusätzlichen Konten zum Wechseln. Mit /accounts add hinzufügen."
+    primary_choice: "Primär ({model})"
+    select_use: "Konto zur Verwendung auswählen"
+
+  common:
+    cancelled: "abgebrochen"
+    session_store_unavailable: "Sitzungsspeicher nicht verfügbar"
+  token:
+    title: "Token-Nutzung (letzte 7 Tage)"
+    input_tokens: "Eingabe-Tokens"
+    output_tokens: "Ausgabe-Tokens"
+    total: "Gesamt"
+    cached: "Cache-Treffer"
+    api_calls: "API-Aufrufe"
+  setup:
+    no_config_manager: "Neukonfiguration nicht möglich: Konfigurationsmanager nicht verfügbar"
+    cancelled: "Einrichtung abgebrochen; aktuelle Einstellungen werden beibehalten"
+    applied: "Konfiguration aktualisiert, aktuelles Modell: {model}"
+
+  setting:
+    title: "Einstellungen"
+    search_entry: "Einstellungen suchen..."
+    search_desc: "Per Stichwort zu jeder Einstellung in allen Kategorien springen"
+    search_title: "Einstellungen suchen"
+    search_placeholder: "Tippen zum Filtern (Name / Beschreibung / Kategorie)"
+    footer_idle: "↑↓ bewegen · ←/→ Kategorie · Space/Enter bearbeiten · Ctrl+R zurücksetzen · Esc beenden"
+    footer_editing: "Enter anwenden · Esc abbrechen"
+    search_footer: "↑/↓ bewegen · Tippen filtert · Enter bearbeiten · Esc zurück"
+    search_empty: "Keine passenden Einstellungen"
+    restart_summary: "{count} Änderung(en) werden nach Neustart wirksam"
+    subtitle: "Kategorie zum Konfigurieren wählen (Esc zum Beenden)"
+    select_setting: "Einstellung zum Bearbeiten wählen (Esc zurück)"
+    on: "an"
+    off: "aus"
+    not_set: "(nicht gesetzt)"
+    current_tag: "aktuell"
+    applied: "Gespeichert {label} = {value}"
+    applied_clear: "Gelöscht {label}"
+    invalid: "Ungültiger Wert: {error}"
+    restart_hint: "(wirksam nach Neustart)"
+    install_installing: "'{name}' wird installiert (Quelle: {source})..."
+    install_cancel_hint: "  Strg+C zum Abbrechen drücken"
+    install_downloading: "Download von {source} [{secs}s]"
+    install_continue: "Installation läuft ({secs}s). Fortfahren? [Y/n]"
+    install_canceled: "Vom Benutzer abgebrochen (Strg+C)"
+    install_canceled_msg: "Installation abgebrochen"
+    install_timeout: "Zeitüberschreitung nach {secs}s"
+    install_crashed: "Der Installations-Thread ist abgestürzt"
+    registry_title: "Skill-Registry-Quellen"
+    registry_question: "Eine Registry zur Verwaltung auswählen oder neue Quelle hinzufügen"
+    registry_test_all: "Alle Verbindungen testen"
+    registry_add_new: "Neue Registry hinzufügen..."
+    registry_not_tested: "[-] nicht getestet"
+    registry_manage_test: "Verbindung testen"
+    registry_manage_enable: "Aktivieren"
+    registry_manage_disable: "Deaktivieren"
+    registry_manage_edit_url: "URL bearbeiten"
+    registry_manage_remove: "Entfernen"
+    registry_manage_remove_desc: "Diese Registry-Quelle löschen"
+    registry_manage_back: "Zurück zur Liste"
+    registry_manage_status_on: "aktiviert"
+    registry_manage_status_off: "deaktiviert"
+    cat:
+      model: "Modell & Anbieter"
+      appearance: "Erscheinungsbild"
+      ai: "KI-Verhalten"
+      security: "Sicherheit"
+      context: "Kontext & Gedächtnis"
+      remote: "Remote-Prompt"
+      advanced: "Erweitert"
+    cat_desc:
+      model: "LLM-Modell, Endpoint und Zugangsdaten"
+      appearance: "Prompt-Symbol und Antwort-Sprache"
+      ai: "Completion, Kontext und Token-Verwaltung"
+      security: "Input Guard, Sandbox und Risikostufe"
+      context: "Gedächtnis-Recall, Compaction und Verlauf"
+      remote: "SSH/telnet-Prompt-Segmente"
+      advanced: "Logging, Tracing und PTY-Daemon"
+    k:
+      model:
+        label: "KI-Modell"
+        desc: "Modellname, der an den Anbieter gesendet wird, z. B. gpt-4o, glm-4.6, deepseek-chat"
+      api_base:
+        label: "API-Basis-URL"
+        desc: "OpenAI-kompatible Endpoint-URL für Chat-Completions"
+      api_key:
+        label: "API-Schlüssel"
+        desc: "Geheimschlüssel für den LLM-Anbieter (in config.yaml gespeichert)"
+      temperature:
+        label: "Temperatur"
+        desc: "Sampling-Zufälligkeit 0.0–2.0; höher = kreativer"
+      max_tokens:
+        label: "Max Tokens"
+        desc: "Token-Obergrenze für Antworten (leer = Anbieter-Standard); Werte unter 16384 werden abgelehnt"
+      prompt_style:
+        label: "Prompt-Symbol"
+        desc: "Benutzerdefiniertes Prompt-Symbol (leer = Standardpfeil)"
+      output_language:
+        label: "Ausgabesprache"
+        desc: "Bevorzugte Sprache für KI-Antworten (zh-CN, en-US, ja-JP, de-DE, fr-FR, es-ES)"
+      auto_suggest:
+        label: "Auto-Suggest"
+        desc: "Verlaufsbasierte Auto-Suggest-Hinweise beim Tippen anzeigen"
+      inline_completion:
+        label: "Inline-Completion"
+        desc: "KI-Inline-Completion beim Tippen"
+      inline_debounce_ms:
+        label: "Inline-Debounce (ms)"
+        desc: "Verzögerung vor Auslösen der Inline-Completion nach Tippen-Stop"
+      inline_context_lines:
+        label: "Inline-Kontextzeilen"
+        desc: "Anzahl aktueller Shell-Zeilen, die als Kontext an Inline-Completion gesendet werden"
+      inline_max_tokens:
+        label: "Inline Max Tokens"
+        desc: "Token-Obergrenze für Inline-Completion-Antworten"
+      inline_min_input_chars:
+        label: "Inline Min Input Chars"
+        desc: "Mindestzeichen vor Auslösen der Inline-Completion"
+      inline_timeout_secs:
+        label: "Inline-Timeout (s)"
+        desc: "Sekunden Wartezeit auf Inline-Completion vor Abbruch"
+      inline_disable_thinking:
+        label: "Inline Disable Thinking"
+        desc: "Reasoning/Thinking-Tokens in Inline-Completion unterdrücken"
+      inline_enforce_json:
+        label: "Inline Enforce JSON"
+        desc: "Inline-Completion zwingen, striktes JSON zurückzugeben"
+      max_llm_messages:
+        label: "Max LLM-Messages"
+        desc: "Maximale Konversations-Turns im LLM-Verlauf"
+      enable_token_estimation:
+        label: "Token-Estimation aktivieren"
+        desc: "tiktoken zur Schätzung der Token-Anzahl für Kontext-Trimming verwenden"
+      input_guard_enabled:
+        label: "Input Guard"
+        desc: "Eingabe gegen gefährliche-Befehl-Regeln vorab prüfen"
+      enable_sandbox:
+        label: "Sandbox aktivieren"
+        desc: "Risikobefehle in einer Sandbox vorab ausführen, bevor sie erlaubt werden"
+      default_risk_level:
+        label: "Standard-Risikostufe"
+        desc: "Basis-Risikoeinstufung für unbekannte Befehle (low/medium/high)"
+      sandbox_off_action:
+        label: "Sandbox-Off-Aktion"
+        desc: "Verhalten, wenn Sandbox nicht verfügbar (allow/confirm/block)"
+      sandbox_timeout_seconds:
+        label: "Sandbox-Timeout (s)"
+        desc: "Sekunden bis zum Abbruch einer Sandbox-Vorabausführung"
+      memory_auto_recall:
+        label: "Memory Auto-Recall"
+        desc: "Relevante langfristige Erinnerungen automatisch in KI-Kontext einbringen"
+      memory_auto_retain:
+        label: "Memory Auto-Retain"
+        desc: "Nennenswerte Fakten automatisch ins langfristige Gedächtnis speichern"
+      context_auto_compact:
+        label: "Context Auto-Compact"
+        desc: "Konversation bei steigendem Kontextdruck automatisch kompaktieren"
+      compact_full_enabled:
+        label: "Full Compaction"
+        desc: "Vollständigen Compaction-Durchlauf aktivieren, der alte Turns zusammenfasst"
+      compact_context_window_tokens:
+        label: "Context-Window-Tokens"
+        desc: "Kontextfenster für die Auto-Komprimierung (leer = automatisch: Modellfenster > Legacy-Budget > Standard 262144/256k)"
+      compact_micro_keep_recent:
+        label: "Micro-Compact Keep Recent"
+        desc: "Wörtlich erhaltene Turns bei Micro-Compaction"
+      compact_shell_keep_recent:
+        label: "Shell-Compact Keep Recent"
+        desc: "Shell-Befehls-Turns, die bei Shell-Compaction erhalten bleiben"
+      compact_summary_max_tokens:
+        label: "Compact-Summary Max Tokens"
+        desc: "Token-Obergrenze für die von Full Compaction erzeugte Zusammenfassung"
+      compact_max_consecutive_failures:
+        label: "Max aufeinanderfolgende Fehler"
+        desc: "Compaction-Fehler vor Fallback auf Trim"
+      compact_reserved_output_tokens:
+        label: "Reserved Output Tokens"
+        desc: "Für Modell-Antwort reservierte Tokens, vom Kontext-Budget abgezogen"
+      history_size:
+        label: "Verlaufsgröße"
+        desc: "Maximale Shell-Verlaufseinträge"
+      max_shell_messages:
+        label: "Max Shell-Messages"
+        desc: "Maximale Shell-Befehls-Turns im KI-Kontext"
+      context_token_budget:
+        label: "Kontext-Token-Budget"
+        desc: "Legacy-Hartlimit, das alte Nachrichten direkt entfernt (keine Komprimierung); leer = unbegrenzt"
+      enable_remote_git_prompt:
+        label: "Remote Git-Prompt"
+        desc: "git-Branch in Remote- (SSH/telnet) Bash-Prompts anzeigen"
+      remote_rich_prompt:
+        label: "Remote Rich-Prompt"
+        desc: "Mehrzeilige Remote-Prompts aktivieren (user@host, cwd, git)"
+      remote_show_venv:
+        label: "Remote Venv anzeigen"
+        desc: "Aktives Python-venv in Remote-Prompts anzeigen"
+      remote_show_container:
+        label: "Remote Container anzeigen"
+        desc: "Container/Runtime-Markierungen in Remote-Prompts anzeigen"
+      remote_show_kube:
+        label: "Remote Kube anzeigen"
+        desc: "Kubernetes-Kontext in Remote-Prompts anzeigen"
+      remote_danger_patterns:
+        label: "Remote Danger Patterns"
+        desc: "Hostname-Regexe, die Remote-PS1 als Gefahr markieren (kommagetrennt)"
+      enable_langfuse:
+        label: "Langfuse aktivieren"
+        desc: "Langfuse LLM-Observability-Tracing aktivieren"
+      langfuse_public_key:
+        label: "Langfuse Public Key"
+        desc: "Langfuse Public Key"
+      langfuse_secret_key:
+        label: "Langfuse Secret Key"
+        desc: "Langfuse Secret Key"
+      langfuse_host:
+        label: "Langfuse Host"
+        desc: "Langfuse Self-Host-Instanz-URL"
+      enable_scripts:
+        label: "Skripte aktivieren"
+        desc: ".aish-Skriptsystem und Lifecycle-Hooks aktivieren"
+      log_level:
+        label: "Log Level"
+        desc: "Tracing-Log-Detaillierungsgrad (error/warn/info/debug/trace)"
+      pty_daemon_enabled:
+        label: "PTY-Daemon"
+        desc: "PTY-Sitzungen über Verbindungsabbrüche hinweg via Hintergrund-Daemon erhalten"
+      codex_auth_path:
+        label: "Codex Auth Path"
+        desc: "Pfad zu OpenAI Codex/ChatGPT auth.json"
+      session_db_path:
+        label: "Session-DB-Pfad"
+        desc: "Benutzerdefinierter Sitzungs-Datenbankort (leer = Standard)"
+      skill_auto_search:
+        label: "Skill-Auto-Suche"
+        desc: "KI durchsucht automatisch Skill-Registries und schlägt Installationen vor, wenn kein Skill passt"
+      skill_registries:
+        label: "Skill-Registry-Quellen"
+        desc: "Skill-Suchquellen verwalten (skills.sh, skillhub.cn). Enter für interaktive Verwaltung"
+
+  session:
+    iteration_limit_reached: "{count} Tool-Aufruf-Iterationen abgeschlossen."
+    iteration_limit_title: "⏸ Tool-Aufruf-Limit erreicht"
+    iteration_continue_prompt: "Fortfahren? [Y/n]"
+  resume:
+    exit_command: "KI-Kontext fortsetzen: aish resume {session_id}"
+    usage: "Verwendung: /resume [session_id]"
+    session_store_unavailable: "Sitzungsspeicher ist nicht verfügbar."
+    no_sessions: "Keine früheren Sitzungen gefunden."
+    recent_header: "Letzte Sitzungen (max. {limit}):"
+    list_hint: "Fortsetzen mit: /resume <session_id>"
+    list_failed: "Sitzungen konnten nicht aufgelistet werden: {error}"
+    not_found: "Sitzung nicht gefunden: {session_id}"
+    cwd_missing: "Das gespeicherte Arbeitsverzeichnis existiert nicht mehr; aktuelles Verzeichnis wird beibehalten: {cwd}"
+    resumed: "Sitzung fortgesetzt: {session_id}"
+    selector_title: "Sitzung fortsetzen"
+    search_placeholder: "Suchen..."
+    no_matches: "Keine passenden Sitzungen."
+    current_marker: "(aktuell)"
+    selector_footer: "Tippen zum Suchen · ↑/↓ zum Auswählen · Enter zum Fortsetzen · Esc zum Abbrechen"
+
+  export:
+    md_header: "# aish Sitzungsexport"
+    session_label: "- **Sitzung**: `{uuid}`"
+    model_label: "- **Modell**: {model}"
+    api_base_label: "- **api_base**: {base}"
+    forked_label: "- **verzweigt von**: `{parent}`"
+    created_label: "- **erstellt**: {created}"
+    working_dir: "**Arbeitsverzeichnis**: `{cwd}`"
+    conversation_header: "## Unterhaltung"
+    history_header: "## Befehlsverlauf"
+    exported: "exportiert {file} ({msgs} Nachrichten, {cmds} Befehle)"
+    write_failed: "Schreiben von {file} fehlgeschlagen: {error}"
+    usage: "Verwendung: /export [md] [--raw]  (nur markdown; --raw überspringt Schwärzung und fragt immer nach)"
+    store_unavailable: "Sitzungsspeicher nicht verfügbar; Export nicht möglich"
+    not_found: "aktuelle Sitzung im Speicher nicht gefunden"
+    load_failed: "Laden der Sitzung fehlgeschlagen: {error}"
+    raw_warning: "ROH-EXPORT: Geheimnisse (Tokens, Passwörter, Schlüssel) werden für {msgs} Nachrichten und {cmds} Befehle UNgeschwärzt geschrieben."
+    raw_confirm: "Unschwärzten Export schreiben?"
+    preview: "Export-Vorschau → {file}  ({msgs} Nachrichten, {cmds} Befehle, {hits} Geheimnis-Treffer)"
+    preview_hits: "{hits} Geheimnis(se) werden durch [REDACTED:…]-Markierungen ersetzt."
+    not_scanned: "nicht gescannt (Raw-Modus)"
+    incomplete_warning: "Warnung: {failed} Transkript-Schreibvorgänge fehlgeschlagen; im Export könnten aktuelle Nachrichten fehlen."
+    confirm: "Export-Datei schreiben?"
+    cancelled: "Export abgebrochen"
+  report:
+    usage: "Aufruf: /report  (schreibt die letzte Antwort nach report.html und öffnet sie auf einer Desktop-Sitzung im Browser; --help zeigt den Aufruf)"
+    generated: "Bericht geschrieben: {file}"
+    opening: "{file} wird geöffnet"
+    open_failed: "Browser konnte nicht geöffnet werden: {error}"
+    hint_local: "Öffnen mit: xdg-open {file}"
+    hint_remote: "Remote- oder Headless-Sitzung; mit folgendem Befehl holen: scp <user>@<host>:'{file}' ."
+    store_unavailable: "Sitzungsspeicher nicht verfügbar; Bericht kann nicht erzeugt werden"
+    not_found: "Aktuelle Sitzung nicht im Speicher gefunden"
+    no_answer: "Diese Sitzung hat noch keine exportierbare Antwort"
+    load_failed: "Sitzung konnte nicht geladen werden: {error}"
+    write_failed: "{file} konnte nicht geschrieben werden: {error}"
+    html:
+      title: "aish-Antwort"
+      session: "Sitzung"
+      model: "Modell"
+      created: "Erstellt"
+      evidence: "Belege"
+      evidence_empty: "Für diesen Zug wurde kein Tool-Aufruf erfasst."
+      evidence_hint: "Die {count} Tool-Aufrufe hinter dieser Antwort, in Aufrufreihenfolge, mit den erfassten Argumenten und Ausgaben. Nichts wurde erneut ausgeführt."
+      args_label: "Argumente"
+      output_label: "Ausgabe"
+      output_missing: "Für diesen Aufruf wurde kein Ergebnis erfasst."
+      tool_unknown: "(unbekanntes Tool)"
+      status_ok: "ok"
+      status_truncated: "gekürzt"
+      status_offloaded: "nur Offload-Vorschau"
+      status_missing: "kein Ergebnis"
+  audit:
+    disabled: "Audit ist nicht aktiviert. Setze 'audit.enabled: true' in security_policy.yaml."
+    usage: "Verwendung: /audit [--user U] [--host H] [--event-type command|ai_tool|security_decision] [--session S] [--since T] [--until T] [--limit N]\n  Zeitstempel im RFC-3339-Format, z. B. 2026-01-01T00:00:00Z; Standardlimit ist 20"
+    permission_denied: "Zugriff verweigert: Nicht-Root-Benutzer können nur ihre eigenen Audit-Ereignisse abfragen"
+    query_failed: "Audit-Log konnte nicht abgefragt werden: {error}"
+    no_events: "Keine Audit-Ereignisse gefunden."
+    col_timestamp: "ZEITSTEMPEL"
+    col_event: "EREIGNIS"
+    col_user: "BENUTZER"
+    col_host: "HOST"
+    col_details: "DETAILS"
+    summary: "{count} Ereignis(se) angezeigt."
+    filter_header: "Filter:"
+    filter_user: "Benutzer={value}"
+    filter_host: "Host={value}"
+    filter_event_type: "Ereignistyp={value}"
+    filter_session: "Sitzung={value}"
+    filter_since: "seit={value}"
+    filter_until: "bis={value}"
+    filter_limit: "Limit={value}"
+    err_unknown_flag: "unbekanntes Flag: {flag}"
+    err_missing_value: "Flag {flag} benötigt einen Wert"
+    err_invalid_limit: "ungültiger --limit-Wert: {value} (positive Ganzzahl erwartet)"
+    err_invalid_datetime: "ungültige {flag}-Zeit (RFC 3339 verwenden, z. B. 2026-01-01T00:00:00Z)"
+    err_invalid_event_type: "ungültiger Ereignistyp: {error}"
+    label_rc: "Exit-Code={value}"
+    label_user: "Benutzer={value}"
+    label_rule: "Regel={value}"
+  audit_export:
+    usage: "Verwendung: /audit export [--user U] [--host H] [--event-type T] [--session S] [--since T] [--until T] [--limit N]\n  gibt ein Verzeichnis mit audit.md, events.jsonl und manifest.json aus"
+    no_events: "keine Audit-Ereignisse für die angegebenen Filter gefunden"
+    permission_denied: "Zugriff verweigert: Nicht-Root-Benutzer können nur ihre eigenen Audit-Ereignisse exportieren"
+    mkdir_failed: "temporäres Verzeichnis konnte nicht erstellt werden: {error}"
+    build_failed: "Audit-Paket konnte nicht erstellt werden: {error}"
+    publish_failed: "Audit-Paket konnte nicht veröffentlicht werden: {error}"
+    exported: "Audit-Paket nach {path} exportiert ({events} Ereignisse, {files} Dateien)"
+  fork:
+    forked: "Sitzung verzweigt {short} (von {parent})"
+    switch_failed: "Verzweigung erstellt, aber Wechsel fehlgeschlagen: {error}"
+    switch_manual: "verwende `/resume {session_id}` zum manuellen Wechseln"
+    failed: "Verzweigung fehlgeschlagen: {error}"
+    store_unavailable: "Sitzungsspeicher nicht verfügbar; Verzweigung nicht möglich"
+
+  sessions:
+    none: "(keine gespeicherten Sitzungen)"
+    switch_failed: "Sitzungswechsel fehlgeschlagen: {error}"
+    list_failed: "Sitzungen auflisten fehlgeschlagen: {error}"
+
+  live_sessions:
+    daemon_disabled: "PTY-Daemon ist deaktiviert. In config.yaml aktivieren:"
+    daemon_disabled_hint: "  pty_daemon_enabled: true"
+    none_active: "Keine aktiven PTY-Sitzungen."
+    panel_title: "Aktive PTY-Sitzungen"
+    search_placeholder: "Suchen..."
+    panel_footer: "↑/↓ navigieren · Enter wählen · Ctrl+E umbenennen · Esc abbrechen"
+    create_new: "Neue Sitzung erstellen"
+    already_current: "Bereits in dieser Sitzung."
+    started_label: "gestartet: {age}"
+    current_tag: "[aktuell]"
+    rename_title: "Sitzung {id} umbenennen"
+    rename_current_none: "Aktueller Name: (keiner)"
+    rename_current_set: "Aktueller Name: {name}"
+    rename_input_label: "Neuen Namen eingeben (leer zum Loeschen)"
+    rename_input_footer: "Namen eingeben | Enter speichern | Esc abbrechen"
+    rename_done: "Sitzung {id} → \"{name}\" umbenannt"
+    rename_cleared: "Name fuer Sitzung {id} geloescht"
+    rename_failed: "Umbenennen fehlgeschlagen: {err}"
+    exit_no_note_title: "Notiz vor dem Trennen hinzufuegen?"
+    exit_no_note_hint: "Diese Sitzung hat keinen Namen — unbenannte Sitzungen sind nach dem Trennen schwer zu unterscheiden."
+    exit_no_note_footer: "Enter speichern & trennen · Esc ohne Namen trennen"
+    resource_detail: "CPU {cpu} · RSS {rss}"
+    resource_alert: "⚠ Sitzung {id} hat den Ressourcen-Schwellwert erreicht (CPU {cpu} / RSS {rss}). Mit /live_sessions dorthin wechseln oder mit /kill_live_sessions beenden."
+
+  kill_live_sessions:
+    daemon_disabled: "PTY-Daemon ist deaktiviert. In config.yaml aktivieren:"
+    daemon_disabled_hint: "  pty_daemon_enabled: true"
+    none_active: "Keine aktiven PTY-Sitzungen."
+    list_header: "Aktive PTY-Sitzungen:"
+    usage_hint: "Verwendung: /kill_live_sessions <id> [id ...]  ·  /kill_live_sessions all"
+    no_others: "Keine weiteren Sitzungen zum Beenden."
+    killing: "Beende {id} ..."
+    kill_done: "erledigt"
+    kill_failed: "fehlgeschlagen: {error}"
+    not_found: "Sitzung '{id}' nicht gefunden."
+    is_current: "{id} ist die aktuelle Sitzung — verwenden Sie 'exit' zum Beenden."
+    summary: "{killed} beendet, {failed} fehlgeschlagen."
+    all_terminated: "{count} Sitzung(en) beendet."
+  rollback:
+    title: "Zurücksetzen"
+    prompt: "Auf eine Änderung zurücksetzen (verwirft sie und alle späteren):"
+    empty: "In dieser Sitzung wurden keine Dateiänderungen aufgezeichnet."
+    drift_summary: "{drifted} von {count} Datei(en) wurden seit der KI-Bearbeitung verändert."
+    drift_warning: "Drift erkannt: Festplatteninhalt weicht von der letzten KI-Bearbeitung ab."
+    impact_summary: "{count} Datei(en) werden wiederhergestellt. Diff unten prüfen:"
+    confirm: "Überschreiben?"
+    confirm_overwrite: "Wiederherstellung bestätigen — überschreibt die obigen Dateien."
+    cancelled: "Rollback abgebrochen."
+    partial: "Teilweise Wiederherstellung: {restored}/{total} Dateien erfolgreich."
+  undo:
+    nothing_to_undo: "Keine Dateiänderungen zum Rückgängigmachen."
+    restored: "{path} wiederhergestellt"
+    removed: "{path} entfernt"
+    restore_failed: "Wiederherstellung fehlgeschlagen: {error}"
+    remove_failed: "Entfernen fehlgeschlagen: {error}"
+    drift_warning: "Drift erkannt: Datei seit der KI-Bearbeitung verändert."
+    drift_deleted: "Datei existiert nicht mehr auf der Festplatte."
+    force_prompt: "Überschreiben erzwingen?"
+    force_confirm: "Bestätigen: abweichende Datei überschreiben?"
+    will_delete: "Datei wird durch diese Wiederherstellung gelöscht."
+    cancelled: "Rückgängig abgebrochen."
+    drift_blocked: "Wiederherstellung blockiert: {path} wurde nach der Bestätigung geändert."
+    will_create: "neue Datei"
+    binary_or_unreadable: "binär oder nicht lesbar"
+
+  time:
+    seconds_ago: "vor {seconds}s"
+    minutes_ago: "vor {minutes}min"
+    hours_ago: "vor {hours}h"
+
+  skill:
+    title: "Skills"
+    search_placeholder: "Tippen zum Filtern..."
+    filtered_suffix: "  · gefiltert aus {total}"
+    tab:
+      installed: "Installiert"
+      browse: "Durchsuchen"
+      registries: "Registries"
+    footer:
+      installed: "Enter prüfen · Esc beenden"
+      browse: "Suchbegriff eingeben · Enter auf 🔍 suchen / in Zeile installieren · Esc leeren"
+      registries: "Leertaste umschalten · Enter verwalten · Esc beenden"
+    empty:
+      installed: "Keine Skills installiert. Den Tab 'Durchsuchen' verwenden, um welche zu finden."
+      browse: "Oben einen Suchbegriff eingeben, dann Enter auf der 🔍-Zeile zum Suchen."
+      registries: "Keine Registries konfiguriert. '＋ Hinzufügen' auswählen, um eine zu erstellen."
+    row:
+      search: "Registries durchsuchen"
+      add_registry: "＋ Registry hinzufügen"
+      search_hint_empty: "Gib oben eine Abfrage ein und drücke hier Enter, um Registries zu durchsuchen."
+      search_hint_query: "Enter drücken, um Registries zu durchsuchen: \"{query}\""
+    status:
+      trusted: "✓ vertraut"
+      quarantined: "⚠ unter Quarantäne"
+      no_skill_md: "✗ kein SKILL.md"
+      registry_on: "[an]"
+      registry_off: "[aus]"
+      installs: "{registry} · {count} Installationen"
+      default_tag: " Standard"
+    error:
+      empty_query: "Leere Suchanfrage."
+      no_registries: "Keine aktiven Registries. Eine im Tab 'Registries' hinzufügen."
+      no_results: "Keine Skills gefunden."
+      install_failed: "Installation für '{name}' abgebrochen oder fehlgeschlagen."
+      unsafe_name: "Unsicherer Skill-Name: {name}"
+      not_found: "Skill '{name}' nicht gefunden."
+      not_installed: "Skill '{name}' ist nicht installiert."
+      already_trusted: "Skill '{name}' ist bereits vertraut."
+      failed: "Fehlgeschlagen: {error}"
+      trust_failed: "Vertrauen für '{name}' fehlgeschlagen: {error}"
+    search_progress: "Suche nach \"{query}\" ..."
+    notice_unknown: "Unbekannt '/skill {sub}'. Skill-Manager wird geöffnet."
+    action:
+      menu_title: "Skill: {name}"
+      menu_question: "Aktion auswählen"
+      vet: "Dateien prüfen (vet)"
+      trust: "Vertrauen (genehmigen)"
+      verify: "Struktur verifizieren"
+      remove: "Entfernen"
+    result:
+      trusted: "Skill '{name}' als vertraut markiert. Wird beim nächsten Skills-Refresh geladen."
+      was_trusted: "Skill '{name}' war bereits vertraut."
+      removed: "Skill '{name}' entfernt."
+      verify_line: "Skill: {name} | Gültig: {valid}"
+      check_pass: "PASS"
+      check_fail: "FAIL"
+      verify_passed: "BESTANDEN"
+      verify_warnings: "WARNUNGEN"
+      verify_valid: "gültig"
+      verify_invalid: "ungültig"
+      vet_quarantined: "\nDieser Skill steht unter QUARANTÄNE. Vertrauen mit /skill trust {name} (oder /skill remove {name})."
+    review_gate:
+      prompt: "Sicherheitsprüfung erforderlich: Skill '{name}' steht unter Quarantäne (nicht vertrauenswürdig).\n  [a] KI-Auto-Prüfung   [y] Dateien jetzt prüfen   [n] löschen   (andere) unter Quarantäne belassen: "
+      trust_hint: "Nach der Prüfung vertrauen: Tab 'Installiert' öffnen und den Skill auswählen."
+      removed: "Skill unter Quarantäne '{name}' entfernt."
+      kept: "Unter Quarantäne belassen. Im Tab 'Installiert' prüfen."
+    vetter:
+      running: "KI-Skill-Prüfung (vetter) läuft für '{name}' (Ctrl+C zum Abbrechen)..."
+      cancelled: "Prüfung abgebrochen. Skill '{name}' bleibt unter Quarantäne."
+      failed: "KI-Prüfung fehlgeschlagen: {error}. Skill '{name}' bleibt unter Quarantäne."
+    registry:
+      restart_notice: "aish neu starten, damit Registry-Änderungen wirksam werden."
+    usage:
+      install: "Verwendung: /skill install <ID>"
+      install_hint: "  Oder verfügbare Skills durchsuchen: /skill search"
+      install_not_found: "Skill '{id}' nicht gefunden. /skill search verwenden, um die richtige ID zu finden."
+      action: "Verwendung: /skill {action} <name>"
+      searching_for: "Suche nach '{query}' ..."
+    review:
+      checklist: "\nPrüf-Checkliste: Herkunft · Zugriff auf Anmeldedaten · Datenexfiltration über Netzwerk · eval/exec · Base64-Verschleierung · sudo · versteckte Downloads · destruktive Operationen · Prompt-Injection."
+      could_not_read: "(SKILL.md konnte nicht gelesen werden: {error})"
+      skill_md_header: "\n--- {path} ---"
+      files_header: "\n--- Dateien in {path} ---"
+    install:
+      installed_quarantined: "Installiert: {name} (UNTER QUARANTÄNE — nicht vertrauenswürdig, nicht geladen)"
+      path_line: "  Pfad: {path}"
+      verify_line: "  Verifizieren: {result}"
+      failed: "Installation fehlgeschlagen: {error}"
+
+  ask_user:
+    default_title: "Benutzereingabe erforderlich"
+    default_hint: "[Standard: {value}]"
+    custom_input_label: "(eigene Antwort eingeben)"
+    footer: "Enter zum Bestätigen · ↑/↓ zum Navigieren · Esc zum Abbrechen"
+    cancel_hint: "Mit Esc oder Strg+C abbrechen."
+    required_error: "Eine Antwort ist erforderlich."
+    min_length_error: "Antwort zu kurz (mindestens {min} Zeichen)."
+    interactive_terminal_required: "ask_user erfordert ein interaktives Terminal"
+    recommended_badge: "Empfohlen"
+    title: "Option auswählen"
+    custom_label: "Benutzerdefiniert:"
+    hint_select: "Enter zum Bestätigen · ↑/↓ zum Navigieren · Esc zum Abbrechen"
+    hint_custom: "Enter zum Bestätigen · ↑/↓ zum Navigieren · Tab oder direkt tippen für Eingabe · Esc zum Abbrechen"
+    paused:
+      title: "⏸ Benutzereingabe erforderlich (Aufgabe pausiert)"
+      prompt: "Frage: {prompt}"
+      reason: "Grund: {reason}"
+      options_header: "Optionen:"
+      custom_input: "Sie können auch einen beliebigen benutzerdefinierten Wert eingeben."
+      how_to: "Antworten Sie mit einem Optionswert (oder einer Nummer) oder geben Sie ; continue with default ein (Standard: {default})."
+  diagnose_cancelled: "  └─ ❌ Systemdiagnose abgebrochen"
+
+  compaction:
+    completed: "Kontext komprimiert"
+    completed_with_tokens: "Kontext komprimiert, etwa {tokens} Tokens freigegeben"
+
+  compact:
+    started: "Kontext wird komprimiert…"
+    completed: "Kompaktierung abgeschlossen. Tokens: {before} → {after} ({saved} gespart)"
+    cancelled: "Kompaktierung abgebrochen; Kontext unverändert"
+    failed: "Kompaktierung fehlgeschlagen: {error} (Kontext unverändert)"
+  status:
+    thinking: "Denkt nach"
+    compacting_context: "Kontext wird komprimiert"
+    thinking_now: "Denkt nach"
+    processing: "Verarbeitet"
+    analyzing: "  Analysiert..."
+    system_diagnosing: "  └─ Systemdiagnose läuft"
+    system_analyzing: "  └─ Systemanalyse läuft"
+  tool:
+    prefix: "🔧 Verwende Tool"
+    prefix_diagnose: "  └─ 🔧 Diagnose-Tool"
+    done_diagnose: "  └─ ✅ Diagnose abgeschlossen"
+
+  sub_agent:
+    thinking: "Denkt nach"
+
+security:
+  sandbox_off_action:
+    allow: "Direkt erlauben"
+    confirm: "Bestätigung verlangen"
+    block: "Blockieren"
+  sandbox_unavailable:
+    title: "⚠️ Sandbox nicht verfügbar"
+    line1: "Die Sandbox ist nicht verfügbar; das Befehlsrisiko kann nicht bewertet werden."
+    line2: "Nachfolgende KI-generierte Befehle werden wie folgt behandelt: {action}."
+    policy_line1: "Die Sandbox ist per Richtlinie deaktiviert; es wurde kein Sandbox-Lauf ausgeführt."
+    policy_line2: "KI-generierte Befehle werden wie folgt behandelt: {action}."
+    reason: "Grund: {reason}"
+    error: "Fehler: {error}"
+    root_required: "Die Sandbox benötigt Root-Rechte"
+    ipc_unavailable: "Verbindung zum Sandbox-Dienst nicht möglich (aish-sandbox.socket läuft nicht oder ist nicht installiert)"
+    ipc_failed: "Ausführung des Sandbox-Dienstes fehlgeschlagen (aish-sandbox)"
+    sandbox_execute_failed: "Das Befehlsrisiko kann nicht bewertet werden; bitte vor der Ausführung bestätigen"
+  risk_reason:
+    sandbox_disabled_by_policy: "Die Sandbox ist per Richtlinie deaktiviert; Dateiveränderungen können für die Risikobewertung nicht geprüft werden. Aktion: {action}."
+    sandbox_disabled: "Die Sandbox ist nicht aktiviert oder ausgeschaltet; Dateiveränderungen können für die Risikobewertung nicht geprüft werden. Aktion: {action}."
+    cwd_outside_repo_root: "Das aktuelle Arbeitsverzeichnis {cwd} liegt außerhalb der Sandbox-Wurzel {root}; relative Seiteneffekte können nicht zuverlässig bewertet werden. Aktion: {action}."
+    sandbox_unavailable: "Initialisierung oder Ausführung der Sandbox fehlgeschlagen; Dateiveränderungen können für die Risikobewertung nicht geprüft werden. Aktion: {action}."
+    sandbox_exception: "Sandbox-Ausführungsfehler; Dateiveränderungen können für die Risikobewertung nicht geprüft werden. Aktion: {action}."
+    sandbox_failed: "Sandbox fehlgeschlagen; Dateiveränderungen können für die Risikobewertung nicht geprüft werden. Aktion: {action}."
+    policy_fallback_rule_match: "Bei deaktivierter Sandbox hat der Befehl {command} {count} Fallback-Regelpfade getroffen; Behandlung als {risk}-Risiko."
+  ai_risk:
+    no_fs_changes: "Die Sandbox hat keine Dateischreibvorgänge oder Löschungen erkannt."
+    high_hits: "Es wurden {count} Schreib-/Löschvorgänge erkannt, die hochriskante Regeln treffen."
+    medium_hits: "Es wurden {count} Schreib-/Löschvorgänge erkannt, die Regeln mittleren Risikos treffen."
+    low_or_unmatched_hits: "Es wurden {count} Schreib-/Löschvorgänge erkannt, die Regeln mit niedrigem Risiko treffen oder keiner Regel entsprechen."
+    preview_paths: "Beispielpfade (teilweise, können Verzeichnisse/Dateien enthalten): {paths}"
+  command_blocked: "Fehler: Befehl wurde vom Sicherheitssystem blockiert"
+  command_blocked_with_reason: "Fehler: Befehl wurde vom Sicherheitssystem blockiert: {reason}"
+
+tools:
+  fs:
+    read_file:
+      missing_path: "Fehlender 'path' Parameter"
+      read_failed: "Lesen von {path} fehlgeschlagen: {error}"
+      file_too_large: "Datei {path} ist {size} Bytes, überschreitet das Limit von {limit} Bytes. Verwenden Sie edit_file mit start_line/end_line für Bereichsbearbeitung."
+      decode_failed: "Dekodieren von {path} als UTF-8 fehlgeschlagen: {error}"
+      empty_file: "(leere Datei)"
+      offset_exceeds_length: "Offset {offset} überschreitet Dateilänge ({length})"
+      access_denied: "Zugriff verweigert: Pfad liegt nicht im Offload-Verzeichnis"
+      large_file_truncated: "\n[... Datei {path} ist {size} Bytes / {lines} Zeilen; zeige {shown} Zeilen ab Offset {offset}. Verwende offset/limit für mehr ...]"
+      large_file_no_tag: "große Datei: partielles Lesen, kein Snapshot-Tag verfügbar"
+    edit_file:
+      missing_path: "Fehlender 'path' Parameter"
+      missing_old_string: "Fehlender 'old_string' Parameter"
+      missing_new_string: "Fehlender 'new_string' Parameter"
+      edit_read_failed: "Lesen von {path} fehlgeschlagen: {error}"
+      file_too_large: "Datei {path} ist {size} Bytes, überschreitet das Limit von {limit} Bytes. Verwenden Sie start_line/end_line für Bereichsbearbeitung."
+      old_string_not_found: "'old_string' nicht gefunden in {path}"
+      old_string_not_found_prefix_hint: "'old_string' nicht gefunden in {path}, aber das Präfix '{prefix}' erscheint {count} mal — wahrscheinlich Suffix-Abweichung"
+      old_string_ambiguous: "'old_string' erscheint {count} mal in {path} - verwenden Sie replace_all=true oder mehr Kontext"
+      edit_success: "{path} bearbeitet"
+      edit_write_failed: "Schreiben von {path} fehlgeschlagen: {error}"
+      not_undoable_confirm: "Bearbeiten von {path}: Vorheriger Inhalt kann nicht gesichert werden, diese Änderung ist NICHT rückgängig machbar (/undo stellt sie nicht wieder her). Fortfahren?"
+      stale_tag: "Datei {path} wurde seit dem letzten Lesen geändert — neu lesen vor dem Bearbeiten"
+      invalid_tag: "Ungültiger Snapshot-Tag '{tag}' für {path}"
+      invalid_line_range: "Ungültiger Zeilenbereich: start_line={start}, end_line={end}. start_line muss >= 1 und end_line >= start_line sein."
+      line_range_out_of_bounds: "Zeilenbereich-Start {start} überschreitet Dateilänge ({lines} Zeilen). Verwenden Sie ein start_line innerhalb der Datei."
+      not_undoable_suffix: " (nicht rückgängig machbar: vorheriger Inhalt zu groß)"
+    write_file:
+      missing_path: "Fehlender 'path' Parameter"
+      missing_content: "Fehlender 'content' Parameter"
+      content_too_large: "Inhalt für {path} ist {size} Bytes, überschreitet das Limit von {limit} Bytes"
+      create_dirs_failed: "Erstellen von übergeordneten Verzeichnissen fehlgeschlagen: {error}"
+      write_success: "{bytes} Bytes in {path} geschrieben"
+      write_failed: "Schreiben von {path} fehlgeschlagen: {error}"
+      not_undoable_confirm: "Überschreiben von {path}: Vorheriger Inhalt kann nicht gesichert werden, diese Änderung ist NICHT rückgängig machbar (/undo stellt sie nicht wieder her). Fortfahren?"
+      not_undoable_suffix: " (nicht rückgängig machbar: vorheriger Inhalt konnte nicht gesichert werden)"
+    undo_edit:
+      nothing_to_undo: "Keine Dateiänderungen zum Rückgängigmachen."
+      restored: "{path} auf vorherigen Inhalt zurückgesetzt."
+      removed: "{path} entfernt (durch die rückgängig gemachte Änderung erstellt)."
+      restore_failed: "Wiederherstellen von {path} fehlgeschlagen: {error}"
+      remove_failed: "Entfernen von {path} fehlgeschlagen: {error}"
+      drifted: "Datei {path} wurde seit der KI-Bearbeitung geändert. Datei neu lesen und erneut versuchen."
+  ask_user:
+    description: "Stellt dem Benutzer eine gezielte Rückfrage. Nur mit prompt wird Texteingabe verwendet; mit options werden Auswahlmöglichkeiten angeboten."
+    unknown_kind: "Unbekannter Typ: {kind}"
+    runtime_not_configured: "ask_user-Laufzeit ist nicht konfiguriert"
+    execute_failed: "ask_user fehlgeschlagen: {error}"
+    param:
+      kind: "Interaktionstyp: text_input für freie Eingabe, choice_or_text für Auswahl mit eigener Eingabe"
+      prompt: "Die Frage, die dem Benutzer gestellt wird."
+      options: "Optionale Auswahlmöglichkeiten. Wenn sie fehlen oder leer sind, verwendet ask_user Texteingabe."
+      option_value: "Stabiler Optionswert in den Tool-Metadaten."
+      option_label: "Für den Benutzer sichtbare Bezeichnung in der Auswahlliste."
+      option_description: "Optionale Zusatzbeschreibung unterhalb der Option."
+      option_recommended: "Markiert diese Option sichtbar als empfohlene Vorgabe."
+      title: "Optionaler Titel für die Frage"
+      default: "Standardwert"
+      placeholder: "Platzhaltertext"
+      allow_freeform_input: "Erlaubt bei vorhandenen Optionen eine benutzerdefinierte Antwort. Standard ist true."
+      required: "Ob der Benutzer eine Antwort geben muss (Standard: true)"
+      allow_cancel: "Ob der Benutzer abbrechen/überspringen darf (Standard: true)"
+      min_length: "Minimale Länge für Texteingabe (Standard: 0)"
+    validation:
+      prompt_empty: "prompt darf nicht leer sein"
+      option_value_empty: "option value darf nicht leer sein"
+      option_label_empty: "option label darf nicht leer sein"
+      option_values_unique: "option values müssen eindeutig sein"
+      option_labels_unique: "option labels müssen eindeutig sein"
+      recommended_unique: "höchstens eine Option darf als empfohlen markiert sein"
+      default_must_match_option: "default muss einem option value entsprechen"
+      legacy_choice_requires_options: "options muss für choice_or_text eine nicht leere Liste sein"
+    result:
+      selected: "Benutzer hat gewählt: {label} (Wert: {value})"
+      text: "Benutzereingabe: {value}"
+      empty_answer: "Benutzer hat eine leere Antwort gegeben."
+      cancelled: "Benutzer hat die Frage abgebrochen."
+
+  smart_log:
+    summary:
+      file: "[DATEI] {ident}: {matched}/{total} Zeilen passend\nBeispiel:\n{sample}"
+      dir: "[VERZ] {path}: {matched}/{total} Zeilen passend\nBeispiel:\n{sample}"
+      systemd: "[SYSTEMD] {ident}: {matched}/{total} Zeilen passend\nBeispiel:\n{sample}"
+      call_failed: "[{stype}] {ident}: Aufruf fehlgeschlagen\n{output}"
+    no_logs_found: "Keine Protokolle oder passenden Informationen gefunden."
+
+  bash:
+    invalid_timeout: "Ungültiges Timeout: muss eine positive ganze Zahl von Sekunden sein"
+    command_timeout: "Befehl nach {timeout}s wegen Timeout abgebrochen. Ergebnis möglicherweise unvollständig."
+    security_handling_required: "der Bash-Befehl erfordert eine Sicherheitsbehandlung der Stufe {level}"
+
+  memory:
+    missing_action: "Parameter 'action' fehlt"
+    unknown_action: "Unbekannte Aktion: {action}. Verwenden Sie search/store/forget/list."
+    search_missing_query: "'query' fehlt für search"
+    store_missing_content: "'content' fehlt für store"
+    forget_missing_id: "'memory_id' fehlt für forget"
+    no_results: "Keine übereinstimmenden Erinnerungen gefunden."
+    stored: "Als Erinnerung #{id} gespeichert."
+    forgot: "Erinnerung #{id} vergessen."
+    not_found: "Erinnerung #{id} nicht gefunden."
+    empty: "Noch keine Erinnerungen."
+    not_available: "Erinnerungsfunktion nicht verfügbar"
+    confirm_store: "Speichern der Erinnerung bestätigen?"
+    confirm_forget: "Löschen der Erinnerung bestätigen"
+    field_category: "Kategorie"
+    field_scope: "Bereich"
+    field_ttl: "Gültigkeit"
+    field_reason: "Grund"
+    field_expires: "läuft ab"
+    expired_tag: "ABGELAUFEN"
+    list_header: "Langfristige Erinnerungen:"
+    verify_usage: "Verwendung: /memory verify <id>"
+    forget_usage: "Verwendung: /memory forget <id>"
+    invalid_id: "Ungültige Erinnerungs-ID: {id}"
+    verified: "Erinnerung #{id} verifiziert (Ablauf gelöscht)."
+    no_expired: "Keine abgelaufenen Erinnerungen."
+    cleared_expired: "{count} abgelaufene Erinnerung(en) gelöscht."
+    unknown_subcommand: "Unbekannter Unterbefehl: {subcommand}. Verwenden Sie list/verify/forget/clear-expired."
+
+  host_note:
+    missing_action: "Parameter 'action' fehlt"
+    unknown_action: "Unbekannte Aktion: {action}. Verwenden Sie store/list/forget."
+    store_missing_content: "'content' fehlt für store"
+    forget_missing_keyword: "'keyword' fehlt für forget"
+    empty: "Für diesen Host sind noch keine Notizen gespeichert."
+    stored: "Notiz gespeichert."
+    forgot: "{count} Notiz(en) entfernt."
+    forgot_none: "Keine übereinstimmenden Notizen gefunden."
+
+help:
+  labels:
+    usage: "Verwendung"
+    options: "Optionen"
+    examples: "Beispiele"
+    notes: "Hinweise"
+    brief_usage: "Verwendung: {usage}"
+  general:
+    title: "AI Shell Hilfe"
+    markdown: |-
+      ## Schnellstart
+      - **Shell-Befehle** — direkt eingeben: `ls`, `cd`, `vim`, `ssh`, `top` …
+      - **KI fragen** — mit `;` beginnen: `;wie finde ich große Dateien`
+      - **Slash-Befehle** — `/` in leerer Zeile drückt für interaktive Auswahl
+
+      ## Slash-Befehle
+      | Befehl | Beschreibung |
+      |--------|--------------|
+      | `/help [page]` | Hilfe anzeigen (`/help` für Seiten) |
+      | `/quit` | AI Shell beenden |
+      | `/model [Name]` | KI-Modell anzeigen oder wechseln |
+      | `/setup` | API-Einstellungen neu konfigurieren |
+      | `/setting` | Interaktiven Einstellungsbereich öffnen |
+      | `/plan [start\|status\|exit]` | Planmodus steuern |
+      | `/token` | Token-Nutzung anzeigen (letzte 7 Tage) |
+      | `/resume [id]` | Vorherige Sitzung fortsetzen |
+      | `/feedback` | Feedback geben oder Fehler melden |
+
+      ## Konfiguration
+      - Konfigurationsdatei: `~/.config/aish/config.yaml`
+      - Priorität: CLI-Argumente > Umgebungsvariablen (`AISH_MODEL`, `AISH_API_KEY`, `AISH_API_BASE`) > Konfigurationsdatei
+      - `/setup` oder `aish setup` für interaktive Konfiguration
+
+      ## Sitzungsverwaltung
+      - `aish -c` — an eine aktive Sitzung anhaengen (oder aus Liste waehlen)
+      - `Ctrl+Q` — aktuelle Sitzung trennen (laeuft im Hintergrund); mit `aish -c` wieder verbinden
+      - `Ctrl+E` — markierte Sitzung im Auswahlmenue umbenennen
+
+      ## Tastenkombinationen
+      | Taste | Aktion |
+      |-------|--------|
+      | `Ctrl+C` | Aktuellen Vorgang abbrechen (zweimal zum Beenden) |
+      | `Ctrl+D` | Shell beenden |
+      | `Shift+Tab` / `F2` | Planmodus umschalten |
+      | `Ctrl+O` | Ausgabeverlauf durchsuchen |
+      | `Ctrl+Q` | Sitzung trennen (mit `aish -c` verbinden) |
+      | `Ctrl+E` | Sitzung umbenennen (im Auswahlmenue) |
+      | `/` in leerer Zeile | Slash-Befehlsauswahl |
+
+      ## Hilfeseiten
+      `/help <page>` für Details zu aish-spezifischen Funktionen:
+
+      | Seite | Inhalt |
+      |-------|--------|
+      | `ai` | KI-Assistent (`;`-Präfix, Kontext, Gespräch) |
+      | `model` | Modellverwaltung (anzeigen, wechseln, Anbieter) |
+      | `plan` | Planmodus (Workflow, Genehmigung, vs. Normalmodus) |
+      | `config` | Konfiguration (Dateien, Umgebungsvariablen, Priorität) |
+      | `shortcuts` | Tastenkombinationen (Bearbeitung, Steuerung, Moduswechsel) |
+      | `security` | Sicherheitsrichtlinie (Risikostufen, Regeln, Erkennung) |
+
+      ## Mehr
+      - Sicherheitsrichtlinie: `~/.config/aish/security_policy.yaml`
+      - Sitzungsdaten: `~/.local/share/aish/sessions.db`
+      - Protokolle: `~/.config/aish/logs/aish.log`
+      - Dokumentation: https://github.com/AI-Shell-Team/aish
+
+  topics:
+    unknown: "Unbekannte Hilfeseite '{topic}'. Verfügbare Seiten: ai, model, plan, config, shortcuts, security"
+
+    ai:
+      title: "KI-Assistent"
+      markdown: |-
+        ## KI fragen
+
+        Stellen Sie Ihre Frage mit `;` (Semikolon) oder `；` (vollbreites Semikolon) als Präfix:
+
+        ```
+        ; Wie finde ich große Dateien?
+        ; Erkläre diesen Befehl: ls -la
+        ; Schlage eine bessere Komprimierungsmethode vor
+        ```
+
+        Die KI sieht Ihren Gesprächskontext, einschließlich vorheriger Shell-Befehle und KI-Antworten.
+
+        ## Funktionsweise
+
+        - Ihre Frage wird an das konfigurierte LLM-Modell gesendet
+        - Die KI erhält den Gesprächsverlauf als Kontext
+        - Antworten werden mit Syntaxhervorhebung und Tabellenformatierung angezeigt
+
+        ## Kontextverwaltung
+
+        - Der Gesprächsverlauf wird automatisch verwaltet
+        - Bei Überschreitung des Token-Budgets wird der Kontext automatisch komprimiert
+        - Ältere Nachrichten werden zusammengefasst, um den aktuellen Kontext zu erhalten
+
+    model:
+      title: "Modellverwaltung"
+      markdown: |-
+        ## Modell anzeigen & wechseln
+
+        ```
+        /model                    # Aktuelles Modell anzeigen
+        /model gpt-4o             # Zu GPT-4o wechseln
+        /model claude-sonnet-4-6  # Zu Claude wechseln
+        ```
+
+        ## Unterstützte Anbieter
+
+        | Anbieter | Modellpräfix |
+        |----------|-------------|
+        | OpenAI | `gpt-*`, `o1-*`, `o3-*`, `o4-*` |
+        | Anthropic | `claude-*` |
+        | Google | `gemini-*`, `gemma-*` |
+        | DeepSeek | `deepseek-*` |
+        | Qwen | `qwen-*`, `qwq-*` |
+        | Mistral | `mistral-*`, `mixtral-*`, `codestral-*` |
+        | xAI | `grok-*` |
+        | Moonshot | `kimi-*`, `moonshot-*` |
+        | Zhipu | `glm-*` |
+        | Lokal | Ollama, vLLM, lokale API |
+
+        ## Wechselverhalten
+
+        - Anbieter wird automatisch anhand des Modellnamens erkannt
+        - Konnektivität wird vor dem Wechsel überprüft
+        - Bei Fehler bleibt das aktuelle Modell bestehen
+        - Konfiguration wird automatisch in `~/.config/aish/config.yaml` gespeichert
+
+    plan:
+      title: "Planmodus"
+      markdown: |-
+        ## Was ist der Planmodus?
+
+        Im Planmodus analysiert die KI Ihre Codebasis und erstellt einen detaillierten Implementierungsplan, bevor Code geschrieben wird. Änderungen werden erst nach Ihrer Genehmigung angewendet.
+
+        ## Befehle
+
+        ```
+        /plan start     # Planmodus starten
+        /plan status    # Aktuellen Planstatus anzeigen
+        /plan exit      # Planmodus beenden
+        ```
+
+        Sie können den Planmodus auch mit `Shift+Tab` oder `F2` umschalten.
+
+        ## Verwendung
+
+        1. Planmodus starten: `/plan start`
+        2. KI um Plan bitten: `; Auth-Modul auf JWT umstellen`
+        3. KI erstellt einen Plan mit Schritten und Dateiänderungen
+        4. Plan prüfen und jeden Schritt genehmigen oder ablehnen
+        5. Nach Genehmigung werden Änderungen angewendet
+        6. Planmodus beenden: `/plan exit`
+
+        ## Planmodus vs. Normalmodus
+
+        | | Normalmodus | Planmodus |
+        |---|---|---|
+        | KI-Tools | Voller Zugriff | Schreibgeschützt + Plan erstellen |
+        | Codeänderungen | Sofort | Nach Genehmigung |
+        | Geeignet für | Schnelle Fixes, Fragen | Refactoring, neue Funktionen |
+
+    config:
+      title: "Konfiguration"
+      markdown: |-
+        ## Konfigurationsdatei
+
+        Speicherort: `~/.config/aish/config.yaml`
+
+        Kann mit `$AISH_CONFIG_DIR` oder `$XDG_CONFIG_HOME` überschrieben werden.
+
+        ## Priorität
+
+        Kommandozeilenargumente > Umgebungsvariablen > Konfigurationsdatei
+
+        ## Umgebungsvariablen
+
+        | Variable | Zweck |
+        |----------|-------|
+        | `AISH_MODEL` | Standardmodell überschreiben |
+        | `AISH_API_KEY` | API-Schlüssel überschreiben |
+        | `AISH_API_BASE` | API-Basis-URL überschreiben |
+        | `AISH_CONFIG_DIR` | Konfigurationsverzeichnis überschreiben |
+
+        ## Wichtige Einstellungen
+
+        ```
+        model: gpt-4o                    # Standard-KI-Modell
+        api_key: sk-xxx                  # API-Schlüssel
+        api_base: https://api.openai.com/v1  # API-Endpunkt
+        temperature: 0.3                 # Antwort-Zufälligkeit
+        theme: dark                      # UI-Theme (dark/light)
+        output_language: de              # Ausgabesprache erzwingen
+        ```
+
+        ## Einrichtungsassistent
+
+        `/setup` oder `aish setup` für interaktive Konfiguration. Einstellungen werden sofort ohne Neustart wirksam.
+
+        ## Weitere Dateien
+
+        - Sicherheitsrichtlinie: `~/.config/aish/security_policy.yaml`
+        - Sitzungsdatenbank: `~/.local/share/aish/sessions.db`
+        - Protokolle: `~/.config/aish/logs/aish.log`
+
+    shortcuts:
+      title: "Tastenkombinationen"
+      markdown: |-
+        ## Bearbeitung
+
+        | Taste | Aktion |
+        |-------|--------|
+        | `Tab` | Autovervollständigung |
+        | `↑` / `↓` | Verlauf navigieren |
+        | `Ctrl+R` | Verlauf durchsuchen |
+        | `Ctrl+L` | Bildschirm löschen |
+        | `Backspace` / `Delete` | Zeichen löschen |
+
+        ## Shell-Steuerung
+
+        | Taste | Aktion |
+        |-------|--------|
+        | `Ctrl+C` | Aktuelle Operation abbrechen (zweimal drücken zum Beenden) |
+        | `Ctrl+D` | Shell beenden |
+        | `Ctrl+O` | Ausgabeverlauf durchsuchen |
+        | `Esc` | Aktuelle Eingabe abbrechen |
+
+        ## Sitzungsverwaltung
+
+        | Taste | Aktion |
+        |-------|--------|
+        | `Ctrl+Q` | Sitzung trennen (bleibt aktiv; mit `aish -c` verbinden) |
+        | `Ctrl+E` | Markierte Sitzung umbenennen (im Auswahlmenue) |
+
+        ## Moduswechsel
+
+        | Taste | Aktion |
+        |-------|--------|
+        | `Shift+Tab` / `F2` | Planmodus umschalten |
+        | `/` in leerer Zeile | Slash-Befehlsauswahl öffnen |
+
+    security:
+      title: "Sicherheitsrichtlinie"
+      markdown: |-
+        ## Übersicht
+
+        aish verwendet eine Sicherheitsrichtlinie, um zu steuern, welche Befehle und Dateioperationen eine Bestätigung erfordern oder blockiert werden.
+
+        ## Speicherort
+
+        Pfad:
+        1. Explizit angegebener Pfad
+        2. `~/.config/aish/security_policy.yaml` (fehlt sie, wird die mitgelieferte Vorlage erzeugt)
+
+        ## Risikostufen
+
+        | Stufe | Verhalten |
+        |-------|-----------|
+        | `LOW` | Erlaubt, protokolliert |
+        | `MEDIUM` | Bestätigung erforderlich |
+        | `HIGH` | Blockiert oder erfordert explizite Bestätigung |
+
+        ## Regelstruktur
+
+        ```yaml
+        rules:
+          - id: protect-system
+            name: Systemverzeichnisse schützen
+            path: ["/boot/**", "/etc/passwd"]
+            operations: [WRITE, DELETE]
+            risk: HIGH
+            reason: "Systemdateien sollten nicht geändert werden"
+        ```
+
+        ## Pfadmuster
+
+        - `*` passt auf ein einzelnes Pfadsegment
+        - `**` passt auf null oder mehr Pfadsegmente
+        - Variablen: `$HOME`, `$PWD`
+
+        ## Geheimnisserkennung
+
+        Eingebaute Erkennungsmuster für API-Schlüssel (OpenAI, Anthropic, AWS, Google, GitHub, Stripe, Slack), JWT-Token und URLs mit eingebetteten Passwörtern. Benutzerdefinierte Muster über `secret_patterns` möglich.
+
+  command:
+    history:
+      title: "📚 Verlauf"
+      description: "Befehlsverlauf anzeigen oder bearbeiten"
+      usage: "history [options] [n]"
+      options:
+        - ["--help, -h", "Diese Hilfe anzeigen"]
+        - ["-c", "Die Verlaufsliste leeren, indem alle Einträge gelöscht werden"]
+        - ["-d offset", "Den Verlaufseintrag an Position offset löschen"]
+        - ["n", "Nur die letzten n Befehle anzeigen"]
+      examples:
+        - "history              # Gesamten Befehlsverlauf anzeigen"
+        - "history 10           # Die letzten 10 Befehle anzeigen"
+        - "history -c           # Gesamten Verlauf löschen"
+        - "history -d 5         # Verlaufseintrag an Position 5 löschen"
+        - "history --help       # Diese Hilfe anzeigen"
+      notes: "Verlaufseinträge werden für alle ausgeführten Befehle und KI-Interaktionen automatisch aufgezeichnet."
+
+    cd:
+      title: "📁 Verzeichnis wechseln"
+      description: "Das aktuelle Arbeitsverzeichnis mit vollständiger Parameterunterstützung ändern"
+      usage: "cd [-L|[-P [-e]]] [directory]"
+      options:
+        - ["-L", "Symbolische Links verfolgen: Symlinks nach der Verarbeitung von '..' auflösen (Standard)"]
+        - ["-P", "Physische Verzeichnisstruktur ohne Verfolgen symbolischer Links verwenden: Symlinks vor der Verarbeitung von '..' auflösen"]
+        - ["-e", "Falls -P angegeben ist und das aktuelle Arbeitsverzeichnis nicht ermittelt werden kann, mit einem Fehlerstatus beenden"]
+        # - ["-@", "Auf Systemen mit Unterstützung Dateien mit erweiterten Attributen als Attribut-Verzeichnisse darstellen"]
+        - ["directory", "Zielpfad des Verzeichnisses (optional, standardmäßig das Home-Verzeichnis)"]
+        - ["-", "Zum vorherigen Verzeichnis zurückkehren"]
+      examples:
+        - "cd ~                 # Zum Home-Verzeichnis wechseln"
+        - "cd /tmp              # In das Verzeichnis /tmp wechseln"
+        - "cd -                 # Zum vorherigen Verzeichnis zurückkehren"
+        - "cd \"path with spaces\" # Anführungszeichen für Pfade mit Leerzeichen verwenden"
+        - "cd -P /tmp           # Physische Pfadauflösung verwenden"
+        - "cd -P -e /tmp        # Physische Pfadauflösung verwenden und bei Fehler abbrechen"
+        - "cd -L /tmp           # Symbolische Links verfolgen (Standardverhalten)"
+        # - "cd -@ /tmp           # Erweiterte Attribute anzeigen (falls unterstützt)"
+      notes: "Unterstützt Tab-Vervollständigung und den Umgang mit Pfaden mit Sonderzeichen. Das Standardverhalten folgt symbolischen Links (-L)."
+
+    pushd:
+      title: "📤 Verzeichnis auf Stack legen"
+      description: "Ein Verzeichnis auf den Stack legen und dorthin wechseln"
+      usage: "pushd [directory]"
+      options:
+        - ["directory", "Zielpfad des Verzeichnisses"]
+        - ["(no args)", "Die obersten zwei Verzeichnisse auf dem Stack tauschen"]
+      examples:
+        - "pushd /tmp           # Aktuelles Verzeichnis auf den Stack legen und nach /tmp wechseln"
+        - "pushd                # Zwischen aktuellem und vorherigem Verzeichnis wechseln"
+      notes: "Pflegt einen Verzeichnis-Stack für eine einfache Navigation zwischen mehreren Verzeichnissen."
+
+    popd:
+      title: "📥 Verzeichnis vom Stack holen"
+      description: "Ein Verzeichnis vom Stack nehmen und dorthin wechseln"
+      usage: "popd"
+      options: []
+      examples:
+        - "popd                 # Zum vorherigen Verzeichnis vom Stack zurückkehren"
+      notes: "Entfernt das oberste Verzeichnis vom Stack und wechselt dorthin."
+
+    dirs:
+      title: "📋 Verzeichnis-Stack anzeigen"
+      description: "Den Verzeichnis-Stack anzeigen"
+      usage: "dirs [-c]"
+      options:
+        - ["-c", "Den Verzeichnis-Stack leeren"]
+      examples:
+        - "dirs                 # Aktuellen Verzeichnis-Stack anzeigen"
+        - "dirs -c              # Verzeichnis-Stack leeren"
+      notes: "Zeigt alle Verzeichnisse an, die sich aktuell auf dem Navigations-Stack befinden."
+
+    help:
+      title: "❓ Hilfe"
+      description: "Verfügbare Befehle und Funktionen anzeigen"
+      usage: "help"
+      options: []
+      examples:
+        - "help                 # Allgemeine Hilfe anzeigen"
+      notes: "Gibt einen Überblick über alle verfügbaren Befehle und Shell-Funktionen."
+
+    clear:
+      title: "🧹 Bildschirm leeren"
+      description: "Den Terminalbildschirm leeren"
+      usage: "clear"
+      options: []
+      examples:
+        - "clear                # Den Terminalbildschirm leeren"
+      notes: "Entspricht dem standardmäßigen Unix-Befehl clear."
+
+    exit:
+      title: "🚪 Shell beenden"
+      description: "Die AI Shell beenden"
+      usage: "exit"
+      options: []
+      examples:
+        - "exit                 # Die Shell beenden"
+        - "quit                 # Alternative Methode zum Beenden"
+      notes: "Beendet die Shell sauber und bewahrt Sitzungsdaten."
+
+    export:
+      title: "🔧 Umgebungsvariablen exportieren"
+      description: "Umgebungsvariablen mit Export-Attribut setzen oder anzeigen"
+      usage: "export [-fn] [name[=value] ...]\nexport -p"
+      options:
+        - ["-f", "Name verweist auf eine Shell-Funktion (nicht unterstützt)"]
+        - ["-n", "Export-Attribut von jedem Namen entfernen"]
+        - ["-p", "Liste aller exportierten Variablen anzeigen"]
+        - ["--", "Weitere Optionsverarbeitung deaktivieren"]
+      examples:
+        - "export PATH=/usr/local/bin:$PATH"
+        - "export EDITOR=vim"
+        - "export -n VAR  # Export-Attribut von VAR entfernen"
+        - "export -p      # Alle exportierten Variablen anzeigen"
+        - "export JAVA_HOME=\"/usr/lib/jvm/java-11-openjdk\""
+        - "export -- -VAR  # Variable mit dem Namen -VAR setzen"
+      notes: "Mit export gesetzte Umgebungsvariablen werden an Kindprozesse weitergegeben."
+
+    unset:
+      title: "🗑️ Umgebungsvariablen entfernen"
+      description: "Shell-Variablen und Funktionen entfernen"
+      usage: "unset [-f] [-v] [-n] [name ...]"
+      options:
+        - ["-f", "Jeder Name verweist auf eine Shell-Funktion (nicht unterstützt)"]
+        - ["-v", "Jeder Name verweist auf eine Shell-Variable (Standard)"]
+        - ["-n", "Jeder Name verweist auf eine Namensreferenz (nicht unterstützt)"]
+        - ["--", "Weitere Optionsverarbeitung deaktivieren"]
+      examples:
+        - "unset TEMP_VAR"
+        - "unset -v VAR1 VAR2"
+        - "unset JAVA_HOME"
+        - "unset -- -VAR  # Variable mit dem Namen -VAR entfernen"
+      notes: "Entfernt Variablen aus der Shell-Umgebung. Nicht vorhandene Variablen werden ignoriert."
+
+    pwd:
+      title: "📍 Arbeitsverzeichnis ausgeben"
+      description: "Das aktuelle Arbeitsverzeichnis mit Symlink-Behandlung ausgeben"
+      usage: "pwd [-L|-P]"
+      options:
+        - ["-L", "Logischen Pfad anzeigen (Symlinks folgen, Standard)"]
+        - ["-P", "Physischen Pfad anzeigen (Symlinks auflösen)"]
+      examples:
+        - "pwd                  # Logisches aktuelles Verzeichnis anzeigen"
+        - "pwd -L               # Logischen Pfad anzeigen (Symlinks beachten)"
+        - "pwd -P               # Physischen Pfad anzeigen (Symlinks auflösen)"
+      notes: "Das Standardverhalten zeigt den logischen Pfad an und berücksichtigt symbolische Links."
+
+    ";":
+      title: "🤖 KI-Assistent"
+      description: "Dem KI-Assistenten eine Frage stellen"
+      usage: "; <question>"
+      options:
+        - ["question", "Ihre Frage an den KI-Assistenten"]
+      examples:
+        - "; wie finde ich große Dateien?"
+        - "; erkläre diesen Befehl: ls -la"
+        - "; schlage eine bessere Methode zum Komprimieren von Dateien vor"
+      notes: "Der KI-Assistent kann bei Befehlserklärungen, Vorschlägen und allgemeiner Shell-Nutzung helfen."
+
+    "；":
+      title: "🤖 KI-Assistent"
+      description: "Dem KI-Assistenten eine Frage stellen"
+      usage: "； <question>"
+      options:
+        - ["question", "Ihre Frage an den KI-Assistenten"]
+      examples:
+        - "； wie finde ich große Dateien?"
+        - "； erkläre diesen Befehl: ls -la"
+        - "； schlage eine bessere Methode zum Komprimieren von Dateien vor"
+      notes: "Der KI-Assistent kann bei Befehlserklärungen, Vorschlägen und allgemeiner Shell-Nutzung helfen."
+
+    "/model":
+      title: "🧠 Modell wechseln"
+      description: "Das aktuelle Modell anzeigen oder zu einem angegebenen Modell wechseln"
+      usage: "/model [model]"
+      options:
+        - ["model", "Zielmodellkennung (wird auf Tool-Call-Unterstützung geprüft)"]
+        - ["--help, -h", "Diese Hilfe anzeigen"]
+      examples:
+        - "/model               # Aktuelles Modell anzeigen"
+        - "/model gpt-4         # Zu einem Modell wechseln"
+        - "/model --help        # Hilfe anzeigen"
+      notes: "Beim Wechsel werden Konnektivität und Tool-Call-Unterstützung geprüft; bei Fehlern bleibt das aktuelle Modell erhalten."
+
+    "/setup":
+      title: "⚙️ Neu konfigurieren"
+      description: "Den interaktiven Einrichtungsassistenten erneut ausführen, um API-Einstellungen zu ändern (Provider, API-Key, Modell)"
+      usage: "/setup"
+      options:
+        - ["--help, -h", "Diese Hilfe anzeigen"]
+      examples:
+        - "/setup               # Einrichtungsassistent starten"
+        - "/setup --help        # Hilfe anzeigen"
+      notes: "Neue Einstellungen werden sofort ohne Neustart angewendet. Ein Abbruch behält die aktuelle Konfiguration bei."
+
+errors:
+  litellm_not_installed: "Das Modul litellm ist nicht installiert"

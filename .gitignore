@@ -1,0 +1,8 @@
+target/
+vendor/aish/target/
+aish-cxxbridge/target/
+aish-cxxbridge/generated/
+build/
+*.o
+*.a
+*.so

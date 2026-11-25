@@ -1,0 +1,11 @@
+[package]
+name = "aish-scripts"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_yaml.workspace = true
+regex.workspace = true
+tracing.workspace = true
+dirs.workspace = true

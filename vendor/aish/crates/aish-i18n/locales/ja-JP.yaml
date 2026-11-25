@@ -1,0 +1,1789 @@
+cli:
+  app_help: "AI Shell - LLM 機能を内蔵した対話型シェル"
+  help_option_help: "このメッセージを表示して終了します。"
+  run_command_help: "AI Shell を起動します"
+  info_command_help: "AI Shell の情報を表示します"
+  check_langfuse_command_help: "Langfuse の設定を確認します"
+  setup_command_help: "対話式セットアップを実行して終了します"
+  check_tool_support_command_help: "ツール呼び出しのライブ検証をデバッグします"
+  detach_hint: "セッションを切り離しました。`aish -c` で再接続できます。"
+  resume_failed: "セッションの復元に失敗しました: {error}"
+
+  uninstall:
+    cancelled: "キャンセルしました。"
+
+  option:
+    model: "使用する LLM モデル。AISH_MODEL または設定ファイルでも指定できます。"
+    api_key: "LLM プロバイダーの API キー。AISH_API_KEY または各プロバイダーの環境変数でも指定できます。"
+    api_base: "LLM プロバイダーの API ベース URL。AISH_API_BASE または設定ファイルでも指定できます。"
+    config: "設定ファイルのパス（既定値: ~/.config/aish/config.yaml）。"
+
+  setup:
+    api_base_prompt: "OpenAI 互換の API Base URL を入力（https://.../v1）"
+    provider_header: "プロバイダーを選択"
+    provider_filter_prompt: "検索:"
+    provider_filter_hint: "↑/↓ 選択 · Enter 確定 · 入力して検索"
+    select_hint: "↑/↓ 選択 · Enter 確定 · Esc キャンセル"
+    provider_endpoint_header: "{provider} の API エンドポイントを選択"
+    search_matches: "（{count} 件一致）"
+    search_matches_one: "（{count} 件一致）"
+    provider_hints:
+      openrouter: "APIキー · マルチモデルゲートウェイ"
+      openai: "直接 API キー"
+      anthropic: "Claude · OpenAI 互換 endpoint"
+      deepseek: "API キー"
+      gemini: "Gemini · API キー"
+      google: "Google AI · API キー"
+      xai: "Grok · API キー"
+      minimax: "M2.5 · Global / CN"
+      moonshot: "Kimi · Global / CN"
+      zai: "GLM · Coding Plan / Global / CN"
+      qianfan: "Qianfan · API キー"
+      mistral: "API キー"
+      together: "オープンモデル · API キー"
+      huggingface: "Inference API · HF トークン"
+      qwen: "Qwen · Standard / Coding Plan"
+      kilocode: "API キー"
+      ollama: "ローカル OSS モデル · 通常 Key 不要"
+      vllm: "セルフホスト · OpenAI 互換"
+      ai_gateway: "統合ゲートウェイ · API キー"
+      azure: "カスタム endpoint · API キー"
+      bedrock: "カスタム endpoint · API キー"
+      custom: "任意の OpenAI 互換 chat/completions エンドポイント"
+    provider_custom_note: "OpenAI 互換"
+    provider_preset_base: "既定の API Base"
+    custom_api_base_placeholder: "https://api.example.com/v1"
+    provider_custom_api_base_required: "API Base は必須です"
+    provider_custom_api_base_invalid: "無効な API Base URL です（https://... を使用）"
+    filter_no_results: "一致なし"
+    api_key_env_found: "{env_key} を検出: {masked}"
+    api_key_env_hint: "Enter で検出されたキーを使うか、新しいキーを入力してください。"
+    api_key_prompt: "API キーを入力"
+    model_custom_prompt: "モデル名を入力（戻るには back）"
+    api_key_required: "API キーは必須です"
+    model_header: "プロバイダー: {provider}"
+    model_filter_prompt: "検索:"
+    model_filter_hint: "↑/↓ 選択 · Enter 確定 · 入力して検索 · Esc キャンセル"
+    model_custom_option: "カスタムモデル..."
+    model_custom_required: "モデル名は必須です"
+    model_custom_saved_as: "保存名: {model}"
+    model_discover_in_progress: "利用可能なモデルを検出しています..."
+    model_discover_failed: "モデルを検出できませんでした: {reason}"
+    verify_title: "検証"
+    verify_connectivity_in_progress: "接続性を確認しています..."
+    verify_tool_in_progress: "API が tools パラメータを受け付けるか確認しています..."
+    verify_simple_success: "API チェックに成功しました"
+    verify_simple_failed_with_reason: "検証に失敗しました: {reason}"
+    verify_failed_unknown: "不明なエラー"
+    verify_tool_not_detected: "tool サポートを検出できませんでした"
+    verify_http_error: "HTTP {status}（{url}）：{detail}"
+    verify_connect_timeout: "{url} への接続が {timeout}s でタイムアウト"
+    verify_connect_refused: "接続が拒否されたか到達不能：{url}"
+    verify_request_failed: "リクエスト失敗：{detail}"
+    verify_http_client_build_failed: "HTTP クライアントの作成に失敗：{detail}"
+    verify_tool_http_error: "HTTP {status} — tool サポート未検出：{detail}"
+    verify_tool_timeout: "tool サポート確認が {timeout}s でタイムアウト"
+    verify_tool_request_failed: "tool サポート確認のリクエスト失敗：{detail}"
+    action_header: "次の操作:"
+    action_retry_model: "別のモデルを選択"
+    action_retry_api_base: "API Base を再入力"
+    action_retry_api_key: "API キーを再入力"
+    action_change_provider: "プロバイダーを変更"
+    action_continue: "このまま続行（非推奨）"
+    action_exit: "セットアップを終了"
+    saved_to: "設定を {path} に保存しました"
+    saved_with_warning_to: "設定を {path} に保存しました（tools パラメータ未検証）"
+    non_interactive: "非対話環境ではセットアップを実行できません"
+    cancelled: "セットアップをキャンセルしました"
+    required_cancelled: "必須設定が不足しているため終了します"
+    connectivity_ok: "接続正常（{}ms）"
+    setup_complete_hint: "\x1b[1maish\x1b[0m を実行してシェルを起動できます。"
+
+  startup:
+    label:
+      skills: "スキル"
+    goodbye: "👋 終了します"
+    config_file_error: "❌ 設定ファイルエラー: {error}"
+    config_file_hint: "💡 --config で有効な設定ファイルパスを指定してください"
+
+  langfuse:
+    incomplete: "⚠️  Langfuse の設定が不完全です"
+    missing: "   不足: {var}"
+    complete: "✅ Langfuse の設定は完全です"
+    script_failed: "Langfuse 確認スクリプトが失敗しました: {error}"
+    script_not_found: "check_langfuse.py スクリプトが見つかりません"
+    run_from_root: "このコマンドはプロジェクトのルートで実行してください"
+
+  parse_errors:
+    title: "エラー"
+    option_requires_argument: "オプション {option} には引数が必要です。"
+    no_such_option: "そのようなオプションはありません: {option}"
+    missing_parameter: "不足しているパラメーター: {param}"
+    invalid_value_for_option: "{option} の値が無効です: {reason}"
+    generic: "無効な引数です: {message}"
+
+status:
+  session: "チャット"
+  live_session: "端末"
+  model: "モデル"
+  host: "ホスト"
+  up: "稼働"
+  services: "サービス"
+  errors_today: "今日のエラー"
+  na: "なし"
+
+  instructions: "命令"
+  instructions_none: "読み込みなし"
+  instructions_loaded: "{count} 件のファイルを読み込み"
+shell:
+  interrupted: "割り込みました"
+  ctrl_c_again: "1秒以内にもう一度 Ctrl+C で終了します"
+  exiting: "シェルを終了しています..."
+  confirm_dialog_title: "ツール実行"
+  confirm_dialog_tool: "ツール:"
+  confirm_dialog_command: "コマンド:"
+  confirm_dialog_options: "[y] 一回許可   [a] セッション記憶   [r] AIに別案を相談   [n] 拒否"
+  confirm_dialog_question: "選択（デフォルト n）："
+  confirm_choice_once: "一回許可"
+  confirm_choice_remember: "セッション記憶"
+  confirm_choice_reply: "AIに別案を相談"
+  confirm_choice_deny: "拒否"
+  forget_approvals_cleared: "このセッションの記憶された承認 {count} 件を削除しました"
+  instructions_toggled: "このセッションのプロジェクト AGENTS.md 命令の読み込み: {state}"
+  welcome2:
+    header: ">_ AI Shell {version}"
+    model_hint: "(/model で切り替え)"
+    label:
+      model: "モデル"
+      config: "設定"
+    quick_start:
+      title: " クイックスタート:"
+      item1_prefix: "ネイティブなシェルコマンド: "
+      cmd_ls: "ls"
+      cmd_top: "top"
+      cmd_vim: "vim"
+      cmd_ssh: "ssh"
+      item1_suffix: " など"
+      item2_prefix: "AI に質問: "
+      item2_example: "; で始めます。例: ; 大きなファイルを探す方法"
+      item3_prefix: "ヘルプを見る:"
+      item3_suffix_1: ""
+      item3_keyword: "help"
+      item3_suffix_2: " を入力すると組み込みヘルプを表示します。"
+    risk: "AI が生成した内容にはリスクがあるため、必ず注意して確認してください。"
+    skills_loaded_suffix: " 件読み込み済み"
+
+  update_available:
+    title: "更新があります"
+    version_line: "新バージョン {latest} が利用可能です"
+    run_prefix: "コマンド:"
+
+  slash:
+    help: "ヘルプ情報を表示"
+    model: "AI モデルの表示・切替"
+    setup: "セットアップウィザードを開く"
+    setting: "対話型設定パネルを開く"
+    plan: "プランモードの制御"
+    token: "トークン使用量を表示"
+    resume: "前回のセッションを再開"
+    feedback: "フィードバックを送信"
+    quit: "AI Shell を終了"
+    record: "ターミナルセッションを録画 (start/stop)"
+    doctor: "システム診断を実行"
+    diagnose: "直前の失敗コマンドを診断"
+    status: "システム環境の状態を表示"
+    live_sessions: "アクティブPTYセッション一覧"
+    kill_live_sessions: "IDでPTYセッション終了"
+    audit: "監査ログを照会（誰/いつ/何/AI提案/確認）"
+    forget-approvals: "記憶されたコマンド承認を削除（このセッション）"
+    skill: "スキルを閲覧・インストール・信頼・検証；レジストリを管理"
+    export: "セッションを Markdown にエクスポート（既定でマスキング；--raw で解除）"
+    report: "直近の回答を HTML ページに書き出し、デスクトップセッションでは開きます"
+    fork: "現在のセッションを分岐"
+    sessions: "セッションツリーを表示"
+    rollback: "このセッションの AI によるファイル編集を確認・ロールバック (edit_file/write_file)"
+    undo: "AIによる直近のファイル変更を取り消す (edit_file/write_file)"
+    memory: "長期メモリの表示、検証、削除"
+    compact: "AIコンテキストを今すぐ圧縮（フォーカス指定は任意）"
+    instructions: "プロジェクト AGENTS.md 命令の読み込みを切り替え（on/off/status；このセッションのみ）"
+    mcp: "MCP サーバーとそのツールを確認・再読込・再接続"
+
+  slash_group:
+    diagnostics: "診断"
+    sessions: "セッション"
+    model_settings: "モデルと設定"
+    skills: "スキル"
+    files_memory: "ファイルとメモリ"
+    record_share: "録画と共有"
+    security_audit: "セキュリティと監査"
+    exit: "終了"
+
+  slash_status:
+    reason_diagnose_no_failure: "診断する失敗コマンドがありません"
+    reason_audit_disabled: "監査ストアが無効です"
+    reason_undo_empty: "取り消すファイル変更がありません"
+    reason_pty_daemon_disabled: "PTY デーモンが有効ではありません"
+    undo_count: "取り消し可能 {count} 件"
+    plan_planning: "計画中"
+    plan_normal: "通常"
+
+  mcp:
+    no_servers: "MCP: サーバーが設定されていません。設定に `mcp.servers` を追加してください。"
+    disabled_hint: "MCP は設定されていますが無効です。`mcp.enabled: true` とし、少なくとも1つのサーバーを有効にしてください。"
+    config_warning: "MCP 設定の警告: {warning}"
+    status_line: "{name} [{transport}] {status} · ツール: {tools} · 信頼: {trust} · 副作用: {side_effects}"
+    endpoint: "  エンドポイント: {endpoint}"
+    failure: "  失敗: {reason}"
+    tool_line: "  {name}（{side_effects}）— {description}"
+    tools_header: "`{server}` が公開するツール（{count}）:"
+    server_connecting: "`{server}` はまだ接続中です。しばらくして再試行してください（状態は `/mcp status` で確認できます）。"
+    unknown_server: "不明な MCP サーバー: {server}"
+    no_tools: "MCP サーバー `{server}` はツールを公開していません。"
+    summary: "MCP: {connected}/{total} サーバー接続済み、{tools} ツールが利用可能。"
+    runtime_unavailable: "MCP ランタイムがまだ利用できません。シェル起動後に再試行してください。"
+    reload_header: "MCP サーバーを再読み込みしています..."
+    reload_done: "MCP サーバーを再読み込みしました。"
+    reconnect_started: "MCP サーバー `{server}` に再接続しています..."
+    reconnect_done: "MCP サーバー `{server}` に再接続しました。"
+    reconnect_failed: "MCP サーバー `{server}` が失敗しました: {reason}"
+    confirm_message: "MCP サーバー `{server}` がツール `{tool}` の呼び出しを要求しています（宣言された副作用: {side_effects}）。\n引数: {args}"
+    blocked_message: "MCP ポリシーがサーバー `{server}` のツール `{tool}` をブロックしました。"
+    alternative_hint: "一度だけ承認するか、このサーバーが読み取り専用なら設定で `trust: allow` と `side_effects: read` を指定すると、以降は確認されません。"
+    invalid_action: "無効な MCP アクションです。list、describe、call のいずれかを指定してください。"
+    tool_required: "このアクションには MCP ツール名が必要です。"
+    reason_server: "MCP 呼び出し: サーバー `{server}`、ツール `{tool}`"
+    reason_side_effects: "宣言された副作用 `{declared}`；サーバーの申告 `{reported}`"
+    reason_arguments: "引数: {args}"
+    reason_trust: "信頼レベル: {trust}"
+    call_failed: "MCP 呼び出し（サーバー `{server}`、ツール `{tool}`）が失敗しました: {detail}"
+    needs_async: "この MCP ツールには非同期ランタイムが必要です。通常のツールループから呼び出してください。"
+    help_hint: "最初の MCP サーバーを設定するには `/mcp add` を実行してください。"
+    unknown_subcommand: "不明な `/mcp` サブコマンド: {sub}"
+    missing_server_arg: "`/mcp {sub}` には必須の引数（サーバー名）がありません。"
+    config_write_failed: "config.yaml の書き込みに失敗しました。変更はロールバックされました: {error}"
+    tool_detail_header: "MCP ツール `{server}`/`{tool}`"
+    tool_detail_description: "  説明: {description}"
+    tool_detail_side_effects: "  副作用: 宣言 {declared} · 報告 {reported} · 実効 {effective}"
+    tool_detail_trust: "  信頼: {trust} → {verdict}"
+    tool_detail_schema: "  inputSchema:\n{schema}"
+    tool_unknown: "MCP サーバー `{server}` に `{tool}` という名前のツールはありません。"
+    verdict_allow: "確認なしで呼び出し可能"
+    verdict_confirm: "呼び出し時に確認を求めます"
+    verdict_block: "ポリシーによりブロック"
+    add_cancelled: "MCP サーバーの追加をキャンセルしました。何も書き込まれていません。"
+    added: "MCP サーバー `{server}` [{transport}] を追加しました（{status}）。"
+    add_failed: "MCP サーバーの追加に失敗しました: {error}"
+    removed: "MCP サーバー `{server}` を削除しました。"
+    remove_failed: "MCP サーバーの削除に失敗しました: {error}"
+    enabled: "MCP サーバー `{server}` を有効化しました（{status}）。"
+    disabled: "MCP サーバー `{server}` を無効化しました。ツールは登録解除されました。"
+    already_enabled: "MCP サーバー `{server}` はすでに有効です。"
+    already_disabled: "MCP サーバー `{server}` はすでに無効です。"
+    toggle_failed: "MCP サーバーの状態変更に失敗しました: {error}"
+    trust_updated: "`{server}` の `{tool}` の信頼レベルを {level} に設定しました。"
+    trust_failed: "MCP の信頼設定に失敗しました: {error}"
+    test_ok: "MCP サーバー `{server}` は正常です（バージョン {version}）。利用可能なツール: {tools} 個。"
+    test_tool_line: "  {name} — {description}"
+    test_failed: "MCP サーバー `{server}` のテストに失敗しました: {error}"
+    test_tip_not_found: "ヒント: コマンドを起動できませんでした。実行ファイルのパスとインストール状況を確認してください。"
+    test_tip_refused: "ヒント: 接続が拒否されました。サーバーが起動しているか、URL/ポートが正しいか確認してください。"
+    test_tip_timeout: "ヒント: サーバーが時間内に応答しませんでした。`/mcp reconnect` を試すか `request_timeout_ms` を増やしてください。"
+    test_tip_auth: "ヒント: 認証に失敗しました。このサーバーに設定した token/header を確認してください。"
+    menu_title: "MCP メニュー"
+    menu_question: "MCP で何をしますか？"
+    menu_add: "MCP サーバーを追加（ウィザード）"
+    menu_tools: "ツール"
+    menu_tools_list: "ツール一覧を表示"
+    menu_test: "接続テスト"
+    menu_trust: "信頼を設定"
+    menu_toggle: "サーバーの有効化/無効化"
+    menu_reconnect: "サーバーに再接続"
+    menu_reload: "全サーバーを再読み込み"
+    menu_remove: "サーバーを削除"
+    menu_help: "ヘルプ"
+    menu_remove_confirm_title: "MCP サーバーを削除"
+    menu_remove_confirm_question: "MCP サーバー `{server}` を削除し、そのツールを登録解除しますか？"
+    menu_remove_confirm_yes: "はい、削除します"
+    menu_remove_confirm_no: "いいえ、キャンセル"
+    pick_server_title: "MCP サーバーを選択"
+    pick_server_question: "どのサーバーを使用しますか？"
+    pick_tool_title: "MCP ツールを選択"
+    pick_tool_question: "どのツールを使用しますか？"
+    pick_tool_any: "*（すべてのツール）"
+    pick_level_title: "信頼レベル"
+    pick_level_question: "この呼び出しをどの程度信頼しますか？"
+    menu_cancelled: "MCP メニューをキャンセルしました。変更はありません。"
+    add:
+      name_prompt: "サーバー名"
+      transport_title: "MCP サーバーを追加"
+      transport_question: "このサーバーはどのトランスポートを使いますか？"
+      command_prompt: "起動コマンド（例: npx）"
+      args_prompt: "追加引数（スペース区切り、任意）"
+      url_prompt: "サーバー URL（例: https://example.com/mcp）"
+      token_prompt: "Bearer トークン（任意、設定に保存されます）"
+      trust_title: "信頼レベル"
+      trust_question: "このサーバーへの呼び出しをどの程度信頼しますか？"
+      expose_title: "ツールの公開方法"
+      expose_question: "このサーバーのツールをモデルにどう公開しますか？"
+      side_effects_title: "宣言する副作用"
+      side_effects_question: "このサーバーのツールは何を行えますか？"
+      confirm_title: "MCP サーバーの追加を確認"
+      confirm_summary: "このサーバーを追加しますか？\n\n{summary}"
+      confirm_yes: "はい、追加する"
+      confirm_no: "いいえ、キャンセル"
+    help: |-
+      引数なしの `/mcp` で9行の対話メニューが開きます（1-9 で選択し、アクション → サーバー → ツールの順に進みます）。以下のサブコマンドも同等に使えます。
+      MCP クライアントコマンド:
+        /mcp | /mcp status | /mcp list   設定済みの全サーバーを表示
+        /mcp help                        このヘルプを表示
+        /mcp tools [server]              1つ、または全サーバーのツール一覧
+        /mcp tool <server> <tool>        1つのツールのスキーマと信頼判定を表示
+        /mcp add                         対話ウィザード（名前、トランスポート、信頼…）
+        /mcp add <name> -- <cmd> [args]  stdio サーバーをクイック追加
+        /mcp add <name> --url <url>      HTTP サーバーをクイック追加
+        /mcp remove | rm <name>          サーバーを削除
+        /mcp enable <name>               サーバーを有効化（即座に接続）
+        /mcp disable <name>              サーバーを無効化（ツールを登録解除）
+        /mcp trust <server> <tool|*> <ask|allow|block>
+                                         1つのツール、またはサーバー全体の信頼を設定
+        /mcp test <name>                 設定を変えずに接続し、ツールを一覧
+        /mcp reload                      設定に従い全サーバーを再接続
+        /mcp reconnect <server>          1つのサーバーを再接続
+      クイック追加フラグ: --transport stdio|http、--url <url>、--token <t>、--trust ask|allow|block、
+        --side-effects read|network|write|unknown、--timeout <ms>、--max-output <bytes>、
+        --expose gateway|tools、--env KEY=VALUE、--header KEY=VALUE、stdio は `-- <command> [args...]`。
+      変更は毎回 config.yaml をアトミックに書き換え（未知のキーは保持、コメントは保持しない）、即座に反映されます。
+      gateway ツール（サーバーごとに1つ）は `action` を受け取ります:
+        action: "list"                        そのサーバーのツール一覧
+        action: "describe", tool: "<name>"    1つのツールを説明
+        action: "call", tool: "<name>", args: {...}   ツールを呼び出す
+      信頼モデル: サーバーが `trust: allow` かつ実効副作用が `read` のときのみ自動承認されます。`unknown`/`write`/`network` は常に確認を求め、`trust: block` は即座に拒否されます。
+
+  feedback:
+    select_type: "フィードバックの種類を選択"
+    type_bug: "バグ報告"
+    type_feature: "機能リクエスト"
+    type_question: "質問"
+    confirm_title: "収集した情報を確認"
+    confirm_question: "以下の情報が Issue に添付されます。ログには機密情報が含まれる場合があります。"
+    confirm: "確認して開く"
+    without_logs: "ログなしで開く"
+    cancel: "キャンセル"
+    opening: "GitHub Issue を開いています..."
+    failed: "ブラウザを開けませんでした: {error}"
+    visit: "アクセス: {url}"
+    log_unavailable: "（ログファイルが見つかりません）"
+    logs_included: "含まれる（最後の30行、秘匿済み）"
+    logs_truncated: "注：URL長さ制限のためログが切り詰められました"
+    body_summary: "## Summary"
+    body_steps: "## Steps to reproduce"
+    body_expected: "## Expected behavior"
+    body_actual: "## Actual behavior"
+    body_environment: "## Environment"
+    body_version: "- AISH version: {version}"
+    body_os: "- Operating system: {os}"
+    body_model: "- AI Model / Provider: {model} / {provider}"
+    body_logs: "## Logs"
+    body_feature_summary: "## Feature summary"
+    body_use_case: "## Use case"
+    body_proposed_solution: "## Proposed solution"
+    body_alternatives: "## Alternatives considered"
+    body_question: "## Question"
+
+  security:
+    panel_title:
+      blocked: "🛑 セキュリティによりブロック"
+      notice: "🔐 セキュリティ通知"
+      confirm: "🔐 確認が必要です"
+    title:
+      blocked: "🛑 セキュリティによりブロック: {tool}"
+      notice: "🔐 セキュリティ通知: {tool}"
+      confirm: "🔐 確認が必要です: {tool}"
+    label:
+      description: "説明"
+      command: "コマンド"
+      target: "対象"
+      content_preview: "内容プレビュー"
+      fallback_hint: "注意"
+      risk_level: "リスクレベル"
+      reasons: "理由"
+      rule: "ルール"
+      matched_paths: "パス"
+      alternatives: "代替案"
+      impact: "影響"
+      no_additional_info: "追加情報はありません。"
+    fallback:
+      sandbox_execute_failed: "コマンドの事前実行に失敗したため、リスクを評価できません。本実行前に確認してください。"
+      sandbox_timeout: "コマンドの事前実行がタイムアウトしたため、リスクを評価できません。本実行前に確認してください。"
+      sandbox_ipc_timeout: "コマンドの事前評価待機がタイムアウトしたため、リスクを評価できません。本実行前に確認してください。"
+      generic: "コマンドのリスク評価を完了できませんでした。本実行前に確認してください。"
+    alternative:
+      generic: "このコマンドは手動で内容と影響を確認してから実行してください。"
+      etc_manual: "/etc 配下の変更が必要な場合は、バックアップや変更管理を伴う手動手順を推奨します。"
+    options_header: "オプション"
+    option:
+      approve: "許可"
+      approve_remember: "はい。このコマンドでは今後確認しない"
+      cancel: "キャンセル"
+    choice_prompt: "選択してください（既定: n）: "
+
+  exit_goodbye: "シェルを終了します。さようなら！"
+  exit_daemon_hint: "※ ヒント: Ctrl+Q でセッションを切り離し（バックグラウンド継続）、aish -c で再接続"
+  command_cancelled: "コマンドをキャンセルしました"
+  error_correction:
+    press_semicolon_hint: "コマンド実行に失敗しました。; でクイック修正、または /diagnose で診断。"
+    corrected_command_label: "修正候補:"
+    corrected_command_title: "💡 修正されたコマンド:"
+    confirm_execute_prefix: "実行: "
+    confirm_execute_suffix: "? (Y/n): "
+    no_valid_command: "正しいコマンドを特定できませんでした"
+    retry_hint: "';' で再度クイック修正、または '/diagnose' で診断"
+    same_as_failed: "修正候補が失敗コマンドと同一です。再実行を拒否します"
+  failure_diagnose:
+    no_failure: "診断できる失敗コマンドがありません。失敗するコマンドを実行してから /diagnose を入力してください。"
+    report_title: "── 診断レポート ──"
+    root_cause: "失敗原因:"
+    confidence: "信頼度:"
+    confidence_high: "高"
+    confidence_medium: "中"
+    confidence_low: "低"
+    evidence: "診断根拠:"
+    suggested_fix: "推奨修正コマンド:"
+    no_suggested_fix: "信頼できる修正案なし"
+    verify_commands: "修正後の検証コマンド:"
+    risk_notes: "リスク:"
+    fix_not_auto_executable: "推奨修正は単一の実行可能コマンドではないため、確認実行をスキップしました。レポートに従って手動で適用してください。"
+    fix_has_alternatives: "複数の修正経路があるため、確認実行をスキップしました。リスク欄を見て手動で選択してください。"
+    confirm_fix_prefix: "推奨修正を実行しますか "
+    confirm_fix_suffix: "？[y/N] "
+    fix_cancelled: "キャンセルしました。手動で実行: {command}"
+    verifying: "検証を実行中…"
+    no_verify_commands: "検証コマンドなし; 検証をスキップ"
+    verify_blocked: "ブロック（非読み取り専用）: {command} ({reason})"
+    verify_passed: "合格: {command} (exit {exit_code})"
+    verify_failed: "不合格: {command} (exit {exit_code})"
+    conclusion_fixed: "結論: 問題は修正されました"
+    conclusion_partial: "結論: 一部の検証が失敗しました"
+    conclusion_unknown: "結論: 判断できません"
+    error: "診断失敗: {error}"
+    parse_format_error: "モデル出力から診断レポートを解析できませんでした。/diagnose を再試行してください。"
+    parse_prose_fallback: "注意: モデルは構造化レポートではなくプレーンテキストを返しました。"
+    no_evidence: "（未提供）"
+  nl_detection:
+    confirm_ask_ai: "自然言語の質問のようです。AIに聞きますか？(Y/n)"
+  error:
+    load_script_failed: "スクリプト '{script}' の読み込みに失敗: {error}"
+    pty_error: "PTY エラー: {error}"
+    restart_bash_failed: "bash の再起動に失敗: {error}"
+    execution_error: "❌ 実行中にエラーが発生しました: {error}"
+    pty_decode_error: "PTY 出力のデコードエラーを検出しました: {error}"
+    potential_error: "🚀 問題の可能性を検出しました: {reason}。解決を試みます..."
+    llm_error_title: "❌ LLM リクエストに失敗しました"
+    llm_error_message: "エラー: {error}"
+    empty_response: "プロバイダーから回答がありませんでした。選択したプロバイダーまたはモデルを確認して、もう一度お試しください。"
+    incomplete_response: "プロバイダーの応答は完了前に終了しました。出力上限を確認するか、別のモデルをお試しください。"
+    partial_turn_saved: "このターンで完了したツール実行ステップを保存しました（{steps} ステップ）。失敗前の作業は失われません。新しいタスクを入力するか ;retry で保存ポイントから続行できます。"
+    partial_turn_saved_limit: "イテレーション上限で停止する前に、このターンで完了したツール実行ステップを保存しました（{steps} ステップ）。完了した作業は失われません。新しいタスクを入力するか ;retry で保存ポイントから続行できます。"
+    llm_error_details_title: "デバッグ詳細"
+    tool_args_json_invalid_hint: "❌ リクエストに失敗しました。再試行してください。"
+  prompt:
+    confirm_execute: "?このコマンドを実行しますか? [y/n]:"
+    ai_hint: "; で AI に質問"
+  model:
+    current: "現在のモデル: {model}"
+    unset: "未設定"
+    invalid: "モデル名は空にできません"
+    switching: "モデルを検証しています: {model}"
+    switch_same: "モデルは変更されていません: {model}"
+    switch_saved: "{model} に切り替えました · {account} · デフォルトに保存"
+    switch_session_ok: "このセッションのみ {model} に切り替えました · {account}（デフォルトは変更なし）"
+    switch_session_only: "このセッションでは {model} · {account} に切り替えました；デフォルトモデルは未保存"
+    verify_failed: "モデル検証に失敗しました: {reason}"
+    picker_title: "モデル / アカウント切替"
+    picker_subtitle: "↑↓ 選択、Enter で切替"
+    fetch_partial_subtitle: "一部の endpoint でモデルリストの取得に失敗 —— {errors}"
+    fetching: "モデルリストを取得中: {base}"
+    picker_search: "モデルや URL を検索..."
+    picker_footer: "Esc キャンセル"
+    action_add: "追加"
+    action_del: "削除"
+    action_toggle: "切替"
+    action_edit: "編集"
+    edit_label: "モデル名"
+    edit_desc: "このアカウントが使用するモデル"
+    edited: "'{name}' のモデルを {model} に更新しました"
+    cannot_remove_primary: "プライマリモデルは削除できません"
+    switched_account: "'{name}' に切り替えました（モデル: {model}）"
+    fallback_badge: "フォールバック"
+    primary_badge: "プライマリ"
+    recent_badge: "最近"
+    current_badge: "現在"
+    unverified_badge: "未検証"
+    action_session: "セッションのみ"
+    action_fallback: "フォールバック"
+    fallback_not_switchable: "フォールバックモデル '{model}' は直接切替不可。主モデル失敗時のみ試行されます"
+    fallback_add_label: "フォールバックモデル名"
+    fallback_add_desc: "主モデル失敗時に試行されるモデル"
+    fallback_added: "フォールバック '{model}' を追加しました"
+    fallback_removed: "フォールバック '{model}' を削除しました"
+    fallback_exists: "フォールバック '{model}' は既に存在します"
+    action_manage: "管理"
+    manage_title: "アカウントとフォールバック管理"
+    manage_search: "検索..."
+    manage_subtitle: "d 選択項目を削除"
+    manage_footer: "Esc 戻る"
+    manage_empty: "管理するアカウントやフォールバックがありません"
+
+  accounts:
+    list_title: "ローテーションアカウント"
+    primary: "  [0] プライマリ  key={key}...  {state}"
+    key_preview: "key={key}..."
+    unset: "(未設定)"
+    enabled: "有効"
+    disabled: "無効"
+    added: "アカウント '{name}' を追加しました（追加アカウント {count} 件）"
+    removed: "アカウント '{name}' を削除しました"
+    already_exists: "アカウント '{name}' は既に存在します"
+    toggled: "{action} アカウント '{name}'"
+    no_extra_remove: "削除できる追加アカウントがありません"
+    no_extra_toggle: "切り替えられる追加アカウントがありません"
+    no_account_named: "'{name}' という名前のアカウントはありません"
+    no_extra_hint: "  （追加アカウントはありません；/accounts add <名前> <key> で追加）"
+    usage_add: "使い方: /accounts add <名前> <api_key> [api_base]"
+    usage_remove: "使い方: /accounts remove <名前>"
+    usage_enable: "使い方: /accounts enable|disable <名前>"
+    unknown_sub: "不明なサブコマンド '{sub}'。/accounts help を試してください"
+    help_1: "/accounts                       ローテーションアカウント一覧"
+    help_2: "/accounts add <名前> <key> [base]"
+    help_3: "/accounts remove <名前>"
+    help_4: "/accounts enable|disable <名前>"
+    help_5: "（引数なしで対話メニューを開きます）"
+    name_label: "アカウント名"
+    name_desc: "短いラベル、例: 'team-b'"
+    key_label: "API キー"
+    key_desc: "このアカウントのキー"
+    base_label: "API ベース（任意）"
+    base_desc: "エンドポイントを上書き；空欄 = プライマリと同じ"
+    custom_model: "カスタム（手動入力）"
+    model_label: "モデル"
+    model_desc: "このエンドポイントが使用するモデル名"
+    select_model: "検証するモデルを選択してください"
+    no_models: "モデルがリストされていません；プライマリモデル '{model}' を使用します"
+    fetch_failed: "モデルの取得に失敗しました：{error}"
+    verifying: "接続を検証しています..."
+    connected: "接続済み（{latency}ms）— モデル：{model}"
+    tool_yes: "ツール呼び出し：対応"
+    tool_no: "ツール呼び出し：非対応"
+    verify_failed: "接続確認に失敗しました：{error}"
+    verify_failed_title: "検証に失敗しました"
+    save_anyway: "それでも保存"
+    cancel_add: "キャンセル"
+    usage_use: "使い方: /accounts use <名前>"
+    switched: "'{name}' に切り替えました（モデル: {model}）"
+    no_extra_use: "切り替え可能なアカウントがありません。/accounts add で追加してください。"
+    primary_choice: "プライマリ ({model})"
+    select_use: "使用するアカウントを選択"
+
+  common:
+    cancelled: "キャンセルしました"
+    session_store_unavailable: "セッションストアが利用できません"
+  token:
+    title: "Token 使用量 (過去7日間)"
+    input_tokens: "入力 tokens"
+    output_tokens: "出力 tokens"
+    total: "合計"
+    cached: "キャッシュヒット"
+    api_calls: "API 呼び出し回数"
+  setup:
+    no_config_manager: "再設定できません: 設定マネージャーを利用できません"
+    cancelled: "セットアップをキャンセルしました。現在の設定を維持します"
+    applied: "設定を更新しました。現在のモデル: {model}"
+
+  setting:
+    title: "設定"
+    search_entry: "設定を検索..."
+    search_desc: "すべてのカテゴリーからキーワードで設定にジャンプ"
+    search_title: "設定を検索"
+    search_placeholder: "入力して絞り込み（名前 / 説明 / カテゴリー）"
+    footer_idle: "↑↓ 移動 · ←/→ カテゴリ · Space/Enter 編集 · Ctrl+R リセット · Esc 終了"
+    footer_editing: "Enter 適用 · Esc キャンセル"
+    search_footer: "↑/↓ 移動  入力で絞り込み  Enter で編集  Esc で戻る"
+    search_empty: "一致する設定はありません"
+    restart_summary: "{count} 件の変更は再起動後に反映されます"
+    subtitle: "設定するカテゴリーを選択（Esc で終了）"
+    select_setting: "編集する設定を選択（Esc で戻る）"
+    on: "オン"
+    off: "オフ"
+    not_set: "（未設定）"
+    current_tag: "現在"
+    applied: "保存しました {label} = {value}"
+    applied_clear: "クリアしました {label}"
+    invalid: "無効な値: {error}"
+    restart_hint: "（再起動後に反映されます）"
+    install_installing: "「{name}」をインストールしています（ソース: {source}）..."
+    install_cancel_hint: "  Ctrl+C でキャンセル"
+    install_downloading: "{source} からダウンロード中 [{secs}秒]"
+    install_continue: "インストール継続中（{secs}秒）。続行しますか？ [Y/n]"
+    install_canceled: "ユーザーによってキャンセルされました（Ctrl+C）"
+    install_canceled_msg: "インストールはキャンセルされました"
+    install_timeout: "{secs}秒後にタイムアウトしました"
+    install_crashed: "インストールスレッドがクラッシュしました"
+    registry_title: "スキルレジストリソース"
+    registry_question: "管理するレジストリを選択するか、新しいソースを追加してください"
+    registry_test_all: "すべての接続をテスト"
+    registry_add_new: "新しいレジストリを追加..."
+    registry_not_tested: "[-] 未テスト"
+    registry_manage_test: "接続をテスト"
+    registry_manage_enable: "有効化"
+    registry_manage_disable: "無効化"
+    registry_manage_edit_url: "URL を編集"
+    registry_manage_remove: "削除"
+    registry_manage_remove_desc: "このレジストリソースを削除します"
+    registry_manage_back: "リストに戻る"
+    registry_manage_status_on: "有効"
+    registry_manage_status_off: "無効"
+    cat:
+      model: "モデルとプロバイダー"
+      appearance: "外観"
+      ai: "AI の動作"
+      security: "セキュリティ"
+      context: "コンテキストとメモリ"
+      remote: "リモートプロンプト"
+      advanced: "高度な設定"
+    cat_desc:
+      model: "LLM モデル、エンドポイント、認証情報"
+      appearance: "プロンプト記号と応答言語"
+      ai: "補完、コンテキスト、トークン処理"
+      security: "InputGuard、サンドボックス、リスクレベル"
+      context: "メモリ再呼び出し、圧縮、履歴"
+      remote: "SSH/telnet プロンプト要素"
+      advanced: "ロギング、トレーシング、PTY デーモン"
+    k:
+      model:
+        label: "AI モデル"
+        desc: "プロバイダーに送信するモデル名（例: gpt-4o, glm-4.6, deepseek-chat）"
+      api_base:
+        label: "API Base URL"
+        desc: "chat completions 用の OpenAI 互換エンドポイント URL"
+      api_key:
+        label: "API キー"
+        desc: "LLM プロバイダーのシークレットキー（config.yaml に保持）"
+      temperature:
+        label: "Temperature"
+        desc: "サンプリングのランダム性 0.0〜2.0、高いほど創造的"
+      max_tokens:
+        label: "最大トークン数"
+        desc: "応答のトークン上限（空欄 = プロバイダーの既定値）。16384 未満の値は拒否されます"
+      prompt_style:
+        label: "プロンプト記号"
+        desc: "カスタムプロンプト記号（空欄 = 既定の矢印）"
+      output_language:
+        label: "出力言語"
+        desc: "AI 応答の優先言語（zh-CN, en-US, ja-JP, de-DE, fr-FR, es-ES）"
+      auto_suggest:
+        label: "自動サジェスト"
+        desc: "入力中に履歴に基づくサジェストヒントを表示"
+      inline_completion:
+        label: "インライン補完"
+        desc: "入力中に AI インライン補完を提供"
+      inline_debounce_ms:
+        label: "インライン デバウンス (ms)"
+        desc: "入力停止後にインライン補完を開始するまでの遅延"
+      inline_context_lines:
+        label: "インライン コンテキスト行数"
+        desc: "インライン補完にコンテキストとして送る直近のシェル行数"
+      inline_max_tokens:
+        label: "インライン最大トークン数"
+        desc: "インライン補完の応答トークン上限"
+      inline_min_input_chars:
+        label: "インライン最小入力文字数"
+        desc: "インライン補完が開始される最小入力文字数"
+      inline_timeout_secs:
+        label: "インライン タイムアウト (秒)"
+        desc: "インライン補完を待機してからキャンセルする秒数"
+      inline_disable_thinking:
+        label: "インライン思考無効"
+        desc: "インライン補完で推論/思考トークンを抑制"
+      inline_enforce_json:
+        label: "インライン JSON 強制"
+        desc: "インライン補完で厳密な JSON を返すよう強制"
+      max_llm_messages:
+        label: "最大 LLM メッセージ数"
+        desc: "LLM 履歴に保持する最大会話ターン数"
+      enable_token_estimation:
+        label: "トークン推定を有効化"
+        desc: "tiktoken を用いてコンテキスト切り詰め用のトークン数を推定"
+      input_guard_enabled:
+        label: "InputGuard"
+        desc: "危険なコマンドルールに対して入力を事前検査"
+      enable_sandbox:
+        label: "サンドボックスを有効化"
+        desc: "危険なコマンドを許可前にサンドボックスで実行"
+      default_risk_level:
+        label: "既定のリスクレベル"
+        desc: "未認識コマンドの基本リスク評価（low/medium/high）"
+      sandbox_off_action:
+        label: "サンドボックス無効時の動作"
+        desc: "サンドボックスが利用できない場合の動作（allow/confirm/block）"
+      sandbox_timeout_seconds:
+        label: "サンドボックス タイムアウト (秒)"
+        desc: "サンドボックス事前実行を強制終了するまでの秒数"
+      memory_auto_recall:
+        label: "メモリ自動再呼び出し"
+        desc: "関連する長期メモリを AI コンテキストに自動表示"
+      memory_auto_retain:
+        label: "メモリ自動保持"
+        desc: "注目すべき事実を長期メモリに自動保存"
+      context_auto_compact:
+        label: "コンテキスト自動圧縮"
+        desc: "コンテキスト圧力が高まると会話を自動的に圧縮"
+      compact_full_enabled:
+        label: "完全圧縮"
+        desc: "古いターンを要約する完全圧縮パスを有効化"
+      compact_context_window_tokens:
+        label: "コンテキストウィンドウトークン数"
+        desc: "自動圧縮の基準となるコンテキストウィンドウ（空 = 自動：モデルウィンドウ > 旧予算 > デフォルト 262144/256k）"
+      compact_micro_keep_recent:
+        label: "マイクロ圧縮で保持する最近"
+        desc: "マイクロ圧縮中にそのまま保持するターン数"
+      compact_shell_keep_recent:
+        label: "シェル圧縮で保持する最近"
+        desc: "シェル圧縮中に保持するシェルコマンドのターン数"
+      compact_summary_max_tokens:
+        label: "圧縮サマリー最大トークン数"
+        desc: "完全圧縮で生成されるサマリーのトークン上限"
+      compact_max_consecutive_failures:
+        label: "最大連続失敗数"
+        desc: "トリムにフォールバックするまでの圧縮失敗回数"
+      compact_reserved_output_tokens:
+        label: "予約済み出力トークン数"
+        desc: "モデルの応答に予約するトークン数、コンテキスト予算から差し引き"
+      history_size:
+        label: "履歴サイズ"
+        desc: "保持するシェル履歴の最大エントリ数"
+      max_shell_messages:
+        label: "最大シェルメッセージ数"
+        desc: "AI コンテキストに保持するシェルコマンドターンの最大数"
+      context_token_budget:
+        label: "コンテキストトークン予算"
+        desc: "旧実装のハード上限。古いメッセージを直接切り詰めます（圧縮ではありません）。空 = 無制限"
+      enable_remote_git_prompt:
+        label: "リモート Git プロンプト"
+        desc: "リモート (SSH/telnet) の bash プロンプトに git ブランチを表示"
+      remote_rich_prompt:
+        label: "リモートリッチプロンプト"
+        desc: "複数行のリッチリモートプロンプトを有効化（user@host, cwd, git）"
+      remote_show_venv:
+        label: "リモート venv 表示"
+        desc: "リモートプロンプトにアクティブな Python venv を表示"
+      remote_show_container:
+        label: "リモートコンテナ表示"
+        desc: "リモートプロンプトにコンテナ/ランタイムマーカーを表示"
+      remote_show_kube:
+        label: "リモート Kube 表示"
+        desc: "リモートプロンプトに Kubernetes コンテキストを表示"
+      remote_danger_patterns:
+        label: "リモート危険パターン"
+        desc: "リモート PS1 を危険と判定するホスト名の正規表現（カンマ区切り）"
+      enable_langfuse:
+        label: "Langfuse を有効化"
+        desc: "Langfuse の LLM オブザーバビリティトレーシングを有効化"
+      langfuse_public_key:
+        label: "Langfuse 公開鍵"
+        desc: "Langfuse の公開鍵"
+      langfuse_secret_key:
+        label: "Langfuse 秘密鍵"
+        desc: "Langfuse の秘密鍵"
+      langfuse_host:
+        label: "Langfuse ホスト"
+        desc: "Langfuse のセルフホストインスタンス URL"
+      enable_scripts:
+        label: "スクリプトを有効化"
+        desc: ".aish スクリプトシステムとライフサイクルフックを有効化"
+      log_level:
+        label: "ログレベル"
+        desc: "トレーシングログの詳細度（error/warn/info/debug/trace）"
+      pty_daemon_enabled:
+        label: "PTY デーモン"
+        desc: "バックグラウンドデーモンで切断をまたいで PTY セッションを保持"
+      codex_auth_path:
+        label: "Codex 認証パス"
+        desc: "OpenAI Codex/ChatGPT の auth.json へのパス"
+      session_db_path:
+        label: "セッション DB パス"
+        desc: "セッションデータベースのカスタム位置（空欄 = 既定値）"
+      skill_auto_search:
+        label: "スキル自動検索"
+        desc: "一致するスキルがない時、AI が自動的にレジストリを検索してインストールを提案"
+      skill_registries:
+        label: "スキルレジストリソース"
+        desc: "検索ソースを管理（skills.sh、skillhub.cn）。Enter で対話式管理を開く"
+
+  session:
+    iteration_limit_reached: "{count} 回のツール呼び出しが完了しました。"
+    iteration_limit_title: "⏸ ツール呼び出し上限に達しました"
+    iteration_continue_prompt: "続行しますか？[Y/n]"
+  resume:
+    exit_command: "AIコンテキストを復元: aish resume {session_id}"
+    usage: "使い方: /resume [session_id]"
+    session_store_unavailable: "セッションストアを利用できません。"
+    no_sessions: "以前のセッションは見つかりませんでした。"
+    recent_header: "最近のセッション（最大 {limit} 件）:"
+    list_hint: "復元するには: /resume <session_id>"
+    list_failed: "セッション一覧の取得に失敗しました: {error}"
+    not_found: "セッションが見つかりません: {session_id}"
+    cwd_missing: "保存された作業ディレクトリは存在しません。現在のディレクトリに留まります: {cwd}"
+    resumed: "セッションを復元しました: {session_id}"
+    selector_title: "セッションを復元"
+    search_placeholder: "検索..."
+    no_matches: "一致するセッションはありません。"
+    current_marker: "(現在)"
+    selector_footer: "入力して検索 · ↑/↓ で選択 · Enter で復元 · Esc でキャンセル"
+
+  export:
+    md_header: "# aish セッションエクスポート"
+    session_label: "- **セッション**: `{uuid}`"
+    model_label: "- **モデル**: {model}"
+    api_base_label: "- **api_base**: {base}"
+    forked_label: "- **フォーク元**: `{parent}`"
+    created_label: "- **作成**: {created}"
+    working_dir: "**作業ディレクトリ**: `{cwd}`"
+    conversation_header: "## 会話"
+    history_header: "## コマンド履歴"
+    exported: "エクスポートしました {file}（{msgs} メッセージ、{cmds} コマンド）"
+    write_failed: "{file} の書き込みに失敗しました: {error}"
+    usage: "使い方: /export [md] [--raw]  （markdown のみ対応。--raw はマスキングを解除し、必ず確認を求めます）"
+    store_unavailable: "セッションストアが利用できません；エクスポートできません"
+    not_found: "ストアに現在のセッションが見つかりません"
+    load_failed: "セッションの読み込みに失敗しました: {error}"
+    raw_warning: "生エクスポート: {msgs} メッセージと {cmds} コマンド内の機密情報（トークン・パスワード・鍵）がマスキングされずに書き込まれます。"
+    raw_confirm: "マスキングなしのエクスポートを書き込みますか？"
+    preview: "エクスポート プレビュー → {file}（{msgs} メッセージ、{cmds} コマンド、機密情報 {hits} 件検出）"
+    preview_hits: "{hits} 件の機密情報が [REDACTED:…] マーカーに置き換えられます。"
+    not_scanned: "未スキャン（raw モード）"
+    incomplete_warning: "警告：トランスクリプトの書き込みが {failed} 回失敗しました。エクスポートに最近のメッセージが欠けている可能性があります。"
+    confirm: "エクスポートファイルを書き込みますか？"
+    cancelled: "エクスポートをキャンセルしました"
+  report:
+    usage: "使い方: /report（直近の回答を report.html に書き出し、デスクトップセッションではブラウザで開きます。--help で使い方）"
+    generated: "レポートを書き出しました: {file}"
+    opening: "{file} を開いています"
+    open_failed: "ブラウザを開けませんでした: {error}"
+    hint_local: "次のコマンドで開けます: xdg-open {file}"
+    hint_remote: "リモートまたはヘッドレスセッションです。次のコマンドで取得してください: scp <user>@<host>:'{file}' ."
+    store_unavailable: "セッションストアが利用できないため、レポートを生成できません"
+    not_found: "現在のセッションがストアにありません"
+    no_answer: "このセッションには書き出せる回答がまだありません"
+    load_failed: "セッションの読み込みに失敗しました: {error}"
+    write_failed: "{file} の書き込みに失敗しました: {error}"
+    html:
+      title: "aish の回答"
+      session: "セッション"
+      model: "モデル"
+      created: "作成日時"
+      evidence: "証拠"
+      evidence_empty: "このターンにはツール呼び出しが記録されていません。"
+      evidence_hint: "この回答の背後にある {count} 件のツール呼び出しを、呼び出し順に、記録された引数と出力とともに示します。何も再実行していません。"
+      args_label: "引数"
+      output_label: "出力"
+      output_missing: "この呼び出しの結果は記録されていません。"
+      tool_unknown: "（不明なツール）"
+      status_ok: "正常"
+      status_truncated: "切り詰め"
+      status_offloaded: "offload プレビューのみ"
+      status_missing: "結果なし"
+  audit:
+    disabled: "監査は無効です。security_policy.yaml で 'audit.enabled: true' を設定してください。"
+    usage: "使い方: /audit [--user U] [--host H] [--event-type command|ai_tool|security_decision] [--session S] [--since T] [--until T] [--limit N]\n  日時は RFC 3339 形式（例: 2026-01-01T00:00:00Z）。既定の limit は 20"
+    permission_denied: "権限が拒否されました: 非 root ユーザーは自分の監査イベントのみ照会できます"
+    query_failed: "監査ログの照会に失敗しました: {error}"
+    no_events: "監査イベントが見つかりません。"
+    col_timestamp: "タイムスタンプ"
+    col_event: "イベント"
+    col_user: "ユーザー"
+    col_host: "ホスト"
+    col_details: "詳細"
+    summary: "{count} 件のイベントを表示。"
+    filter_header: "フィルター:"
+    filter_user: "ユーザー={value}"
+    filter_host: "ホスト={value}"
+    filter_event_type: "イベント種別={value}"
+    filter_session: "セッション={value}"
+    filter_since: "開始={value}"
+    filter_until: "終了={value}"
+    filter_limit: "件数={value}"
+    err_unknown_flag: "不明なフラグ: {flag}"
+    err_missing_value: "フラグ {flag} には値が必要です"
+    err_invalid_limit: "無効な --limit の値: {value}（正の整数である必要があります）"
+    err_invalid_datetime: "無効な {flag} の日時（RFC 3339 形式、例: 2026-01-01T00:00:00Z）"
+    err_invalid_event_type: "無効なイベント種別: {error}"
+    label_rc: "終了コード={value}"
+    label_user: "ユーザー={value}"
+    label_rule: "ルール={value}"
+  audit_export:
+    usage: "使い方: /audit export [--user U] [--host H] [--event-type T] [--session S] [--since T] [--until T] [--limit N]\n  audit.md、events.jsonl、manifest.json を含むディレクトリを出力します"
+    no_events: "指定したフィルタに一致する監査イベントが見つかりません"
+    permission_denied: "権限が拒否されました: 非 root ユーザーは自分の監査イベントのみエクスポートできます"
+    mkdir_failed: "一時ディレクトリの作成に失敗しました: {error}"
+    build_failed: "監査パッケージの構築に失敗しました: {error}"
+    publish_failed: "監査パッケージの公開に失敗しました: {error}"
+    exported: "監査パッケージを {path} にエクスポートしました（{events} イベント、{files} ファイル）"
+  fork:
+    forked: "セッションをフォークしました {short}（親 {parent}）"
+    switch_failed: "フォークを作成しましたが切り替えに失敗しました: {error}"
+    switch_manual: "`/resume {session_id}` で手動切り替えしてください"
+    failed: "フォーク失敗: {error}"
+    store_unavailable: "セッションストアが利用できません；フォークできません"
+
+  sessions:
+    none: "（保存済みセッションはありません）"
+    switch_failed: "セッションの切り替えに失敗しました: {error}"
+    list_failed: "セッション一覧の取得に失敗しました: {error}"
+
+  live_sessions:
+    daemon_disabled: "PTYデーモンが無効です。config.yaml で有効にしてください："
+    daemon_disabled_hint: "  pty_daemon_enabled: true"
+    none_active: "アクティブなPTYセッションがありません。"
+    panel_title: "アクティブPTYセッション"
+    search_placeholder: "検索..."
+    panel_footer: "↑/↓ 移動 · Enter 選択 · Ctrl+E 名前変更 · Esc キャンセル"
+    create_new: "新規セッション作成"
+    already_current: "現在のセッションです。"
+    started_label: "開始: {age}"
+    current_tag: "[現在]"
+    rename_title: "セッション {id} の名前を変更"
+    rename_current_none: "現在の名前: (なし)"
+    rename_current_set: "現在の名前: {name}"
+    rename_input_label: "新しい名前を入力(空でクリア)"
+    rename_input_footer: "名前を入力 | Enter 保存 | Esc キャンセル"
+    rename_done: "セッション {id} を \"{name}\" に変更しました"
+    rename_cleared: "セッション {id} の名前をクリアしました"
+    rename_failed: "名前変更に失敗: {err}"
+    exit_no_note_title: "切り離し前にメモを追加しますか？"
+    exit_no_note_hint: "このセッションにはメモがありません。名前のないセッションは切断後に見分けがつきません。"
+    exit_no_note_footer: "Enter 保存して切り離し · Esc 名前なしで切り離し"
+    resource_detail: "CPU {cpu} · メモリ {rss}"
+    resource_alert: "⚠ セッション {id} がリソース閾値に達しました（CPU {cpu} / メモリ {rss}）。/live_sessions で切り替えるか、/kill_live_sessions で終了してください。"
+
+  kill_live_sessions:
+    daemon_disabled: "PTYデーモンが無効です。config.yaml で有効にしてください："
+    daemon_disabled_hint: "  pty_daemon_enabled: true"
+    none_active: "アクティブなPTYセッションがありません。"
+    list_header: "アクティブPTYセッション："
+    usage_hint: "使用法: /kill_live_sessions <id> [id ...]  ·  /kill_live_sessions all"
+    no_others: "終了する他のセッションがありません。"
+    killing: "{id} を終了中 ..."
+    kill_done: "完了"
+    kill_failed: "失敗: {error}"
+    not_found: "セッション '{id}' が見つかりません。"
+    is_current: "{id} は現在のセッションです — 'exit' で終了してください。"
+    summary: "{killed} 件終了、{failed} 件失敗。"
+    all_terminated: "{count} 件のセッションを終了しました。"
+  rollback:
+    title: "ロールバック"
+    prompt: "変更を選んでロールバック（その変更以降のすべてを破棄）:"
+    empty: "このセッションではファイル変更が記録されていません。"
+    drift_summary: "{count} ファイル中 {drifted} ファイルが AI 編集後に変更されました。"
+    drift_warning: "ドリフト検出：ディスク内容が AI の最終編集と一致しません。"
+    impact_summary: "{count} ファイルを復元します。以下の Diff を確認してください："
+    confirm: "上書きしますか？"
+    confirm_overwrite: "復元を確認 — 上記ファイルを上書きします。"
+    cancelled: "ロールバックはキャンセルされました。"
+    partial: "部分復元：{total} ファイル中 {restored} ファイル成功。"
+  undo:
+    nothing_to_undo: "元に戻すファイル変更がありません。"
+    restored: "{path} を復元しました"
+    removed: "{path} を削除しました"
+    restore_failed: "復元失敗: {error}"
+    remove_failed: "削除失敗: {error}"
+    drift_warning: "ドリフト検出：AI 編集後にファイルがディスク上で変更されました。"
+    drift_deleted: "ファイルはディスク上に存在しません。"
+    force_prompt: "強制上書きしますか？"
+    force_confirm: "確認：ドリフトしたファイルを上書きしますか？"
+    will_delete: "この復元操作によりファイルが削除されます。"
+    cancelled: "元に戻すはキャンセルされました。"
+    drift_blocked: "復元ブロック：確認後に {path} がディスク上で変更されました。"
+    will_create: "新規ファイル"
+    binary_or_unreadable: "バイナリまたは読み取り不可"
+
+  time:
+    seconds_ago: "{seconds}秒前"
+    minutes_ago: "{minutes}分前"
+    hours_ago: "{hours}時間前"
+
+  skill:
+    title: "スキル"
+    search_placeholder: "入力して絞り込み..."
+    filtered_suffix: "  · 全{total}件中"
+    tab:
+      installed: "インストール済み"
+      browse: "ブラウズ"
+      registries: "レジストリ"
+    footer:
+      installed: "Enter でレビュー · Esc で終了"
+      browse: "クエリを入力 · 🔍 行で Enter で検索 / 各行で Enter でインストール · Esc でクリア"
+      registries: "Space で切替 · Enter で管理 · Esc で終了"
+    empty:
+      installed: "インストール済みのスキルがありません。「ブラウズ」タブから探してください。"
+      browse: "上のクエリを入力し、🔍 行で Enter を押して検索します。"
+      registries: "レジストリが設定されていません。「＋ 追加」を選んで作成してください。"
+    row:
+      search: "レジストリを検索"
+      add_registry: "＋ レジストリを追加"
+      search_hint_empty: "上でクエリを入力し、ここで Enter を押してレジストリを検索します。"
+      search_hint_query: "Enter でレジストリを検索: \"{query}\""
+    status:
+      trusted: "✓ 信頼済み"
+      quarantined: "⚠ 隔離中"
+      no_skill_md: "✗ SKILL.md なし"
+      registry_on: "[オン]"
+      registry_off: "[オフ]"
+      installs: "{registry} · {count} 件インストール"
+      default_tag: " 既定"
+    error:
+      empty_query: "クエリが空です。"
+      no_registries: "有効なレジストリがありません。「レジストリ」タブで追加してください。"
+      no_results: "スキルが見つかりませんでした。"
+      install_failed: "'{name}' のインストールがキャンセルまたは失敗しました。"
+      unsafe_name: "安全でないスキル名: {name}"
+      not_found: "スキル '{name}' が見つかりません。"
+      not_installed: "スキル '{name}' はインストールされていません。"
+      already_trusted: "スキル '{name}' は既に信頼済みです。"
+      failed: "失敗: {error}"
+      trust_failed: "'{name}' の信頼に失敗しました: {error}"
+    search_progress: "\"{query}\" を検索中..."
+    notice_unknown: "不明な '/skill {sub}' です。スキルマネージャーを開きます。"
+    action:
+      menu_title: "スキル: {name}"
+      menu_question: "操作を選択してください"
+      vet: "ファイルをレビュー (vet)"
+      trust: "信頼 (承認)"
+      verify: "構造を検証"
+      remove: "削除"
+    result:
+      trusted: "スキル '{name}' を信頼しました。次回のスキル更新時に読み込まれます。"
+      was_trusted: "スキル '{name}' は既に信頼済みです。"
+      removed: "スキル '{name}' を削除しました。"
+      verify_line: "スキル: {name} | 有効: {valid}"
+      check_pass: "PASS"
+      check_fail: "FAIL"
+      verify_passed: "合格"
+      verify_warnings: "警告"
+      verify_valid: "有効"
+      verify_invalid: "無効"
+      vet_quarantined: "\nこのスキルは隔離中です。/skill trust {name} で信頼、または /skill remove {name} で削除してください。"
+    review_gate:
+      prompt: "セキュリティレビューが必要です: スキル '{name}' は隔離中です (信頼されていません)。\n  [a] AI 自動レビュー   [y] 今すぐファイルをレビュー   [n] 削除   (その他) 隔離のまま維持: "
+      trust_hint: "レビュー後に信頼する: 「インストール済み」タブを開いてスキルを選択してください。"
+      removed: "隔離中のスキル '{name}' を削除しました。"
+      kept: "隔離のまま維持しました。「インストール済み」タブでレビューしてください。"
+    vetter:
+      running: "スキル '{name}' で AI ベッターレビューを実行中 (Ctrl+C でキャンセル)..."
+      cancelled: "レビューをキャンセルしました。スキル '{name}' は隔離のままです。"
+      failed: "AI レビューが失敗しました: {error}。スキル '{name}' は隔離のままです。"
+    registry:
+      restart_notice: "レジストリの変更を反映するには aish を再起動してください。"
+    usage:
+      install: "使い方: /skill install <ID>"
+      install_hint: "  または利用可能なスキルをブラウズ: /skill search"
+      install_not_found: "スキル '{id}' が見つかりません。/skill search で正しい ID を探してください。"
+      action: "使い方: /skill {action} <名前>"
+      searching_for: "'{query}' を検索中..."
+    review:
+      checklist: "\nベッティングチェックリスト: 来歴 · 認証情報へのアクセス · ネットワーク流出 · eval/exec · base64 難読化 · sudo · 隠しダウンロード · 破壊的操作 · プロンプトインジェクション。"
+      could_not_read: "(SKILL.md を読み込めませんでした: {error})"
+      skill_md_header: "\n--- {path} ---"
+      files_header: "\n--- {path} 内のファイル ---"
+    install:
+      installed_quarantined: "インストール済み: {name} (隔離中 — 信頼されていないため読み込まれません)"
+      path_line: "  パス: {path}"
+      verify_line: "  検証: {result}"
+      failed: "インストール失敗: {error}"
+
+  ask_user:
+    default_title: "ユーザー入力が必要です"
+    default_hint: "[既定値: {value}]"
+    custom_input_label: "（カスタム回答を入力）"
+    footer: "Enter で確定 · ↑/↓ で移動 · Esc でキャンセル"
+    cancel_hint: "Esc または Ctrl+C でキャンセルします。"
+    required_error: "回答は必須です。"
+    min_length_error: "回答が短すぎます（最小 {min} 文字）。"
+    interactive_terminal_required: "ask_user には対話型端末が必要です"
+    recommended_badge: "推奨"
+    title: "オプションを選択"
+    custom_label: "カスタム:"
+    hint_select: "Enter で選択 ・ ↑/↓ で移動 ・ Esc でキャンセル"
+    hint_custom: "Enter で確定 ・ ↑/↓ で移動 ・ Tab または直接入力でカスタム入力へ ・ Esc でキャンセル"
+    paused:
+      title: "⏸ ユーザー入力が必要です（タスクは一時停止中）"
+      prompt: "質問: {prompt}"
+      reason: "理由: {reason}"
+      options_header: "選択肢:"
+      custom_input: "任意の値を自由入力することもできます。"
+      how_to: "選択肢の値（または番号）で返信するか、; continue with default と入力してください（既定値: {default}）。"
+  diagnose_cancelled: "  └─ ❌ システム診断をキャンセルしました"
+
+  compaction:
+    completed: "コンテキストを圧縮しました"
+    completed_with_tokens: "コンテキストを圧縮し、約 {tokens} トークンを確保しました"
+
+  compact:
+    started: "コンテキストを圧縮中…"
+    completed: "圧縮が完了しました。トークン: {before} → {after}（{saved} 削減）"
+    cancelled: "圧縮をキャンセルしました。コンテキストは変更されていません"
+    failed: "圧縮に失敗しました: {error}（コンテキストは変更されていません）"
+  status:
+    thinking: "考え中"
+    compacting_context: "コンテキストを圧縮中"
+    thinking_now: "考え中"
+    processing: "処理中"
+    analyzing: "  解析中..."
+    system_diagnosing: "  └─ システム診断中"
+    system_analyzing: "  └─ システム解析中"
+  tool:
+    prefix: "🔧 ツールを使用中"
+    prefix_diagnose: "  └─ 🔧 診断ツール"
+    done_diagnose: "  └─ ✅ 診断完了"
+
+  sub_agent:
+    thinking: "考え中"
+
+security:
+  sandbox_off_action:
+    allow: "そのまま許可"
+    confirm: "確認を求める"
+    block: "ブロック"
+  sandbox_unavailable:
+    title: "⚠️ サンドボックスを利用できません"
+    line1: "サンドボックスを利用できないため、コマンドのリスクを評価できません。"
+    line2: "以後の AI 生成コマンドは次の方針で扱われます: {action}。"
+    policy_line1: "ポリシーによりサンドボックスが無効化されているため、サンドボックス実行は行われませんでした。"
+    policy_line2: "AI 生成コマンドは次の方針で扱われます: {action}。"
+    reason: "理由: {reason}"
+    error: "エラー: {error}"
+    root_required: "サンドボックスには root 権限が必要です"
+    ipc_unavailable: "サンドボックスサービスに接続できません（aish-sandbox.socket が起動していないか未インストールです）"
+    ipc_failed: "サンドボックスサービスの実行に失敗しました（aish-sandbox）"
+    sandbox_execute_failed: "コマンドのリスクを評価できません。実行前に確認してください"
+  risk_reason:
+    sandbox_disabled_by_policy: "ポリシーによりサンドボックスが無効です。ファイル変更を検査してリスク評価できません。処理方針: {action}。"
+    sandbox_disabled: "サンドボックスが有効でないか無効化されています。ファイル変更を検査してリスク評価できません。処理方針: {action}。"
+    cwd_outside_repo_root: "現在の作業ディレクトリ {cwd} はサンドボックスルート {root} の外にあるため、相対パスの副作用を信頼して評価できません。処理方針: {action}。"
+    sandbox_unavailable: "サンドボックスの初期化または実行に失敗したため、ファイル変更を検査してリスク評価できません。処理方針: {action}。"
+    sandbox_exception: "サンドボックス実行エラーのため、ファイル変更を検査してリスク評価できません。処理方針: {action}。"
+    sandbox_failed: "サンドボックスが失敗したため、ファイル変更を検査してリスク評価できません。処理方針: {action}。"
+    policy_fallback_rule_match: "ポリシーによりサンドボックス無効時、コマンド {command} が {count} 件のフォールバックルールに一致しました。{risk} リスクとして扱います。"
+  ai_risk:
+    no_fs_changes: "サンドボックスはファイルの書き込みや削除を検出しませんでした。"
+    high_hits: "高リスクルールに一致する書き込みまたは削除を {count} 件検出しました。"
+    medium_hits: "中リスクルールに一致する書き込みまたは削除を {count} 件検出しました。"
+    low_or_unmatched_hits: "低リスクまたは未一致の書き込みまたは削除を {count} 件検出しました。"
+    preview_paths: "対象パスの例（一部のみ。ディレクトリやファイルを含む場合があります）: {paths}"
+  command_blocked: "エラー: コマンドはセキュリティシステムによりブロックされました"
+  command_blocked_with_reason: "エラー: コマンドはセキュリティシステムによりブロックされました: {reason}"
+
+tools:
+  fs:
+    read_file:
+      missing_path: "'path' パラメータがありません"
+      read_failed: "{path} の読み取りに失敗: {error}"
+      file_too_large: "ファイル {path} は {size} バイトで、{limit} バイトの制限を超えています。edit_file の start_line/end_line で行範囲編集してください。"
+      decode_failed: "{path} の UTF-8 デコードに失敗: {error}"
+      empty_file: "(空のファイル)"
+      offset_exceeds_length: "オフセット {offset} がファイル長({length})を超えています"
+      access_denied: "アクセス拒否: パスが offload ディレクトリ内にありません"
+      large_file_truncated: "\n[... ファイル {path} は {size} バイト / {lines} 行；オフセット {offset} から {shown} 行を表示。offset/limit で続きを読んでください ...]"
+      large_file_no_tag: "大きなファイル: 部分読み取りのためスナップショットタグは利用できません"
+    edit_file:
+      missing_path: "'path' パラメータがありません"
+      missing_old_string: "'old_string' パラメータがありません"
+      missing_new_string: "'new_string' パラメータがありません"
+      edit_read_failed: "{path} の読み取りに失敗: {error}"
+      file_too_large: "ファイル {path} は {size} バイトで、{limit} バイトの制限を超えています。start_line/end_line で行範囲編集してください。"
+      old_string_not_found: "{path} に 'old_string' が見つかりません"
+      old_string_not_found_prefix_hint: "{path} に 'old_string' が見つかりませんが、その接頭辞 '{prefix}' は {count} 回出現します — 接尾辞の不一致の可能性"
+      old_string_ambiguous: "'old_string' が {path} に {count} 回出現します - replace_all=true を使うか、より多くのコンテキストを提供してください"
+      edit_success: "{path} を編集しました"
+      edit_write_failed: "{path} の書き込みに失敗: {error}"
+      not_undoable_confirm: "{path} を編集します：既存の内容のスナップショットを作成できないため、この変更は取り消せません（/undo では復元できません）。続行しますか？"
+      stale_tag: "ファイル {path} は最後の読み取り以降に変更されました — 編集前に再読み込みしてください"
+      invalid_tag: "{path} のスナップショットタグ '{tag}' が無効です"
+      invalid_line_range: "無効な行範囲: start_line={start}, end_line={end}。start_line は >= 1、end_line は start_line 以上である必要があります。"
+      line_range_out_of_bounds: "行範囲の開始 {start} がファイル長({lines} 行)を超えています。ファイル内の start_line を使用してください。"
+      not_undoable_suffix: "（元に戻せません：以前の内容が大きすぎます）"
+    write_file:
+      missing_path: "'path' パラメータがありません"
+      missing_content: "'content' パラメータがありません"
+      content_too_large: "{path} のコンテンツは {size} バイトで、{limit} バイトの制限を超えています"
+      create_dirs_failed: "親ディレクトリの作成に失敗: {error}"
+      write_success: "{bytes} バイトを {path} に書き込みました"
+      write_failed: "{path} の書き込みに失敗: {error}"
+      not_undoable_confirm: "{path} を上書きします：既存の内容のスナップショットを作成できないため、この変更は取り消せません（/undo では復元できません）。続行しますか？"
+      not_undoable_suffix: "（元に戻せません：以前の内容を保存できませんでした）"
+    undo_edit:
+      nothing_to_undo: "元に戻すファイル変更がありません。"
+      restored: "{path} を以前の内容に復元しました。"
+      removed: "{path} を削除しました（取り消した変更で作成されたファイルです）。"
+      restore_failed: "{path} の復元に失敗: {error}"
+      remove_failed: "{path} の削除に失敗: {error}"
+      drifted: "ファイル {path} は AI 編集後に変更されました。ファイルを再読み込みして再試行してください。"
+  ask_user:
+    description: "ユーザーに焦点を絞った確認質問をします。prompt のみならテキスト入力、options があれば選択肢を提示します。"
+    unknown_kind: "不明な種類です: {kind}"
+    runtime_not_configured: "ask_user ランタイムが構成されていません"
+    execute_failed: "ask_user に失敗しました: {error}"
+    param:
+      kind: "操作タイプ: text_input は自由入力、choice_or_text は選択肢とカスタム入力"
+      prompt: "ユーザーに尋ねる質問です。"
+      options: "ユーザーに提示する任意の選択肢です。省略または空の場合、ask_user はテキスト入力を使います。"
+      option_value: "ツールメタデータに返される安定した選択肢の値です。"
+      option_label: "選択リストに表示されるユーザー向けラベルです。"
+      option_description: "選択肢の下に表示される任意の補足説明です。"
+      option_recommended: "この選択肢を推奨として明示表示します。"
+      title: "質問の任意タイトル"
+      default: "既定値"
+      placeholder: "プレースホルダーテキスト"
+      allow_freeform_input: "選択肢がある場合にカスタム回答を許可します。既定値は true です。"
+      required: "ユーザーが回答を入力する必要があるかどうか（既定値: true）"
+      allow_cancel: "ユーザーがキャンセル/スキップできるかどうか（既定値: true）"
+      min_length: "テキスト入力の最小文字数（既定値: 0）"
+    validation:
+      prompt_empty: "prompt は空にできません"
+      option_value_empty: "option value は空にできません"
+      option_label_empty: "option label は空にできません"
+      option_values_unique: "option value は一意である必要があります"
+      option_labels_unique: "option label は一意である必要があります"
+      recommended_unique: "推奨としてマークできる選択肢は最大 1 つです"
+      default_must_match_option: "default はいずれかの option value と一致する必要があります"
+      legacy_choice_requires_options: "choice_or_text では options に空でない配列が必要です"
+    result:
+      selected: "ユーザーが選択しました: {label}（値: {value}）"
+      text: "ユーザー入力: {value}"
+      empty_answer: "ユーザーは空の回答を返しました。"
+      cancelled: "ユーザーが質問をキャンセルしました。"
+
+  memory:
+    missing_action: "'action' パラメータが不足しています"
+    unknown_action: "不明なアクションです: {action}。search/store/forget/list を使用してください。"
+    search_missing_query: "検索に 'query' が必要です"
+    store_missing_content: "保存に 'content' が必要です"
+    forget_missing_id: "削除に 'memory_id' が必要です"
+    no_results: "一致するメモリが見つかりませんでした。"
+    stored: "メモリ #{id} として保存しました。"
+    forgot: "メモリ #{id} を削除しました。"
+    not_found: "メモリ #{id} が見つかりません。"
+    empty: "まだメモリはありません。"
+    not_available: "メモリ機能は利用できません"
+    confirm_store: "メモリの保存を確認しますか？"
+    confirm_forget: "メモリの削除を確認"
+    field_category: "カテゴリ"
+    field_scope: "スコープ"
+    field_ttl: "有効期間"
+    field_reason: "理由"
+    field_expires: "有効期限"
+    expired_tag: "期限切れ"
+    list_header: "長期メモリ："
+    verify_usage: "使用法：/memory verify <id>"
+    forget_usage: "使用法：/memory forget <id>"
+    invalid_id: "無効なメモリ ID：{id}"
+    verified: "メモリ #{id} を検証しました（期限をクリア）。"
+    no_expired: "期限切れのメモリはありません。"
+    cleared_expired: "{count} 件の期限切れメモリを削除しました。"
+    unknown_subcommand: "不明なサブコマンド：{subcommand}。list/verify/forget/clear-expired を使用してください。"
+
+  smart_log:
+    summary:
+      file: "[FILE] {ident}: 一致 {matched}/{total} 行\nサンプル:\n{sample}"
+      dir: "[DIR] {path}: 一致 {matched}/{total} 行\nサンプル:\n{sample}"
+      systemd: "[SYSTEMD] {ident}: 一致 {matched}/{total} 行\nサンプル:\n{sample}"
+      call_failed: "[{stype}] {ident}: 呼び出し失敗\n{output}"
+    no_logs_found: "ログまたは一致する情報は見つかりませんでした。"
+
+  bash:
+    invalid_timeout: "無効なタイムアウト：正の整数秒を指定してください"
+    command_timeout: "コマンドが{timeout}sでタイムアウトし、終了されました。結果は不完全な可能性があります。"
+    security_handling_required: "bash コマンドには {level} レベルのセキュリティ処理が必要です"
+
+help:
+  labels:
+    usage: "使い方"
+    options: "オプション"
+    examples: "例"
+    notes: "補足"
+    brief_usage: "使い方: {usage}"
+  general:
+    title: "AI Shell ヘルプ"
+    markdown: |-
+      ## クイックスタート
+      - **シェルコマンド** — そのまま入力：`ls`、`cd`、`vim`、`ssh`、`top` …
+      - **AI に質問** — `;` または `；` で始める：`;大きなファイルを見つける方法`
+      - **スラッシュコマンド** — 空行で `/` を押すとインタラクティブピッカーが開きます
+
+      ## スラッシュコマンド
+      | コマンド | 説明 |
+      |----------|------|
+      | `/help [page]` | ヘルプを表示（`/help` でページ一覧） |
+      | `/quit` | AI Shell を終了 |
+      | `/model [名前]` | AI モデルを表示または切り替え |
+      | `/setup` | API 設定を再構成 |
+      | `/setting` | 対話型設定パネルを開く |
+      | `/plan [start\|status\|exit]` | プランモードの制御 |
+      | `/token` | トークン使用量を表示（過去 7 日間） |
+      | `/resume [id]` | 前回のセッションを再開 |
+      | `/feedback` | フィードバックを送信またはバグを報告 |
+
+      ## 設定
+      - 設定ファイル：`~/.config/aish/config.yaml`
+      - 優先度：コマンドライン引数 > 環境変数（`AISH_MODEL`、`AISH_API_KEY`、`AISH_API_BASE`） > 設定ファイル
+      - `/setup` または `aish setup` でインタラクティブに設定
+
+      ## セッション管理
+      - `aish -c` — 既存のライブセッションに接続（またはリストから選択）
+      - `Ctrl+Q` — 現在のセッションを切り離す（バックグラウンドで継続）；`aish -c` で再接続
+      - `Ctrl+E` — ピッカーで選択中のセッションの名前を変更
+
+      ## キーボードショートカット
+      | キー | 操作 |
+      |------|------|
+      | `Ctrl+C` | 現在の操作をキャンセル（2 回押すと終了） |
+      | `Ctrl+D` | シェルを終了 |
+      | `Shift+Tab` / `F2` | プランモード切替 |
+      | `Ctrl+O` | 出力履歴を閲覧 |
+      | `Ctrl+Q` | セッションを切り離す（`aish -c` で再接続） |
+      | `Ctrl+E` | セッションの名前を変更（ピッカー内） |
+      | 空行で `/` | スラッシュコマンドピッカー |
+
+      ## ヘルプページ
+      `/help <page>` で aish 固有機能の詳細を確認：
+
+      | ページ | 内容 |
+      |--------|------|
+      | `ai` | AIアシスタントの使い方（`;`プレフィックス、コンテキスト、会話） |
+      | `model` | モデル管理（表示、切替、対応プロバイダー） |
+      | `plan` | プランモード（ワークフロー、承認、通常モードとの比較） |
+      | `config` | 設定（ファイル、環境変数、優先順位） |
+      | `shortcuts` | キーボードショートカット（編集、制御、モード切替） |
+      | `security` | セキュリティポリシー（リスクレベル、ルール、シークレット検出） |
+
+      ## その他
+      - セキュリティポリシー：`~/.config/aish/security_policy.yaml`
+      - セッションデータ：`~/.local/share/aish/sessions.db`
+      - ログ：`~/.config/aish/logs/aish.log`
+      - ドキュメント：https://github.com/AI-Shell-Team/aish
+
+  topics:
+    unknown: "不明なヘルプページ '{topic}'。利用可能なページ：ai, model, plan, config, shortcuts, security"
+
+    ai:
+      title: "AI アシスタント"
+      markdown: |-
+        ## AI への質問
+
+        `;`（セミコロン）または `；`（全角セミコロン）を前に付けて質問します：
+
+        ```
+        ; 大きなファイルを見つける方法は？
+        ; このコマンドを説明して：ls -la
+        ; より良い圧縮方法を提案して
+        ```
+
+        AI は以前のシェルコマンドや AI 応答を含む会話コンテキストを参照します。
+
+        ## 仕組み
+
+        - 質問は設定された LLM モデルに送信されます
+        - AI は会話履歴をコンテキストとして受け取ります
+        - 応答はシンタックスハイライトとテーブル描画で表示されます
+
+        ## コンテキスト管理
+
+        - 会話履歴は自動的に維持されます
+        - トークン予算を超えると自動的にコンテキストを圧縮します
+        - 古いメッセージは要約され、最新のコンテキストが保持されます
+
+    model:
+      title: "モデル管理"
+      markdown: |-
+        ## モデルの確認と切り替え
+
+        ```
+        /model                    # 現在のモデルを表示
+        /model gpt-4o             # GPT-4o に切り替え
+        /model claude-sonnet-4-6  # Claude に切り替え
+        ```
+
+        ## 対応プロバイダー
+
+        | プロバイダー | モデルプレフィックス |
+        |-------------|-------------------|
+        | OpenAI | `gpt-*`, `o1-*`, `o3-*`, `o4-*` |
+        | Anthropic | `claude-*` |
+        | Google | `gemini-*`, `gemma-*` |
+        | DeepSeek | `deepseek-*` |
+        | Qwen | `qwen-*`, `qwq-*` |
+        | Mistral | `mistral-*`, `mixtral-*`, `codestral-*` |
+        | xAI | `grok-*` |
+        | Moonshot | `kimi-*`, `moonshot-*` |
+        | Zhipu | `glm-*` |
+        | ローカル | Ollama, vLLM, ローカル API |
+
+        ## 切り替え動作
+
+        - モデル名からプロバイダーを自動検出
+        - 切り替え前に接続性を検証
+        - 失敗時は現在のモデルを維持
+        - 設定は `~/.config/aish/config.yaml` に自動保存
+
+    plan:
+      title: "プランモード"
+      markdown: |-
+        ## プランモードとは？
+
+        プランモードでは、AI がコードを書く前にコードベースを分析し、詳細な実装計画を作成します。変更は承認後にのみ適用されます。
+
+        ## コマンド
+
+        ```
+        /plan start     # プランモードに入る
+        /plan status    # 現在のプラン状態を表示
+        /plan exit      # プランモードを終了
+        ```
+
+        `Shift+Tab` または `F2` でプランモードを切り替えることもできます。
+
+        ## 使い方
+
+        1. プランモードに入る：`/plan start`
+        2. AI に計画を依頼：`; auth モジュールを JWT にリファクタリングして`
+        3. AI がステップとファイル変更を含む計画を生成
+        4. 計画を確認し、各ステップを承認または拒否
+        5. 承認後、変更が適用される
+        6. プランモードを終了：`/plan exit`
+
+        ## プランモード vs 通常モード
+
+        | | 通常モード | プランモード |
+        |---|---|---|
+        | AI ツール | フルアクセス | 読み取り専用 + プラン書き込み |
+        | コード変更 | 即時実行 | 承認後実行 |
+        | 適した場面 | 簡単な修正、質問 | リファクタリング、新機能 |
+
+    config:
+      title: "設定"
+      markdown: |-
+        ## 設定ファイル
+
+        場所：`~/.config/aish/config.yaml`
+
+        `$AISH_CONFIG_DIR` または `$XDG_CONFIG_HOME` で上書き可能。
+
+        ## 優先順位
+
+        コマンドライン引数 > 環境変数 > 設定ファイル
+
+        ## 環境変数
+
+        | 変数 | 用途 |
+        |------|------|
+        | `AISH_MODEL` | デフォルトモデルを上書き |
+        | `AISH_API_KEY` | API キーを上書き |
+        | `AISH_API_BASE` | API ベース URL を上書き |
+        | `AISH_CONFIG_DIR` | 設定ディレクトリを上書き |
+
+        ## 主な設定項目
+
+        ```
+        model: gpt-4o                    # デフォルト LLM モデル
+        api_key: sk-xxx                  # API キー
+        api_base: https://api.openai.com/v1  # API エンドポイント
+        temperature: 0.3                 # 応答のランダム性
+        theme: dark                      # UI テーマ（dark/light）
+        output_language: ja              # 出力言語の強制
+        ```
+
+        ## セットアップウィザード
+
+        `/setup` または `aish setup` でインタラクティブに設定できます。設定は再起動なしで即座に反映されます。
+
+        ## その他のファイル
+
+        - セキュリティポリシー：`~/.config/aish/security_policy.yaml`
+        - セッションデータベース：`~/.local/share/aish/sessions.db`
+        - ログ：`~/.config/aish/logs/aish.log`
+
+    shortcuts:
+      title: "キーボードショートカット"
+      markdown: |-
+        ## 編集
+
+        | キー | 操作 |
+        |------|------|
+        | `Tab` | 自動補完 |
+        | `↑` / `↓` | 履歴を参照 |
+        | `Ctrl+R` | 履歴検索 |
+        | `Ctrl+L` | 画面クリア |
+        | `Backspace` / `Delete` | 文字削除 |
+
+        ## シェル制御
+
+        | キー | 操作 |
+        |------|------|
+        | `Ctrl+C` | 現在の操作をキャンセル（2 回押しで終了） |
+        | `Ctrl+D` | シェルを終了 |
+        | `Ctrl+O` | 出力履歴を参照 |
+        | `Esc` | 現在の入力をキャンセル |
+
+        ## セッション管理
+
+        | キー | 操作 |
+        |------|------|
+        | `Ctrl+Q` | セッションを切り離す（継続実行；`aish -c` で再接続） |
+        | `Ctrl+E` | 選択中のセッションの名前を変更（ピッカー内） |
+
+        ## モード切替
+
+        | キー | 操作 |
+        |------|------|
+        | `Shift+Tab` / `F2` | プランモード切替 |
+        | 空行で `/` | スラッシュコマンドピッカーを開く |
+
+    security:
+      title: "セキュリティポリシー"
+      markdown: |-
+        ## 概要
+
+        aish はセキュリティポリシーファイルを使用して、確認が必要またはブロックされるコマンドやファイル操作を制御します。
+
+        ## 設定場所
+
+        パス：
+        1. 明示的に指定されたパス
+        2. `~/.config/aish/security_policy.yaml`（無い場合は同梱テンプレートから生成）
+
+        ## リスクレベル
+
+        | レベル | 動作 |
+        |--------|------|
+        | `LOW` | 許可、ログ記録 |
+        | `MEDIUM` | 確認プロンプト |
+        | `HIGH` | ブロックまたは明示的な確認が必要 |
+
+        ## ルール構造
+
+        ```yaml
+        rules:
+          - id: protect-system
+            name: システムディレクトリの保護
+            path: ["/boot/**", "/etc/passwd"]
+            operations: [WRITE, DELETE]
+            risk: HIGH
+            reason: "システムファイルは変更すべきではありません"
+        ```
+
+        ## パスパターン
+
+        - `*` は単一のパスセグメントにマッチ
+        - `**` はゼロ以上のパスセグメントにマッチ
+        - 変数：`$HOME`、`$PWD`
+
+        ## シークレット検出
+
+        OpenAI、Anthropic、AWS、Google、GitHub、Stripe、Slack の API キー、JWT トークン、埋め込みパスワードを含む URL の検出パターンが組み込まれています。`secret_patterns` でカスタムパターンを追加できます。
+
+  command:
+    history:
+      title: "📚 履歴"
+      description: "コマンド履歴を表示または操作します"
+      usage: "history [options] [n]"
+      options:
+        - ["--help, -h", "このヘルプメッセージを表示します"]
+        - ["-c", "すべての項目を削除して履歴一覧を消去します"]
+        - ["-d offset", "位置 offset の履歴項目を削除します"]
+        - ["n", "直近 n 件のコマンドのみ表示します"]
+      examples:
+        - "history              # すべてのコマンド履歴を表示します"
+        - "history 10           # 直近 10 件のコマンドを表示します"
+        - "history -c           # すべての履歴を消去します"
+        - "history -d 5         # 位置 5 の履歴項目を削除します"
+        - "history --help       # このヘルプメッセージを表示します"
+      notes: "実行したすべてのコマンドと AI との対話は自動的に履歴へ記録されます。"
+
+    cd:
+      title: "📁 ディレクトリ移動"
+      description: "完全な引数サポート付きで現在の作業ディレクトリを変更します"
+      usage: "cd [-L|[-P [-e]]] [directory]"
+      options:
+        - ["-L", "シンボリックリンクをたどります: '..' を処理した後にリンクを解決します（既定）"]
+        - ["-P", "シンボリックリンクをたどらず物理ディレクトリ構造を使います: '..' を処理する前にリンクを解決します"]
+        - ["-e", "-P が指定され、現在の作業ディレクトリを判定できない場合は非ゼロ終了します"]
+        # - ["-@", "対応システムでは、拡張属性を持つファイルを属性を含むディレクトリとして表示します"]
+        - ["directory", "移動先ディレクトリのパス（省略時はホームディレクトリ）"]
+        - ["-", "前のディレクトリに戻ります"]
+      examples:
+        - "cd ~                 # ホームディレクトリへ移動します"
+        - "cd /tmp              # /tmp ディレクトリへ移動します"
+        - "cd -                 # 前のディレクトリに戻ります"
+        - "cd \"path with spaces\" # スペースを含むパスでは引用符を使います"
+        - "cd -P /tmp           # 物理パス解決を使います"
+        - "cd -P -e /tmp        # 物理パス解決を使い、エラー時に終了します"
+        - "cd -L /tmp           # シンボリックリンクをたどります（既定動作）"
+        # - "cd -@ /tmp           # 拡張属性を表示します（対応時）"
+      notes: "Tab 補完と特殊文字を含むパスの処理に対応しています。既定ではシンボリックリンクをたどります（-L）。"
+
+    pushd:
+      title: "📤 ディレクトリをスタックに追加"
+      description: "ディレクトリをスタックに積み、その場所へ移動します"
+      usage: "pushd [directory]"
+      options:
+        - ["directory", "移動先ディレクトリのパス"]
+        - ["(no args)", "スタック先頭の 2 つのディレクトリを入れ替えます"]
+      examples:
+        - "pushd /tmp           # 現在のディレクトリをスタックに積み、/tmp へ移動します"
+        - "pushd                # 現在と直前のディレクトリを入れ替えます"
+      notes: "複数のディレクトリ間を簡単に移動できるよう、ディレクトリスタックを維持します。"
+
+    popd:
+      title: "📥 ディレクトリをスタックから取り出す"
+      description: "スタックからディレクトリを取り出し、その場所へ移動します"
+      usage: "popd"
+      options: []
+      examples:
+        - "popd                 # スタックから前のディレクトリへ戻ります"
+      notes: "スタック先頭のディレクトリを取り除き、その場所へ移動します。"
+
+    dirs:
+      title: "📋 ディレクトリスタック表示"
+      description: "ディレクトリスタックを表示します"
+      usage: "dirs [-c]"
+      options:
+        - ["-c", "ディレクトリスタックを消去します"]
+      examples:
+        - "dirs                 # 現在のディレクトリスタックを表示します"
+        - "dirs -c              # ディレクトリスタックを消去します"
+      notes: "現在ナビゲーションスタックにあるすべてのディレクトリを表示します。"
+
+    help:
+      title: "❓ ヘルプ"
+      description: "利用可能なコマンドと機能を表示します"
+      usage: "help"
+      options: []
+      examples:
+        - "help                 # 一般的なヘルプ情報を表示します"
+      notes: "利用可能なすべてのコマンドとシェル機能の概要を表示します。"
+
+    clear:
+      title: "🧹 画面クリア"
+      description: "ターミナル画面を消去します"
+      usage: "clear"
+      options: []
+      examples:
+        - "clear                # ターミナル画面を消去します"
+      notes: "標準的な Unix の clear コマンドと同等です。"
+
+    exit:
+      title: "🚪 シェル終了"
+      description: "AI Shell を終了します"
+      usage: "exit"
+      options: []
+      examples:
+        - "exit                 # シェルを終了します"
+        - "quit                 # 別の終了方法です"
+      notes: "セッションデータを保持したままシェルを正常終了します。"
+
+    export:
+      title: "🔧 環境変数を export"
+      description: "export 属性付きで環境変数を設定または表示します"
+      usage: "export [-fn] [name[=value] ...]\nexport -p"
+      options:
+        - ["-f", "名前はシェル関数を指します（未対応）"]
+        - ["-n", "各名前から export 属性を削除します"]
+        - ["-p", "export 済み変数の一覧を表示します"]
+        - ["--", "以降のオプション処理を無効にします"]
+      examples:
+        - "export PATH=/usr/local/bin:$PATH"
+        - "export EDITOR=vim"
+        - "export -n VAR  # VAR から export 属性を削除します"
+        - "export -p      # export 済み変数をすべて表示します"
+        - "export JAVA_HOME=\"/usr/lib/jvm/java-11-openjdk\""
+        - "export -- -VAR  # -VAR という名前の変数を設定します"
+      notes: "export で設定した環境変数は子プロセスへ引き継がれます。"
+
+    unset:
+      title: "🗑️ 環境変数を解除"
+      description: "シェル変数と関数を削除します"
+      usage: "unset [-f] [-v] [-n] [name ...]"
+      options:
+        - ["-f", "各名前はシェル関数を指します（未対応）"]
+        - ["-v", "各名前はシェル変数を指します（既定）"]
+        - ["-n", "各名前は名前参照を指します（未対応）"]
+        - ["--", "以降のオプション処理を無効にします"]
+      examples:
+        - "unset TEMP_VAR"
+        - "unset -v VAR1 VAR2"
+        - "unset JAVA_HOME"
+        - "unset -- -VAR  # -VAR という名前の変数を削除します"
+      notes: "シェル環境から変数を削除します。存在しない変数は無視されます。"
+
+    pwd:
+      title: "📍 作業ディレクトリ表示"
+      description: "シンボリックリンク処理付きで現在の作業ディレクトリを表示します"
+      usage: "pwd [-L|-P]"
+      options:
+        - ["-L", "論理パスを表示します（シンボリックリンクをたどる、既定）"]
+        - ["-P", "物理パスを表示します（シンボリックリンクを解決する）"]
+      examples:
+        - "pwd                  # 論理的な現在ディレクトリを表示します"
+        - "pwd -L               # 論理パスを表示します（シンボリックリンクを考慮）"
+        - "pwd -P               # 物理パスを表示します（シンボリックリンクを解決）"
+      notes: "既定ではシンボリックリンクを考慮した論理パスを表示します。"
+
+    ";":
+      title: "🤖 AI アシスタント"
+      description: "AI アシスタントに質問します"
+      usage: "; <question>"
+      options:
+        - ["question", "AI アシスタントへの質問"]
+      examples:
+        - "; 大きいファイルを見つけるには？"
+        - "; このコマンドを説明して: ls -la"
+        - "; ファイルを圧縮するもっと良い方法を提案して"
+      notes: "AI アシスタントは、コマンドの説明、提案、一般的なシェルの使い方を支援できます。"
+
+    "；":
+      title: "🤖 AI アシスタント"
+      description: "AI アシスタントに質問します"
+      usage: "； <question>"
+      options:
+        - ["question", "AI アシスタントへの質問"]
+      examples:
+        - "； 大きいファイルを見つけるには？"
+        - "； このコマンドを説明して: ls -la"
+        - "； ファイルを圧縮するもっと良い方法を提案して"
+      notes: "AI アシスタントは、コマンドの説明、提案、一般的なシェルの使い方を支援できます。"
+
+    "/model":
+      title: "🧠 モデル切替"
+      description: "現在のモデルを表示するか、指定したモデルへ切り替えます"
+      usage: "/model [model]"
+      options:
+        - ["model", "切り替え先のモデル識別子（ツール呼び出し対応を検証します）"]
+        - ["--help, -h", "このヘルプメッセージを表示します"]
+      examples:
+        - "/model               # 現在のモデルを表示します"
+        - "/model gpt-4         # モデルを切り替えます"
+        - "/model --help        # ヘルプを表示します"
+      notes: "切り替え時には接続性とツール呼び出し対応を検証し、失敗した場合は現在のモデルを維持します。"
+
+    "/setup":
+      title: "⚙️ 再設定"
+      description: "対話型セットアップウィザードを再実行し、API 設定（プロバイダー、API キー、モデル）を変更します"
+      usage: "/setup"
+      options:
+        - ["--help, -h", "このヘルプメッセージを表示します"]
+      examples:
+        - "/setup               # セットアップウィザードを起動します"
+        - "/setup --help        # ヘルプを表示します"
+      notes: "新しい設定は再起動なしで直ちに適用されます。キャンセルした場合は現在の設定が維持されます。"
+
+errors:
+  litellm_not_installed: "litellm モジュールがインストールされていません"

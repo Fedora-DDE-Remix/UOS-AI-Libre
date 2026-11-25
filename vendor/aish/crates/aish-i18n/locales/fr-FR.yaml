@@ -1,0 +1,1788 @@
+cli:
+  app_help: "AI Shell - Un shell avec des capacites LLM integrees"
+  help_option_help: "Afficher ce message et quitter."
+  run_command_help: "Lancer AI Shell"
+  info_command_help: "Afficher les informations sur AI Shell"
+  check_langfuse_command_help: "Verifier la configuration de Langfuse"
+  setup_command_help: "Executer la configuration interactive et quitter"
+  check_tool_support_command_help: "Depanner la verification en direct de la prise en charge des appels d'outils"
+  detach_hint: "Session détachée. Lancez `aish -c` pour vous reconnecter."
+  resume_failed: "Echec de la reprise de session : {error}"
+
+  uninstall:
+    cancelled: "Annulé."
+
+  option:
+    model: "Modele LLM a utiliser ; peut aussi etre defini via AISH_MODEL ou le fichier de configuration."
+    api_key: "Cle API du fournisseur LLM ; peut aussi etre definie via AISH_API_KEY ou les variables d'environnement du fournisseur."
+    api_base: "URL de base de l'API du fournisseur LLM ; peut aussi etre definie via AISH_API_BASE ou le fichier de configuration."
+    config: "Chemin du fichier de configuration (par defaut : ~/.config/aish/config.yaml)."
+
+  setup:
+    api_base_prompt: "Saisissez une URL base OpenAI-compatible (https://.../v1)"
+    provider_header: "Choisir un fournisseur"
+    provider_filter_prompt: "Rechercher :"
+    provider_filter_hint: "↑/↓ selectionner · Enter confirmer · taper pour rechercher"
+    select_hint: "↑/↓ selectionner · Enter confirmer · Esc annuler"
+    provider_endpoint_header: "Choisir l'endpoint API pour {provider}"
+    search_matches: " ({count} resultats)"
+    search_matches_one: " ({count} resultat)"
+    provider_hints:
+      openrouter: "Cle API · passerelle multi-modeles"
+      openai: "Cle API directe"
+      anthropic: "Claude · endpoint compatible OpenAI"
+      deepseek: "Cle API"
+      gemini: "Gemini · Cle API"
+      google: "Google AI · Cle API"
+      xai: "Grok · Cle API"
+      minimax: "M2.5 · Global / CN"
+      moonshot: "Kimi · Global / CN"
+      zai: "GLM · Coding Plan / Global / CN"
+      qianfan: "Qianfan · Cle API"
+      mistral: "Cle API"
+      together: "Modeles ouverts · Cle API"
+      huggingface: "Inference API · jeton HF"
+      qwen: "Qwen · Standard / Coding Plan"
+      kilocode: "Cle API"
+      ollama: "Modeles OSS locaux · cle souvent optionnelle"
+      vllm: "Auto-heberge · compatible OpenAI"
+      ai_gateway: "Passerelle unifiee · Cle API"
+      azure: "Endpoint personnalise · Cle API"
+      bedrock: "Endpoint personnalise · Cle API"
+      custom: "Tout endpoint chat/completions compatible OpenAI"
+    provider_custom_note: "Compatible OpenAI"
+    provider_preset_base: "API Base predefinie"
+    custom_api_base_placeholder: "https://api.example.com/v1"
+    provider_custom_api_base_required: "L'API Base est obligatoire"
+    provider_custom_api_base_invalid: "URL API Base invalide (utilisez https://...)"
+    filter_no_results: "Aucun resultat"
+    api_key_env_found: "Detecte {env_key} : {masked}"
+    api_key_env_hint: "Appuyez sur Enter pour utiliser la cle detectee ou saisissez-en une nouvelle."
+    api_key_prompt: "Saisir la cle API"
+    model_custom_prompt: "Saisir le nom du modele (back pour changer de fournisseur)"
+    api_key_required: "La cle API est obligatoire"
+    model_header: "Fournisseur : {provider}"
+    model_filter_prompt: "Rechercher :"
+    model_filter_hint: "↑/↓ selectionner · Enter confirmer · taper pour rechercher · Esc annuler"
+    model_custom_option: "Modele personnalise..."
+    model_custom_required: "Le nom du modele est obligatoire"
+    model_custom_saved_as: "Sera enregistre sous : {model}"
+    model_discover_in_progress: "Recherche des modeles disponibles..."
+    model_discover_failed: "Impossible de decouvrir les modeles : {reason}"
+    verify_title: "Verification"
+    verify_connectivity_in_progress: "Verification de la connectivite..."
+    verify_tool_in_progress: "Verification de l'acceptation des parametres tools..."
+    verify_simple_success: "Verifications API reussies"
+    verify_simple_failed_with_reason: "Verification echouee : {reason}"
+    verify_failed_unknown: "erreur inconnue"
+    verify_tool_not_detected: "prise en charge des tools non detectee"
+    verify_http_error: "HTTP {status} depuis {url} : {detail}"
+    verify_connect_timeout: "Delai depasse apres {timeout}s lors de la connexion a {url}"
+    verify_connect_refused: "Connexion refusee ou inaccessible : {url}"
+    verify_request_failed: "Echec de la requete : {detail}"
+    verify_http_client_build_failed: "Impossible de creer le client HTTP : {detail}"
+    verify_tool_http_error: "HTTP {status} — prise en charge des tools non detectee : {detail}"
+    verify_tool_timeout: "Delai depasse apres {timeout}s lors de la verification des tools"
+    verify_tool_request_failed: "Echec de la requete lors de la verification des tools : {detail}"
+    action_header: "Action suivante :"
+    action_retry_model: "Choisir un autre modele"
+    action_retry_api_base: "Ressaisir l'API Base"
+    action_retry_api_key: "Ressaisir la cle API"
+    action_change_provider: "Changer de fournisseur"
+    action_continue: "Continuer quand meme (deconseille)"
+    action_exit: "Quitter la configuration"
+    saved_to: "Configuration enregistree dans {path}"
+    saved_with_warning_to: "Configuration enregistree dans {path} (parametres tools non verifies)"
+    non_interactive: "Environnement non interactif ; impossible d'executer la configuration"
+    cancelled: "Configuration annulee"
+    required_cancelled: "Configuration requise manquante ; fermeture"
+    connectivity_ok: "Connectivite OK ({}ms)"
+    setup_complete_hint: "Vous pouvez maintenant lancer \x1b[1maish\x1b[0m pour demarrer le shell."
+
+  startup:
+    label:
+      skills: "Skills"
+    goodbye: "👋 Au revoir !"
+    config_file_error: "❌ Erreur de fichier de configuration : {error}"
+    config_file_hint: "💡 Utilisez --config pour specifier un chemin de configuration valide"
+
+  langfuse:
+    incomplete: "⚠️  La configuration Langfuse est incomplete"
+    missing: "   Manquant : {var}"
+    complete: "✅ La configuration Langfuse est complete"
+    script_failed: "Le script de verification Langfuse a echoue : {error}"
+    script_not_found: "Script check_langfuse.py introuvable"
+    run_from_root: "Veuillez executer cette commande depuis la racine du projet"
+
+  parse_errors:
+    title: "Erreur"
+    option_requires_argument: "L'option {option} requiert un argument."
+    no_such_option: "Option inconnue : {option}"
+    missing_parameter: "Parametre manquant : {param}"
+    invalid_value_for_option: "Valeur invalide pour {option} : {reason}"
+    generic: "Arguments invalides : {message}"
+
+status:
+  session: "chat"
+  live_session: "term"
+  model: "modele"
+  host: "hote"
+  up: "duree"
+  services: "services"
+  errors_today: "erreurs aujourd'hui"
+  na: "N/A"
+
+  instructions: "instructions"
+  instructions_none: "aucune chargée"
+  instructions_loaded: "{count} fichier(s) chargé(s)"
+shell:
+  interrupted: "Interrompu"
+  ctrl_c_again: "Ctrl+C à nouveau dans 1s pour quitter"
+  exiting: "Fermeture du shell..."
+  confirm_dialog_title: "Exécution d'outil"
+  confirm_dialog_tool: "Outil :"
+  confirm_dialog_command: "Commande :"
+  confirm_dialog_options: "[y] Autoriser une fois   [a] Mémoriser cette session   [r] Demander à l'IA une autre approche   [n] Refuser"
+  confirm_dialog_question: "Votre choix (défaut n) :"
+  confirm_choice_once: "Autoriser une fois"
+  confirm_choice_remember: "Mémoriser cette session"
+  confirm_choice_reply: "Demander à l'IA une autre approche"
+  confirm_choice_deny: "Refuser"
+  forget_approvals_cleared: "{count} autorisation(s) mémorisée(s) effacée(s) pour cette session"
+  instructions_toggled: "Chargement des instructions AGENTS.md du projet pour cette session : {state}"
+  welcome2:
+    header: ">_ AI Shell {version}"
+    model_hint: "(tapez /model pour changer)"
+    label:
+      model: "modele"
+      config: "config"
+    quick_start:
+      title: " Demarrage rapide :"
+      item1_prefix: "Commandes shell natives : "
+      cmd_ls: "ls"
+      cmd_top: "top"
+      cmd_vim: "vim"
+      cmd_ssh: "ssh"
+      item1_suffix: " etc."
+      item2_prefix: "Demander a l'IA : "
+      item2_example: "Commencez par ;, par exemple ; comment trouver de gros fichiers"
+      item3_prefix: "Obtenir de l'aide :"
+      item3_suffix_1: "Tapez "
+      item3_keyword: "help"
+      item3_suffix_2: " pour voir l'aide integree et l'utilisation."
+    risk: "Le contenu genere par l'IA peut etre risque ; verifiez-le attentivement."
+    skills_loaded_suffix: " charges"
+
+  update_available:
+    title: "Mise à jour disponible"
+    version_line: "Nouvelle version {latest} disponible"
+    run_prefix: "Commande :"
+
+  slash:
+    help: "Afficher les informations d'aide"
+    model: "Afficher ou changer le modèle IA"
+    setup: "Ouvrir l'assistant de configuration"
+    setting: "Ouvrir le panneau de configuration interactif"
+    plan: "Contrôle du mode plan"
+    token: "Afficher l'utilisation des tokens"
+    resume: "Reprendre la session précédente"
+    feedback: "Envoyer un commentaire"
+    quit: "Quitter AI Shell"
+    record: "Enregistrer la session terminal (start/stop)"
+    doctor: "Exécuter les diagnostics système"
+    diagnose: "Diagnostiquer la dernière commande échouée"
+    status: "Afficher l'état de l'environnement système"
+    live_sessions: "Lister les sessions PTY actives"
+    kill_live_sessions: "Terminer session(s) PTY par ID"
+    audit: "Consulter le journal d'audit (qui/quand/quoi/suggestion IA/confirmation)"
+    forget-approvals: "Effacer les approbations mémorisées (cette session)"
+    skill: "Parcourir, installer, approuver, vérifier les skills ; gérer les registres"
+    export: "Exporter la session en Markdown (secrets masqués par défaut ; --raw les affiche)"
+    report: "Écrit la dernière réponse dans une page HTML et l'ouvre sur une session de bureau"
+    fork: "Créer une branche de la session actuelle"
+    sessions: "Afficher l'arborescence des sessions"
+    rollback: "Examiner et annuler les modifications de fichier de l'IA (edit_file/write_file) cette session"
+    undo: "Annuler la dernière modification de fichier par l'IA (edit_file/write_file)"
+    memory: "Visualiser, vérifier ou oublier les mémoires"
+    compact: "Compresser le contexte de l'IA maintenant (focus optionnel)"
+    instructions: "Basculer le chargement des instructions AGENTS.md du projet (on/off/status ; cette session)"
+    mcp: "Inspecter, recharger et reconnecter les serveurs MCP et leurs outils"
+
+  slash_group:
+    diagnostics: "Diagnostic"
+    sessions: "Sessions"
+    model_settings: "Modèle et paramètres"
+    skills: "Compétences"
+    files_memory: "Fichiers et mémoire"
+    record_share: "Enregistrement et partage"
+    security_audit: "Sécurité et audit"
+    exit: "Quitter"
+
+  slash_status:
+    reason_diagnose_no_failure: "Aucune commande en échec à diagnostiquer"
+    reason_audit_disabled: "Le stockage d'audit est désactivé"
+    reason_undo_empty: "Aucune modification de fichier à annuler"
+    reason_pty_daemon_disabled: "Le démon PTY n'est pas activé"
+    undo_count: "{count} modification(s) annulable(s)"
+    plan_planning: "Planification"
+    plan_normal: "Normal"
+
+  mcp:
+    no_servers: "MCP : aucun serveur configuré. Ajoutez une entrée `mcp.servers` à votre configuration."
+    disabled_hint: "MCP est configuré mais inactif. Définissez `mcp.enabled: true` et activez au moins un serveur."
+    config_warning: "Avertissement de configuration MCP : {warning}"
+    status_line: "{name} [{transport}] {status} · outils : {tools} · confiance : {trust} · effets de bord : {side_effects}"
+    endpoint: "  endpoint : {endpoint}"
+    failure: "  échec : {reason}"
+    tool_line: "  {name} ({side_effects}) — {description}"
+    tools_header: "Outils exposés par `{server}` ({count}) :"
+    server_connecting: "`{server}` est encore en cours de connexion ; réessayez dans un instant (`/mcp status` affiche l'état)."
+    unknown_server: "Serveur MCP inconnu : {server}"
+    no_tools: "Le serveur MCP `{server}` n'expose aucun outil."
+    summary: "MCP : {connected}/{total} serveur(s) connecté(s), {tools} outil(s) disponible(s)."
+    runtime_unavailable: "Le runtime MCP n'est pas encore disponible ; réessayez une fois le shell démarré."
+    reload_header: "Rechargement des serveurs MCP..."
+    reload_done: "Serveurs MCP rechargés."
+    reconnect_started: "Reconnexion du serveur MCP `{server}`..."
+    reconnect_done: "Serveur MCP `{server}` reconnecté."
+    reconnect_failed: "Échec du serveur MCP `{server}` : {reason}"
+    confirm_message: "Le serveur MCP `{server}` veut appeler l'outil `{tool}` (effets de bord déclarés : {side_effects}).\nArguments : {args}"
+    blocked_message: "La politique MCP a bloqué l'outil `{tool}` sur le serveur `{server}`."
+    alternative_hint: "Approuvez une fois, ou définissez `trust: allow` avec `side_effects: read` pour le serveur `{server}` afin que les outils en lecture seule ne demandent plus."
+    invalid_action: "Action MCP invalide ; attendu : list, describe ou call."
+    tool_required: "Un nom d'outil MCP est requis pour cette action."
+    reason_server: "Appel MCP au serveur `{server}`, outil `{tool}`"
+    reason_side_effects: "Effets de bord déclarés `{declared}` ; le serveur a signalé `{reported}`"
+    reason_arguments: "Arguments : {args}"
+    reason_trust: "Niveau de confiance : {trust}"
+    call_failed: "Échec de l'appel MCP au serveur `{server}`, outil `{tool}` : {detail}"
+    needs_async: "Cet outil MCP nécessite un runtime asynchrone ; appelez-le via la boucle d'outils normale."
+    help_hint: "Lancez `/mcp add` pour configurer votre premier serveur MCP."
+    unknown_subcommand: "Sous-commande `/mcp` inconnue : {sub}"
+    missing_server_arg: "`/mcp {sub}` requiert un argument obligatoire (un nom de serveur)."
+    config_write_failed: "Échec de l'écriture de config.yaml ; la modification a été annulée : {error}"
+    tool_detail_header: "Outil MCP `{server}`/`{tool}`"
+    tool_detail_description: "  description : {description}"
+    tool_detail_side_effects: "  effets de bord : déclarés {declared} · signalés {reported} · effectifs {effective}"
+    tool_detail_trust: "  confiance : {trust} → {verdict}"
+    tool_detail_schema: "  inputSchema :\n{schema}"
+    tool_unknown: "Le serveur MCP `{server}` n'expose aucun outil nommé `{tool}`."
+    verdict_allow: "autorisé sans confirmation"
+    verdict_confirm: "demande une confirmation"
+    verdict_block: "bloqué par la politique"
+    add_cancelled: "Ajout du serveur MCP annulé ; rien n'a été écrit."
+    added: "Serveur MCP `{server}` [{transport}] ajouté ({status})."
+    add_failed: "Échec de l'ajout du serveur MCP : {error}"
+    removed: "Serveur MCP `{server}` supprimé."
+    remove_failed: "Échec de la suppression du serveur MCP : {error}"
+    enabled: "Serveur MCP `{server}` activé ({status})."
+    disabled: "Serveur MCP `{server}` désactivé ; ses outils ont été désenregistrés."
+    already_enabled: "Le serveur MCP `{server}` est déjà activé."
+    already_disabled: "Le serveur MCP `{server}` est déjà désactivé."
+    toggle_failed: "Échec du changement d'état du serveur MCP : {error}"
+    trust_updated: "Confiance de `{tool}` sur `{server}` définie sur {level}."
+    trust_failed: "Échec de la définition de la confiance MCP : {error}"
+    test_ok: "Serveur MCP `{server}` OK (version {version}), {tools} outil(s) disponible(s)."
+    test_tool_line: "  {name} — {description}"
+    test_failed: "Échec du test du serveur MCP `{server}` : {error}"
+    test_tip_not_found: "Astuce : la commande n'a pas pu démarrer — vérifiez le chemin de l'exécutable et son installation."
+    test_tip_refused: "Astuce : la connexion a été refusée — le serveur tourne-t-il et l'URL/le port sont-ils corrects ?"
+    test_tip_timeout: "Astuce : le serveur n'a pas répondu à temps ; essayez `/mcp reconnect` ou augmentez `request_timeout_ms`."
+    test_tip_auth: "Astuce : l'authentification a échoué — vérifiez le token/header configuré pour ce serveur."
+    menu_title: "Menu MCP"
+    menu_question: "Que voulez-vous faire avec MCP ?"
+    menu_add: "Ajouter un serveur MCP (assistant)"
+    menu_tools: "Outils"
+    menu_tools_list: "Lister tous les outils"
+    menu_test: "Tester la connexion"
+    menu_trust: "Définir la confiance"
+    menu_toggle: "Activer/désactiver un serveur"
+    menu_reconnect: "Reconnecter un serveur"
+    menu_reload: "Recharger tous les serveurs"
+    menu_remove: "Supprimer un serveur"
+    menu_help: "Aide"
+    menu_remove_confirm_title: "Supprimer le serveur MCP"
+    menu_remove_confirm_question: "Supprimer le serveur MCP `{server}` et désenregistrer ses outils ?"
+    menu_remove_confirm_yes: "Oui, supprimer"
+    menu_remove_confirm_no: "Non, annuler"
+    pick_server_title: "Choisir un serveur MCP"
+    pick_server_question: "Quel serveur ?"
+    pick_tool_title: "Choisir un outil MCP"
+    pick_tool_question: "Quel outil ?"
+    pick_tool_any: "* (tous les outils)"
+    pick_level_title: "Niveau de confiance"
+    pick_level_question: "Quelle confiance accorder aux appels ?"
+    menu_cancelled: "Menu MCP annulé ; rien n'a été modifié."
+    add:
+      name_prompt: "Nom du serveur"
+      transport_title: "Ajouter un serveur MCP"
+      transport_question: "Quel transport ce serveur utilise-t-il ?"
+      command_prompt: "Commande à lancer (ex. npx)"
+      args_prompt: "Arguments supplémentaires, séparés par des espaces (facultatif)"
+      url_prompt: "URL du serveur (ex. https://example.com/mcp)"
+      token_prompt: "Jeton Bearer (facultatif ; stocké dans la configuration)"
+      trust_title: "Niveau de confiance"
+      trust_question: "À quel point faire confiance aux appels à ce serveur ?"
+      expose_title: "Exposition des outils"
+      expose_question: "Comment exposer les outils de ce serveur au modèle ?"
+      side_effects_title: "Effets de bord déclarés"
+      side_effects_question: "Que peuvent faire les outils de ce serveur ?"
+      confirm_title: "Confirmer le nouveau serveur MCP"
+      confirm_summary: "Ajouter ce serveur ?\n\n{summary}"
+      confirm_yes: "Oui, ajouter"
+      confirm_no: "Non, annuler"
+    help: |-
+      `/mcp` sans argument ouvre un menu de neuf lignes (1-9 pour choisir, puis action → serveur → outil) ; les sous-commandes ci-dessous restent équivalentes.
+      Commandes du client MCP :
+        /mcp | /mcp status | /mcp list   Afficher tous les serveurs configurés
+        /mcp help                        Afficher cette aide
+        /mcp tools [server]              Lister les outils d'un serveur, ou de tous
+        /mcp tool <server> <tool>        Voir le schéma et le verdict de confiance d'un outil
+        /mcp add                         Assistant interactif (nom, transport, confiance...)
+        /mcp add <name> -- <cmd> [args]  Ajout rapide d'un serveur stdio
+        /mcp add <name> --url <url>      Ajout rapide d'un serveur HTTP
+        /mcp remove | rm <name>          Supprimer un serveur
+        /mcp enable <name>               Activer un serveur (connexion immédiate)
+        /mcp disable <name>              Désactiver un serveur (désenregistre ses outils)
+        /mcp trust <server> <tool|*> <ask|allow|block>
+                                         Définir la confiance d'un outil ou d'un serveur entier
+        /mcp test <name>                 Se connecter une fois et lister les outils sans l'activer
+        /mcp reload                      Reconnecter tous les serveurs selon la configuration
+        /mcp reconnect <server>          Reconnecter un serveur
+      Options d'ajout rapide : --transport stdio|http, --url <url>, --token <t>, --trust ask|allow|block,
+        --side-effects read|network|write|unknown, --timeout <ms>, --max-output <bytes>,
+        --expose gateway|tools, --env KEY=VALUE, --header KEY=VALUE et `-- <command> [args...]` pour stdio.
+      Chaque modification réécrit config.yaml de façon atomique (clés inconnues conservées, commentaires non) et prend effet immédiatement.
+      Les gateway tools (une par serveur) acceptent une `action` :
+        action: "list"                        Lister les outils du serveur
+        action: "describe", tool: "<name>"    Décrire un outil
+        action: "call", tool: "<name>", args: {...}   Appeler un outil
+      Modèle de confiance : un appel n'est approuvé automatiquement que si le serveur est `trust: allow` et que ses effets de bord effectifs sont `read` ; `unknown`/`write`/`network` demandent toujours, et `trust: block` est refusé d'emblée.
+
+  feedback:
+    select_type: "Sélectionner le type de commentaire"
+    type_bug: "Rapport de bug"
+    type_feature: "Demande de fonctionnalité"
+    type_question: "Question"
+    confirm_title: "Vérifier les informations collectées"
+    confirm_question: "Les informations suivantes seront jointes à l'issue. Les journaux peuvent contenir des informations sensibles."
+    confirm: "Confirmer et ouvrir"
+    without_logs: "Ouvrir sans les journaux"
+    cancel: "Annuler"
+    opening: "Ouverture du GitHub Issue..."
+    failed: "Impossible d'ouvrir le navigateur : {error}"
+    visit: "Visiter : {url}"
+    log_unavailable: "(fichier journal introuvable)"
+    logs_included: "inclus (30 dernières lignes, expurgés)"
+    logs_truncated: "Remarque : les journaux ont été tronqués en raison de la limite de longueur d'URL"
+    body_summary: "## Summary"
+    body_steps: "## Steps to reproduce"
+    body_expected: "## Expected behavior"
+    body_actual: "## Actual behavior"
+    body_environment: "## Environment"
+    body_version: "- AISH version: {version}"
+    body_os: "- Operating system: {os}"
+    body_model: "- AI Model / Provider: {model} / {provider}"
+    body_logs: "## Logs"
+    body_feature_summary: "## Feature summary"
+    body_use_case: "## Use case"
+    body_proposed_solution: "## Proposed solution"
+    body_alternatives: "## Alternatives considered"
+    body_question: "## Question"
+
+  security:
+    panel_title:
+      blocked: "🛑 Blocage de securite"
+      notice: "🔐 Avertissement de securite"
+      confirm: "🔐 Confirmation requise"
+    title:
+      blocked: "🛑 Blocage de securite : {tool}"
+      notice: "🔐 Avertissement de securite : {tool}"
+      confirm: "🔐 Confirmation requise : {tool}"
+    label:
+      description: "Description"
+      command: "Commande"
+      target: "Cible"
+      content_preview: "Apercu du contenu"
+      fallback_hint: "Note"
+      risk_level: "Niveau de risque"
+      reasons: "Raison"
+      rule: "Règle"
+      matched_paths: "Chemins"
+      alternatives: "Alternatives"
+      impact: "Impact"
+      no_additional_info: "Aucune information supplementaire fournie."
+    fallback:
+      sandbox_execute_failed: "La pre-execution de la commande a echoue, le risque ne peut donc pas etre evalue. Veuillez confirmer avant d'executer la vraie commande."
+      sandbox_timeout: "La pre-execution de la commande a expire, le risque ne peut donc pas etre evalue. Veuillez confirmer avant d'executer la vraie commande."
+      sandbox_ipc_timeout: "Delai d'attente depasse lors de l'evaluation preliminaire de la commande ; le risque ne peut donc pas etre evalue. Veuillez confirmer avant d'executer la vraie commande."
+      generic: "L'evaluation du risque de la commande n'a pas pu etre menee a bien. Veuillez confirmer avant d'executer la vraie commande."
+    alternative:
+      generic: "Veuillez verifier manuellement cette commande et son impact avant execution."
+      etc_manual: "Si vous devez modifier des fichiers sous /etc, privilegiez un processus manuel avec sauvegardes/gestion du changement."
+    options_header: "Options"
+    option:
+      approve: "Autoriser"
+      approve_remember: "Oui, et ne plus demander pour cette commande"
+      cancel: "Annuler"
+    choice_prompt: "Votre choix (par defaut : n) : "
+
+  exit_goodbye: "Fermeture du shell. Au revoir !"
+  exit_daemon_hint: "※ Astuce : Ctrl+Q pour détacher (session active), puis aish -c pour se reconnecter"
+  command_cancelled: "Commande annulee"
+  error_correction:
+    press_semicolon_hint: "L'execution de la commande a echoue. ; pour correction rapide ou /diagnose pour diagnostic."
+    corrected_command_label: "Correction suggeree :"
+    corrected_command_title: "💡 Commande corrigee :"
+    confirm_execute_prefix: "Executer : "
+    confirm_execute_suffix: "? (Y/n): "
+    no_valid_command: "Impossible de determiner la commande correcte"
+    retry_hint: "Tapez ';' pour une autre correction rapide, ou '/diagnose' pour un diagnostic"
+    same_as_failed: "La correction suggeree est identique a la commande echouee; repetition refusee"
+  failure_diagnose:
+    no_failure: "Aucune commande echouee a diagnostiquer. Executez d'abord une commande en echec, puis /diagnose."
+    report_title: "── Rapport de diagnostic ──"
+    root_cause: "Cause:"
+    confidence: "Confiance:"
+    confidence_high: "elevee"
+    confidence_medium: "moyenne"
+    confidence_low: "faible"
+    evidence: "Preuves:"
+    suggested_fix: "Correction suggeree:"
+    no_suggested_fix: "Aucune correction fiable"
+    verify_commands: "Commandes de verification:"
+    risk_notes: "Risques:"
+    fix_not_auto_executable: "La correction suggeree n'est pas une commande executable unique ; execution confirmee ignoree. Appliquez manuellement selon le rapport."
+    fix_has_alternatives: "Le rapport propose plusieurs corrections ; execution confirmee ignoree. Choisissez manuellement selon les notes de risque."
+    confirm_fix_prefix: "Executer la correction suggeree "
+    confirm_fix_suffix: "? [y/N] "
+    fix_cancelled: "Annule. Vous pouvez executer manuellement: {command}"
+    verifying: "Verification en cours…"
+    no_verify_commands: "Aucune commande de verification; verification ignoree"
+    verify_blocked: "Bloque (non lecture seule): {command} ({reason})"
+    verify_passed: "Reussi: {command} (exit {exit_code})"
+    verify_failed: "Echec: {command} (exit {exit_code})"
+    conclusion_fixed: "Conclusion: probleme corrige"
+    conclusion_partial: "Conclusion: certaines verifications ont echoue"
+    conclusion_unknown: "Conclusion: impossible a determiner"
+    error: "Echec du diagnostic: {error}"
+    parse_format_error: "Impossible d'interpreter le rapport de diagnostic. Reessayez /diagnose."
+    parse_prose_fallback: "Note : le modele a renvoye du texte brut au lieu d'un rapport structure."
+    no_evidence: "(non fournie)"
+  nl_detection:
+    confirm_ask_ai: "Cela ressemble à une question en langage naturel. Demander à l'IA ? (Y/n)"
+  error:
+    load_script_failed: "Échec du chargement du script '{script}' : {error}"
+    pty_error: "Erreur PTY : {error}"
+    restart_bash_failed: "Échec du redémarrage de bash : {error}"
+    execution_error: "❌ Erreur pendant l'execution : {error}"
+    pty_decode_error: "Erreur de decodage de sortie PTY detectee : {error}"
+    potential_error: "🚀 Probleme potentiel detecte : {reason}, tentative de resolution..."
+    llm_error_title: "❌ Echec de la requete LLM"
+    llm_error_message: "Erreur : {error}"
+    empty_response: "Le fournisseur n’a renvoyé aucune réponse. Vérifiez le fournisseur ou le modèle sélectionné, puis réessayez."
+    incomplete_response: "Le fournisseur a terminé cette réponse avant qu’elle soit complète. Vérifiez la limite de sortie ou essayez un autre modèle."
+    partial_turn_saved: "Les etapes d'outils completees de ce tour ont ete sauvegardees ({steps} etapes). Le travail precedent l'erreur n'est pas perdu ; saisissez une nouvelle tache ou ;retry pour reprendre depuis le point sauvegarde."
+    partial_turn_saved_limit: "Les etapes d'outils completees de ce tour ont ete sauvegardees ({steps} etapes) avant l'arret a la limite d'iterations. Le travail est conserve ; saisissez une nouvelle tache ou ;retry pour reprendre depuis le point sauvegarde."
+    llm_error_details_title: "Details de debogage"
+    tool_args_json_invalid_hint: "❌ La requete a echoue, veuillez reessayer."
+  prompt:
+    confirm_execute: "?Executer cette commande ? [y/n]:"
+    ai_hint: "Utilisez ; pour interroger l'IA"
+  model:
+    current: "Modele actuel : {model}"
+    unset: "non defini"
+    invalid: "Le nom du modele ne peut pas etre vide"
+    switching: "Validation du modele : {model}"
+    switch_same: "Modele inchange : {model}"
+    switch_saved: "Passe a {model} · {account} · enregistre par defaut"
+    switch_session_ok: "Passe a {model} · {account} · cette session seulement (defaut inchange)"
+    switch_session_only: "Passe a {model} · {account} pour cette session ; modele par defaut NON enregistre"
+    verify_failed: "La validation du modele a echoue : {reason}"
+    picker_title: "Changer modele / compte"
+    picker_subtitle: "↑↓ selectionner, Enter basculer"
+    fetch_partial_subtitle: "Recuperation echouee pour certains endpoints — {errors}"
+    fetching: "Recuperation de la liste des modeles : {base}"
+    picker_search: "Rechercher modeles ou URLs..."
+    picker_footer: "Esc annuler"
+    action_add: "ajouter"
+    action_del: "supprimer"
+    action_toggle: "act/des"
+    action_edit: "editer"
+    edit_label: "Nom du modele"
+    edit_desc: "Modele de ce compte"
+    edited: "Modele de '{name}' mis a jour vers {model}"
+    cannot_remove_primary: "Le modele principal ne peut pas etre supprime"
+    switched_account: "Bascule vers '{name}' (modele : {model})"
+    fallback_badge: "secours"
+    primary_badge: "Principal"
+    recent_badge: "recent"
+    current_badge: "actuel"
+    unverified_badge: "non verifie"
+    action_session: "session seule"
+    action_fallback: "secours"
+    fallback_not_switchable: "Le modele de secours '{model}' n'est pas directement commutable; essaye seulement quand le principal echoue"
+    fallback_add_label: "Nom du modele de secours"
+    fallback_add_desc: "Modele essaye quand le principal echoue"
+    fallback_added: "Ajoute secours '{model}'"
+    fallback_removed: "Supprime secours '{model}'"
+    fallback_exists: "Le secours '{model}' existe deja"
+    action_manage: "gerer"
+    manage_title: "Comptes et secours"
+    manage_search: "Rechercher..."
+    manage_subtitle: "d pour supprimer l'entree selectionnee"
+    manage_footer: "Esc retour"
+    manage_empty: "Aucun compte ni secours a gerer"
+
+  accounts:
+    list_title: "Comptes de rotation"
+    primary: "  [0] primaire  key={key}...  {state}"
+    key_preview: "key={key}..."
+    unset: "(non défini)"
+    enabled: "activé"
+    disabled: "désactivé"
+    added: "compte '{name}' ajouté ({count} comptes supplémentaires)"
+    removed: "compte '{name}' supprimé"
+    already_exists: "le compte '{name}' existe déjà"
+    toggled: "{action} compte '{name}'"
+    no_extra_remove: "aucun compte supplémentaire à supprimer"
+    no_extra_toggle: "aucun compte supplémentaire à basculer"
+    no_account_named: "aucun compte nommé '{name}'"
+    no_extra_hint: "  (aucun compte supplémentaire ; ajoutez-en un avec /accounts add <nom> <key>)"
+    usage_add: "usage : /accounts add <nom> <api_key> [api_base]"
+    usage_remove: "usage : /accounts remove <nom>"
+    usage_enable: "usage : /accounts enable|disable <nom>"
+    unknown_sub: "sous-commande inconnue '{sub}'. essayez /accounts help"
+    help_1: "/accounts                       lister les comptes de rotation"
+    help_2: "/accounts add <nom> <key> [base]"
+    help_3: "/accounts remove <nom>"
+    help_4: "/accounts enable|disable <nom>"
+    help_5: "(sans argument, un menu interactif s'ouvre)"
+    name_label: "Nom du compte"
+    name_desc: "étiquette courte, par ex. 'team-b'"
+    key_label: "Clé API"
+    key_desc: "la clé pour ce compte"
+    base_label: "API base (optionnel)"
+    base_desc: "remplacer le point de terminaison ; vide = comme le primaire"
+    custom_model: "Personnalisé (saisir manuellement)"
+    model_label: "Modèle"
+    model_desc: "Nom du modèle utilisé par ce point de terminaison"
+    select_model: "Sélectionnez un modèle à vérifier"
+    no_models: "Aucun modèle listé ; utilisation du modèle principal '{model}'"
+    fetch_failed: "Échec de la récupération des modèles : {error}"
+    verifying: "Vérification de la connectivité..."
+    connected: "Connecté ({latency}ms) - modèle : {model}"
+    tool_yes: "Appel d'outils : pris en charge"
+    tool_no: "Appel d'outils : non pris en charge"
+    verify_failed: "Échec de la vérification de la connexion : {error}"
+    verify_failed_title: "Échec de la vérification"
+    save_anyway: "Enregistrer quand même"
+    cancel_add: "Annuler"
+    usage_use: "usage : /accounts use <nom>"
+    switched: "Basculé vers '{name}' (modèle : {model})"
+    no_extra_use: "Aucun compte supplémentaire à activer. Ajoutez-en un avec /accounts add."
+    primary_choice: "Principal ({model})"
+    select_use: "Sélectionner le compte à utiliser"
+
+  common:
+    cancelled: "annulé"
+    session_store_unavailable: "stockage de session indisponible"
+  token:
+    title: "Utilisation de tokens (7 derniers jours)"
+    input_tokens: "Tokens d'entrée"
+    output_tokens: "Tokens de sortie"
+    total: "Total"
+    cached: "Accès au cache"
+    api_calls: "Appels API"
+  setup:
+    no_config_manager: "Reconfiguration impossible : gestionnaire de configuration indisponible"
+    cancelled: "Configuration annulee, les parametres actuels sont conserves"
+    applied: "Configuration mise a jour, modele actuel : {model}"
+
+  setting:
+    title: "Paramètres"
+    search_entry: "Rechercher un paramètre..."
+    search_desc: "Accéder à n'importe quel paramètre par mot-clé dans toutes les catégories"
+    search_title: "Rechercher un paramètre"
+    search_placeholder: "Tapez pour filtrer (nom / description / catégorie)"
+    footer_idle: "↑↓ naviguer · ←/→ catégorie · Space/Enter modifier · Ctrl+R réinitialiser · Esc quitter"
+    footer_editing: "Enter appliquer · Esc annuler"
+    search_footer: "↑/↓ naviguer  Tapez pour filtrer  Enter modifier  Esc retour"
+    search_empty: "Aucun paramètre correspondant"
+    restart_summary: "{count} modification(s) prendront effet après le redémarrage"
+    subtitle: "Choisir une catégorie à configurer (Esc pour quitter)"
+    select_setting: "Sélectionner un paramètre à modifier (Esc pour revenir)"
+    on: "activé"
+    off: "désactivé"
+    not_set: "(non défini)"
+    current_tag: "actuel"
+    applied: "{label} enregistré = {value}"
+    applied_clear: "{label} effacé"
+    invalid: "Valeur invalide : {error}"
+    restart_hint: "(prend effet après le redémarrage)"
+    install_installing: "Installation de '{name}' (source : {source})..."
+    install_cancel_hint: "  Appuyez sur Ctrl+C pour annuler"
+    install_downloading: "Téléchargement depuis {source} [{secs}s]"
+    install_continue: "Installation toujours en cours ({secs}s). Continuer ? [Y/n]"
+    install_canceled: "Annulé par l'utilisateur (Ctrl+C)"
+    install_canceled_msg: "Installation annulée"
+    install_timeout: "Délai dépassé après {secs}s"
+    install_crashed: "Le thread d'installation a planté"
+    registry_title: "Sources du registre de skills"
+    registry_question: "Sélectionnez un registre à gérer, ou ajoutez une nouvelle source"
+    registry_test_all: "Tester toutes les connexions"
+    registry_add_new: "Ajouter un nouveau registre..."
+    registry_not_tested: "[-] non testé"
+    registry_manage_test: "Tester la connexion"
+    registry_manage_enable: "Activer"
+    registry_manage_disable: "Désactiver"
+    registry_manage_edit_url: "Modifier l'URL"
+    registry_manage_remove: "Supprimer"
+    registry_manage_remove_desc: "Supprimer cette source de registre"
+    registry_manage_back: "Retour à la liste"
+    registry_manage_status_on: "activé"
+    registry_manage_status_off: "désactivé"
+    cat:
+      model: "Modèle & Fournisseur"
+      appearance: "Apparence"
+      ai: "Comportement IA"
+      security: "Sécurité"
+      context: "Contexte & Mémoire"
+      remote: "Invite distante"
+      advanced: "Avancé"
+    cat_desc:
+      model: "Modèle LLM, endpoint et identifiants"
+      appearance: "Symbole d'invite et langue des réponses"
+      ai: "Complétion, contexte et gestion des tokens"
+      security: "Input guard, sandbox et niveau de risque"
+      context: "Rappel mémoire, compactage et historique"
+      remote: "Segments d'invite SSH/telnet"
+      advanced: "Journalisation, tracing et daemon PTY"
+    k:
+      model:
+        label: "Modèle IA"
+        desc: "Nom du modèle envoyé au fournisseur, par ex. gpt-4o, glm-4.6, deepseek-chat"
+      api_base:
+        label: "URL de base API"
+        desc: "URL d'endpoint compatible OpenAI pour les chat completions"
+      api_key:
+        label: "Clé API"
+        desc: "Clé secrète pour le fournisseur LLM (conservée dans config.yaml)"
+      temperature:
+        label: "Température"
+        desc: "Aléatoire d'échantillonnage 0.0–2.0 ; plus élevé = plus créatif"
+      max_tokens:
+        label: "Tokens max"
+        desc: "Plafond de tokens de réponse (vide = valeur par défaut du fournisseur) ; les valeurs inférieures à 16384 sont refusées"
+      prompt_style:
+        label: "Symbole d'invite"
+        desc: "Symbole d'invite personnalisé (vide = flèche par défaut)"
+      output_language:
+        label: "Langue de sortie"
+        desc: "Langue préférée pour les réponses de l'IA (zh-CN, en-US, ja-JP, de-DE, fr-FR, es-ES)"
+      auto_suggest:
+        label: "Suggestion auto"
+        desc: "Afficher des suggestions automatiques basées sur l'historique pendant la frappe"
+      inline_completion:
+        label: "Complétion en ligne"
+        desc: "Complétion IA en ligne pendant la frappe"
+      inline_debounce_ms:
+        label: "Anti-rebond en ligne (ms)"
+        desc: "Délai avant de déclencher la complétion en ligne après l'arrêt de la frappe"
+      inline_context_lines:
+        label: "Lignes de contexte en ligne"
+        desc: "Nombre de lignes récentes du shell envoyées comme contexte à la complétion en ligne"
+      inline_max_tokens:
+        label: "Tokens max en ligne"
+        desc: "Plafond de tokens pour les réponses de complétion en ligne"
+      inline_min_input_chars:
+        label: "Caractères min en ligne"
+        desc: "Caractères minimum saisis avant le déclenchement de la complétion en ligne"
+      inline_timeout_secs:
+        label: "Délai d'attente en ligne (s)"
+        desc: "Secondes d'attente d'une complétion en ligne avant annulation"
+      inline_disable_thinking:
+        label: "Désactiver le raisonnement en ligne"
+        desc: "Supprimer les tokens de raisonnement/réflexion dans la complétion en ligne"
+      inline_enforce_json:
+        label: "Forcer JSON en ligne"
+        desc: "Forcer la complétion en ligne à renvoyer du JSON strict"
+      max_llm_messages:
+        label: "Messages LLM max"
+        desc: "Tours de conversation maximum conservés dans l'historique LLM"
+      enable_token_estimation:
+        label: "Activer l'estimation des tokens"
+        desc: "Utiliser tiktoken pour estimer le nombre de tokens afin de réduire le contexte"
+      input_guard_enabled:
+        label: "Input Guard"
+        desc: "Pré-filtrer la saisie selon les règles de commandes dangereuses"
+      enable_sandbox:
+        label: "Activer la sandbox"
+        desc: "Exécuter les commandes risquées dans une sandbox avant de les autoriser"
+      default_risk_level:
+        label: "Niveau de risque par défaut"
+        desc: "Niveau de risque de base pour les commandes non reconnues (low/medium/high)"
+      sandbox_off_action:
+        label: "Action sandbox désactivée"
+        desc: "Action lorsque la sandbox est indisponible (allow/confirm/block)"
+      sandbox_timeout_seconds:
+        label: "Délai d'attente sandbox (s)"
+        desc: "Secondes avant l'arrêt d'une pré-exécution sandbox"
+      memory_auto_recall:
+        label: "Rappel mémoire auto"
+        desc: "Afficher automatiquement les mémoires long terme pertinentes dans le contexte IA"
+      memory_auto_retain:
+        label: "Conservation mémoire auto"
+        desc: "Conserver automatiquement les faits notables dans la mémoire long terme"
+      context_auto_compact:
+        label: "Compactage auto du contexte"
+        desc: "Compacter automatiquement la conversation lorsque la pression du contexte augmente"
+      compact_full_enabled:
+        label: "Compactage complet"
+        desc: "Activer la passe de compactage complet qui résume les anciens tours"
+      compact_context_window_tokens:
+        label: "Tokens de fenêtre de contexte"
+        desc: "Fenêtre de contexte pour l'auto-compaction (vide = auto : fenêtre du modèle > budget hérité > défaut 262144/256k)"
+      compact_micro_keep_recent:
+        label: "Conservation récent micro-compactage"
+        desc: "Tours conservés tels quels pendant le micro-compactage"
+      compact_shell_keep_recent:
+        label: "Conservation récent compactage shell"
+        desc: "Tours de commandes shell conservés pendant le compactage shell"
+      compact_summary_max_tokens:
+        label: "Tokens max du résumé de compactage"
+        desc: "Plafond de tokens pour le résumé produit par le compactage complet"
+      compact_max_consecutive_failures:
+        label: "Échecs consécutifs max"
+        desc: "Échecs de compactage avant repli vers une troncature"
+      compact_reserved_output_tokens:
+        label: "Tokens de sortie réservés"
+        desc: "Tokens réservés pour la réponse du modèle, soustraits du budget de contexte"
+      history_size:
+        label: "Taille de l'historique"
+        desc: "Nombre maximum d'entrées conservées dans l'historique du shell"
+      max_shell_messages:
+        label: "Messages shell max"
+        desc: "Tours de commandes shell maximum conservés dans le contexte IA"
+      context_token_budget:
+        label: "Budget de tokens du contexte"
+        desc: "Limite stricte héritée qui tronque les anciens messages (pas une compression) ; vide = illimité"
+      enable_remote_git_prompt:
+        label: "Invite git distante"
+        desc: "Afficher la branche git dans les invites bash distantes (SSH/telnet)"
+      remote_rich_prompt:
+        label: "Invite distante riche"
+        desc: "Activer les invites distantes riches multi-lignes (user@host, cwd, git)"
+      remote_show_venv:
+        label: "Afficher venv distant"
+        desc: "Afficher le venv Python actif dans les invites distantes"
+      remote_show_container:
+        label: "Afficher conteneur distant"
+        desc: "Afficher les marqueurs de conteneur/runtime dans les invites distantes"
+      remote_show_kube:
+        label: "Afficher kube distant"
+        desc: "Afficher le contexte Kubernetes dans les invites distantes"
+      remote_danger_patterns:
+        label: "Motifs de danger distants"
+        desc: "Regex de noms d'hôte marquant le PS1 distant comme dangereux (séparés par des virgules)"
+      enable_langfuse:
+        label: "Activer Langfuse"
+        desc: "Activer le tracing d'observabilité LLM Langfuse"
+      langfuse_public_key:
+        label: "Clé publique Langfuse"
+        desc: "Clé publique Langfuse"
+      langfuse_secret_key:
+        label: "Clé secrète Langfuse"
+        desc: "Clé secrète Langfuse"
+      langfuse_host:
+        label: "Hôte Langfuse"
+        desc: "URL de l'instance Langfuse auto-hébergée"
+      enable_scripts:
+        label: "Activer les scripts"
+        desc: "Activer le système de scripts .aish et les hooks de cycle de vie"
+      log_level:
+        label: "Niveau de journalisation"
+        desc: " Verbosité du journal de tracing (error/warn/info/debug/trace)"
+      pty_daemon_enabled:
+        label: "Daemon PTY"
+        desc: "Conserver les sessions PTY entre les déconnexions via un daemon en arrière-plan"
+      codex_auth_path:
+        label: "Chemin d'auth Codex"
+        desc: "Chemin vers le fichier auth.json d'OpenAI Codex/ChatGPT"
+      session_db_path:
+        label: "Chemin de la base de sessions"
+        desc: "Emplacement personnalisé de la base de données des sessions (vide = valeur par défaut)"
+      skill_auto_search:
+        label: "Recherche auto de compétences"
+        desc: "L'IA cherche automatiquement dans les registres et suggère des installations sans skill correspondant"
+      skill_registries:
+        label: "Sources de registres de compétences"
+        desc: "Gérer les sources de recherche (skills.sh, skillhub.cn). Entrée pour gestionnaire interactif"
+
+  session:
+    iteration_limit_reached: "{count} iterations d'appels d'outils terminees."
+    iteration_limit_title: "⏸ Limite d'appels d'outils atteinte"
+    iteration_continue_prompt: "Continuer ? [Y/n]"
+  resume:
+    exit_command: "Reprendre le contexte IA : aish resume {session_id}"
+    usage: "Utilisation : /resume [session_id]"
+    session_store_unavailable: "Le stockage des sessions n'est pas disponible."
+    no_sessions: "Aucune session precedente trouvee."
+    recent_header: "Sessions recentes ({limit} max) :"
+    list_hint: "Reprendre avec : /resume <session_id>"
+    list_failed: "Impossible de lister les sessions : {error}"
+    not_found: "Session introuvable : {session_id}"
+    cwd_missing: "Le repertoire de travail enregistre n'existe plus ; conservation du repertoire courant : {cwd}"
+    resumed: "Session reprise : {session_id}"
+    selector_title: "Reprendre une session"
+    search_placeholder: "Rechercher..."
+    no_matches: "Aucune session correspondante."
+    current_marker: "(actuelle)"
+    selector_footer: "Tapez pour rechercher · ↑/↓ pour selectionner · Enter pour reprendre · Esc pour annuler"
+
+  export:
+    md_header: "# exportation de session aish"
+    session_label: "- **session** : `{uuid}`"
+    model_label: "- **modèle** : {model}"
+    api_base_label: "- **api_base** : {base}"
+    forked_label: "- **bifurquée de** : `{parent}`"
+    created_label: "- **créée** : {created}"
+    working_dir: "**répertoire de travail** : `{cwd}`"
+    conversation_header: "## Conversation"
+    history_header: "## Historique des commandes"
+    exported: "exporté {file} ({msgs} messages, {cmds} commandes)"
+    write_failed: "échec d'écriture de {file} : {error}"
+    usage: "usage : /export [md] [--raw]  (markdown uniquement ; --raw désactive le masquage et demande toujours confirmation)"
+    store_unavailable: "stockage de session indisponible ; export impossible"
+    not_found: "session actuelle introuvable dans le stockage"
+    load_failed: "échec du chargement de la session : {error}"
+    raw_warning: "EXPORT BRUT : les secrets (jetons, mots de passe, clés) de {msgs} messages et {cmds} commandes seront écrits EN CLAIR."
+    raw_confirm: "Écrire l'export sans masquage ?"
+    preview: "Aperçu de l'export → {file}  ({msgs} messages, {cmds} commandes, {hits} secret(s) détecté(s))"
+    preview_hits: "{hits} secret(s) seront remplacés par des marqueurs [REDACTED:…]."
+    not_scanned: "non analysé (mode brut)"
+    incomplete_warning: "avertissement : {failed} écriture(s) de transcription en échec ; l'export peut manquer des messages récents."
+    confirm: "Écrire le fichier d'export ?"
+    cancelled: "export annulé"
+  report:
+    usage: "usage : /report  (écrit la dernière réponse dans report.html et l'ouvre dans le navigateur sur une session de bureau ; --help affiche l'usage)"
+    generated: "rapport écrit : {file}"
+    opening: "ouverture de {file}"
+    open_failed: "impossible d'ouvrir le navigateur : {error}"
+    hint_local: "à ouvrir avec : xdg-open {file}"
+    hint_remote: "session distante ou sans affichage ; récupérez-le avec : scp <user>@<host>:'{file}' ."
+    store_unavailable: "stockage de session indisponible ; impossible de générer le rapport"
+    not_found: "session courante introuvable dans le stockage"
+    no_answer: "cette session n'a pas encore de réponse à exporter"
+    load_failed: "échec du chargement de la session : {error}"
+    write_failed: "échec de l'écriture de {file} : {error}"
+    html:
+      title: "réponse aish"
+      session: "Session"
+      model: "Modèle"
+      created: "Créée"
+      evidence: "Preuves"
+      evidence_empty: "Aucun appel d'outil n'a été enregistré pour ce tour."
+      evidence_hint: "Les {count} appels d'outil derrière cette réponse, dans l'ordre d'appel, avec les arguments et la sortie enregistrés. Rien n'a été réexécuté."
+      args_label: "Arguments"
+      output_label: "Sortie"
+      output_missing: "Aucun résultat n'a été enregistré pour cet appel."
+      tool_unknown: "(outil inconnu)"
+      status_ok: "ok"
+      status_truncated: "tronqué"
+      status_offloaded: "aperçu offload seul"
+      status_missing: "sans résultat"
+  audit:
+    disabled: "l'audit n'est pas activé. Définissez 'audit.enabled: true' dans security_policy.yaml."
+    usage: "usage : /audit [--user U] [--host H] [--event-type command|ai_tool|security_decision] [--session S] [--since T] [--until T] [--limit N]\n  dates au format RFC 3339, p. ex. 2026-01-01T00:00:00Z ; limite par défaut : 20"
+    permission_denied: "permission refusée : les non-root ne peuvent consulter que leurs propres événements d'audit"
+    query_failed: "échec de la requête du journal d'audit : {error}"
+    no_events: "Aucun événement d'audit trouvé."
+    col_timestamp: "HORODATAGE"
+    col_event: "ÉVÉNEMENT"
+    col_user: "UTILISATEUR"
+    col_host: "HÔTE"
+    col_details: "DÉTAILS"
+    summary: "{count} événement(s) affiché(s)."
+    filter_header: "filtres :"
+    filter_user: "utilisateur={value}"
+    filter_host: "hôte={value}"
+    filter_event_type: "type d'événement={value}"
+    filter_session: "session={value}"
+    filter_since: "depuis={value}"
+    filter_until: "jusqu'à={value}"
+    filter_limit: "limite={value}"
+    err_unknown_flag: "flag inconnu : {flag}"
+    err_missing_value: "le flag {flag} exige une valeur"
+    err_invalid_limit: "valeur --limit invalide : {value} (entier positif attendu)"
+    err_invalid_datetime: "date/heure {flag} invalide (utilisez RFC 3339, p. ex. 2026-01-01T00:00:00Z)"
+    err_invalid_event_type: "type d'événement invalide : {error}"
+    label_rc: "code={value}"
+    label_user: "utilisateur={value}"
+    label_rule: "règle={value}"
+  audit_export:
+    usage: "usage : /audit export [--user U] [--host H] [--event-type T] [--session S] [--since T] [--until T] [--limit N]\n  produit un répertoire avec audit.md, events.jsonl et manifest.json"
+    no_events: "aucun événement d'audit trouvé pour ces filtres"
+    permission_denied: "permission refusée : les non-root ne peuvent exporter que leurs propres événements d'audit"
+    mkdir_failed: "impossible de créer le répertoire temporaire : {error}"
+    build_failed: "impossible de construire le paquet d'audit : {error}"
+    publish_failed: "impossible de publier le paquet d'audit : {error}"
+    exported: "paquet d'audit exporté vers {path} ({events} événements, {files} fichiers)"
+  fork:
+    forked: "session bifurquée {short} (depuis {parent})"
+    switch_failed: "bifurcation créée mais le changement a échoué : {error}"
+    switch_manual: "utilisez `/resume {session_id}` pour changer manuellement"
+    failed: "échec de la bifurcation : {error}"
+    store_unavailable: "stockage de session indisponible ; bifurcation impossible"
+
+  sessions:
+    none: "(aucune session enregistrée)"
+    switch_failed: "échec du changement de session : {error}"
+    list_failed: "échec de la liste des sessions : {error}"
+
+  live_sessions:
+    daemon_disabled: "Daemon PTY desactive. Activer dans config.yaml :"
+    daemon_disabled_hint: "  pty_daemon_enabled: true"
+    none_active: "Aucune session PTY active."
+    panel_title: "Sessions PTY Actives"
+    search_placeholder: "Rechercher..."
+    panel_footer: "↑/↓ naviguer · Enter selectionner · Ctrl+E renommer · Esc annuler"
+    create_new: "Creer une nouvelle session"
+    already_current: "Deja dans cette session."
+    started_label: "demarre: {age}"
+    current_tag: "[actuel]"
+    rename_title: "Renommer la session {id}"
+    rename_current_none: "Nom actuel : (aucun)"
+    rename_current_set: "Nom actuel : {name}"
+    rename_input_label: "Entrez un nouveau nom (vide pour effacer)"
+    rename_input_footer: "Tapez un nom | Enter enregistrer | Esc annuler"
+    rename_done: "Session {id} renommee → \"{name}\""
+    rename_cleared: "Nom efface pour la session {id}"
+    rename_failed: "Echec du renommage : {err}"
+    exit_no_note_title: "Ajouter une note avant de détacher ?"
+    exit_no_note_hint: "Cette session n'a pas de note — les sessions sans nom sont difficiles a distinguer apres déconnexion."
+    exit_no_note_footer: "Enter enregistrer & détacher · Esc détacher sans nommer"
+    resource_detail: "CPU {cpu} · RSS {rss}"
+    resource_alert: "⚠ La session {id} a atteint le seuil de ressources (CPU {cpu} / RSS {rss}). Utilisez /live_sessions pour y basculer ou /kill_live_sessions pour la terminer."
+
+  kill_live_sessions:
+    daemon_disabled: "Daemon PTY desactive. Activer dans config.yaml :"
+    daemon_disabled_hint: "  pty_daemon_enabled: true"
+    none_active: "Aucune session PTY active."
+    list_header: "Sessions PTY actives :"
+    usage_hint: "Usage: /kill_live_sessions <id> [id ...]  ·  /kill_live_sessions all"
+    no_others: "Aucune autre session a terminer."
+    killing: "Terminaison de {id} ..."
+    kill_done: "fait"
+    kill_failed: "echec: {error}"
+    not_found: "Session '{id}' introuvable."
+    is_current: "{id} est la session actuelle — utilisez 'exit' pour quitter."
+    summary: "{killed} terminees, {failed} echouees."
+    all_terminated: "{count} session(s) terminee(s)."
+  rollback:
+    title: "Retour arrière"
+    prompt: "Revenir à une modification (abandonne celle-ci et les ultérieures):"
+    empty: "Aucune modification de fichier enregistrée cette session."
+    drift_summary: "{drifted} sur {count} fichier(s) modifiés depuis l'édition de l'IA."
+    drift_warning: "Drift détecté : le contenu disque diffère de la dernière édition de l'IA."
+    impact_summary: "{count} fichier(s) seront restaurés. Vérifiez les diffs ci-dessous :"
+    confirm: "Écraser ?"
+    confirm_overwrite: "Confirmer la restauration — écrasera les fichiers ci-dessus."
+    cancelled: "Retour arrière annulé."
+    partial: "Restauration partielle : {restored}/{total} fichiers réussis."
+  undo:
+    nothing_to_undo: "Aucune modification de fichier à annuler."
+    restored: "{path} restauré"
+    removed: "{path} supprimé"
+    restore_failed: "Restauration échouée: {error}"
+    remove_failed: "Suppression échouée: {error}"
+    drift_warning: "Drift détecté : le fichier a changé sur disque depuis l'édition de l'IA."
+    drift_deleted: "Le fichier n'existe plus sur le disque."
+    force_prompt: "Forcer l'écrasement ?"
+    force_confirm: "Confirmer : écraser le fichier modifié ?"
+    will_delete: "Le fichier sera supprimé par cette restauration."
+    cancelled: "Restauration abandonnée."
+    drift_blocked: "Restauration bloquée : {path} a été modifié après confirmation."
+    will_create: "nouveau fichier"
+    binary_or_unreadable: "binaire ou illisible"
+
+  time:
+    seconds_ago: "il y a {seconds}s"
+    minutes_ago: "il y a {minutes}min"
+    hours_ago: "il y a {hours}h"
+
+  skill:
+    title: "Skills"
+    search_placeholder: "Saisir pour filtrer..."
+    filtered_suffix: "  · filtré parmi {total}"
+    tab:
+      installed: "Installés"
+      browse: "Parcourir"
+      registries: "Registres"
+    footer:
+      installed: "Enter réviser · Esc quitter"
+      browse: "Saisir la requête · Enter sur 🔍 rechercher / sur une ligne installer · Esc effacer"
+      registries: "Espace activer/désactiver · Enter gérer · Esc quitter"
+    empty:
+      installed: "Aucun skill installé. Utilisez l'onglet Parcourir pour en trouver."
+      browse: "Saisissez une requête ci-dessus, puis Enter sur la ligne 🔍 pour rechercher."
+      registries: "Aucun registre configuré. Sélectionnez ＋ Ajouter pour en créer un."
+    row:
+      search: "Rechercher dans les registres"
+      add_registry: "＋ Ajouter un registre"
+      search_hint_empty: "Saisissez une requête ci-dessus, puis appuyez sur Entrée ici pour rechercher dans les registres."
+      search_hint_query: "Appuyez sur Entrée pour rechercher dans les registres : \"{query}\""
+    status:
+      trusted: "✓ approuvé"
+      quarantined: "⚠ en quarantaine"
+      no_skill_md: "✗ pas de SKILL.md"
+      registry_on: "[actif]"
+      registry_off: "[inactif]"
+      installs: "{registry} · {count} installations"
+      default_tag: " par défaut"
+    error:
+      empty_query: "Requête vide."
+      no_registries: "Aucun registre activé. Ajoutez-en un dans l'onglet Registres."
+      no_results: "Aucun skill trouvé."
+      install_failed: "Installation annulée ou échouée pour « {name} »."
+      unsafe_name: "Nom de skill non sûr : {name}"
+      not_found: "Skill « {name} » introuvable."
+      not_installed: "Le skill « {name} » n'est pas installé."
+      already_trusted: "Le skill « {name} » est déjà approuvé."
+      failed: "Échec : {error}"
+      trust_failed: "Échec de l'approbation de « {name} » : {error}"
+    search_progress: "Recherche de « {query} » ..."
+    notice_unknown: "« /skill {sub} » inconnu. Ouverture du gestionnaire de skills."
+    action:
+      menu_title: "Skill : {name}"
+      menu_question: "Sélectionner une action"
+      vet: "Examiner les fichiers (vet)"
+      trust: "Approuver"
+      verify: "Vérifier la structure"
+      remove: "Supprimer"
+    result:
+      trusted: "Skill « {name} » approuvé. Il sera chargé au prochain rafraîchissement des skills."
+      was_trusted: "Le skill « {name} » était déjà approuvé."
+      removed: "Skill « {name} » supprimé."
+      verify_line: "Skill : {name} | Valide : {valid}"
+      check_pass: "PASS"
+      check_fail: "FAIL"
+      verify_passed: "RÉUSSI"
+      verify_warnings: "AVERTISSEMENTS"
+      verify_valid: "valide"
+      verify_invalid: "invalide"
+      vet_quarantined: "\nCe skill est EN QUARANTAINE. Approuvez-le avec /skill trust {name} (ou /skill remove {name})."
+    review_gate:
+      prompt: "Révision de sécurité requise : le skill « {name} » est en quarantaine (non approuvé).\n  [a] révision IA automatique   [y] examiner les fichiers maintenant   [n] supprimer   (autre) garder en quarantaine : "
+      trust_hint: "Approbation après révision : ouvrez l'onglet Installés et sélectionnez le skill."
+      removed: "Skill en quarantaine « {name} » supprimé."
+      kept: "Gardé en quarantaine. Révisez-le dans l'onglet Installés."
+    vetter:
+      running: "Exécution de la révision IA du skill « {name} » (Ctrl+C pour annuler)..."
+      cancelled: "Révision annulée. Le skill « {name} » reste en quarantaine."
+      failed: "Échec de la révision IA : {error}. Le skill « {name} » reste en quarantaine."
+    registry:
+      restart_notice: "Redémarrez aish pour que les modifications des registres prennent effet."
+    usage:
+      install: "Utilisation : /skill install <ID>"
+      install_hint: "  Ou parcourir les skills disponibles : /skill search"
+      install_not_found: "Skill « {id} » introuvable. Utilisez /skill search pour trouver l'ID correct."
+      action: "Utilisation : /skill {action} <nom>"
+      searching_for: "Recherche de « {query} » ..."
+    review:
+      checklist: "\nListe de vérification : provenance · accès aux identifiants · exfiltration réseau · eval/exec · obfuscation base64 · sudo · téléchargements cachés · opérations destructives · injection de prompt."
+      could_not_read: "(impossible de lire SKILL.md : {error})"
+      skill_md_header: "\n--- {path} ---"
+      files_header: "\n--- fichiers dans {path} ---"
+    install:
+      installed_quarantined: "Installé : {name} (EN QUARANTAINE — non approuvé, non chargé)"
+      path_line: "  Chemin : {path}"
+      verify_line: "  Vérifier : {result}"
+      failed: "Échec de l'installation : {error}"
+
+  ask_user:
+    default_title: "Saisie utilisateur requise"
+    default_hint: "[defaut : {value}]"
+    custom_input_label: "(saisir une reponse personnalisee)"
+    footer: "Enter pour confirmer · ↑/↓ pour naviguer · Esc pour annuler"
+    cancel_hint: "Appuyez sur Echap ou Ctrl+C pour annuler."
+    required_error: "Une reponse est requise."
+    min_length_error: "Reponse trop courte (minimum {min} caracteres)."
+    interactive_terminal_required: "ask_user requiert un terminal interactif"
+    recommended_badge: "Recommande"
+    title: "Selectionnez une option"
+    custom_label: "Personnalise :"
+    hint_select: "Entree pour confirmer · ↑/↓ pour naviguer · Esc pour annuler"
+    hint_custom: "Entree pour confirmer · ↑/↓ pour naviguer · Tab ou saisie directe pour entrer du texte · Esc pour annuler"
+    paused:
+      title: "⏸ Saisie utilisateur requise (tache en pause)"
+      prompt: "Question : {prompt}"
+      reason: "Raison : {reason}"
+      options_header: "Options :"
+      custom_input: "Vous pouvez aussi repondre avec n'importe quelle valeur personnalisee."
+      how_to: "Repondez avec une valeur d'option (ou un numero) ou tapez ; continue with default (par defaut : {default})."
+  diagnose_cancelled: "  └─ ❌ Diagnostic systeme annule"
+
+  compaction:
+    completed: "Contexte compressé"
+    completed_with_tokens: "Contexte compressé, environ {tokens} tokens récupérés"
+
+  compact:
+    started: "Compression du contexte…"
+    completed: "Compression terminée. Tokens : {before} → {after} ({saved} économisés)"
+    cancelled: "Compression annulée ; contexte inchangé"
+    failed: "Échec de la compression : {error} (contexte inchangé)"
+  status:
+    thinking: "Reflexion"
+    compacting_context: "Compression du contexte"
+    thinking_now: "Reflexion"
+    processing: "Traitement"
+    analyzing: "  Analyse..."
+    system_diagnosing: "  └─ Diagnostic systeme en cours"
+    system_analyzing: "  └─ Analyse systeme en cours"
+  tool:
+    prefix: "🔧 Utilisation de l'outil"
+    prefix_diagnose: "  └─ 🔧 Outil de diagnostic"
+    done_diagnose: "  └─ ✅ Diagnostic termine"
+
+  sub_agent:
+    thinking: "Reflexion"
+
+security:
+  sandbox_off_action:
+    allow: "Autoriser directement"
+    confirm: "Demander confirmation"
+    block: "Bloquer"
+  sandbox_unavailable:
+    title: "⚠️ Sandbox indisponible"
+    line1: "Le sandbox est indisponible ; le risque de la commande ne peut pas etre evalue."
+    line2: "Les commandes generees par l'IA suivantes seront traitees ainsi : {action}."
+    policy_line1: "Le sandbox est desactive par politique ; aucune execution de sandbox n'a eu lieu."
+    policy_line2: "Les commandes IA seront traitees ainsi : {action}."
+    reason: "Raison : {reason}"
+    error: "Erreur : {error}"
+    root_required: "Le sandbox requiert les privileges root"
+    ipc_unavailable: "Impossible de se connecter au service sandbox (aish-sandbox.socket n'est pas en cours d'execution ou n'est pas installe)"
+    ipc_failed: "Echec de l'execution du service sandbox (aish-sandbox)"
+    sandbox_execute_failed: "Impossible d'evaluer le risque de la commande ; veuillez confirmer avant l'execution"
+  risk_reason:
+    sandbox_disabled_by_policy: "Le sandbox est desactive par politique ; les modifications de fichiers ne peuvent pas etre inspectees pour l'evaluation du risque. Action : {action}."
+    sandbox_disabled: "Le sandbox n'est pas active ou est desactivee ; les modifications de fichiers ne peuvent pas etre inspectees pour l'evaluation du risque. Action : {action}."
+    cwd_outside_repo_root: "Le repertoire courant {cwd} est hors de la racine du sandbox {root} ; les effets relatifs ne peuvent pas etre evalues de facon fiable. Action : {action}."
+    sandbox_unavailable: "L'initialisation ou l'execution du sandbox a echoue ; les modifications de fichiers ne peuvent pas etre inspectees pour l'evaluation du risque. Action : {action}."
+    sandbox_exception: "Erreur d'execution du sandbox ; les modifications de fichiers ne peuvent pas etre inspectees pour l'evaluation du risque. Action : {action}."
+    sandbox_failed: "Echec du sandbox ; les modifications de fichiers ne peuvent pas etre inspectees pour l'evaluation du risque. Action : {action}."
+    policy_fallback_rule_match: "Avec le sandbox desactive par politique, la commande {command} a correspondu a {count} chemins de regles de secours ; traitement comme risque {risk}."
+  ai_risk:
+    no_fs_changes: "Le sandbox n'a detecte aucune ecriture ou suppression de fichier."
+    high_hits: "{count} operations d'ecriture ou de suppression correspondant a des regles a haut risque ont ete detectees."
+    medium_hits: "{count} operations d'ecriture ou de suppression correspondant a des regles a risque moyen ont ete detectees."
+    low_or_unmatched_hits: "{count} operations d'ecriture ou de suppression a faible risque ou sans correspondance ont ete detectees."
+    preview_paths: "Exemples de chemins (partiels, pouvant inclure des fichiers ou repertoires) : {paths}"
+  command_blocked: "Erreur : commande bloquee par le systeme de securite"
+  command_blocked_with_reason: "Erreur : commande bloquee par le systeme de securite : {reason}"
+tools:
+  fs:
+    read_file:
+      missing_path: "Paramètre 'path' manquant"
+      read_failed: "Échec de lecture de {path} : {error}"
+      file_too_large: "Le fichier {path} fait {size} octets, dépassant la limite de {limit} octets. Utilisez edit_file avec start_line/end_line pour éditer par plage de lignes."
+      decode_failed: "Échec de décodage de {path} en UTF-8 : {error}"
+      empty_file: "(fichier vide)"
+      offset_exceeds_length: "L'offset {offset} dépasse la longueur du fichier ({length})"
+      access_denied: "Accès refusé : le chemin n'est pas dans le répertoire offload"
+      large_file_truncated: "\n[... fichier {path} fait {size} octets / {lines} lignes ; affichage de {shown} lignes depuis l'offset {offset}. Utilisez offset/limit pour lire plus ...]"
+      large_file_no_tag: "fichier volumineux : lecture partielle, aucune balise d'instantané disponible"
+    edit_file:
+      missing_path: "Paramètre 'path' manquant"
+      missing_old_string: "Paramètre 'old_string' manquant"
+      missing_new_string: "Paramètre 'new_string' manquant"
+      edit_read_failed: "Échec de lecture de {path} : {error}"
+      file_too_large: "Le fichier {path} fait {size} octets, dépassant la limite de {limit} octets. Utilisez start_line/end_line pour éditer par plage."
+      old_string_not_found: "'old_string' introuvable dans {path}"
+      old_string_not_found_prefix_hint: "'old_string' introuvable dans {path}, mais son préfixe '{prefix}' apparaît {count} fois — probable suffixe incorrect"
+      old_string_ambiguous: "'old_string' apparaît {count} fois dans {path} - utilisez replace_all=true ou plus de contexte"
+      edit_success: "{path} modifié"
+      edit_write_failed: "Échec d'écriture de {path} : {error}"
+      not_undoable_confirm: "Modifier {path} : impossible de sauvegarder le contenu précédent, cette modification est IRREVERSIBLE (/undo ne pourra pas la restaurer). Continuer ?"
+      stale_tag: "Le fichier {path} a changé depuis la dernière lecture — relisez-le avant de modifier"
+      invalid_tag: "Étiquette d'instantané '{tag}' invalide pour {path}"
+      invalid_line_range: "Plage de lignes invalide : start_line={start}, end_line={end}. start_line doit être >= 1 et end_line >= start_line."
+      line_range_out_of_bounds: "Le début de plage {start} dépasse la longueur du fichier ({lines} lignes). Utilisez un start_line dans le fichier."
+      not_undoable_suffix: " (irréversible : le contenu précédent est trop volumineux)"
+    write_file:
+      missing_path: "Paramètre 'path' manquant"
+      missing_content: "Paramètre 'content' manquant"
+      content_too_large: "Le contenu pour {path} fait {size} octets, dépassant la limite de {limit} octets"
+      create_dirs_failed: "Échec de création des répertoires parents : {error}"
+      write_success: "{bytes} octets écrits dans {path}"
+      write_failed: "Échec d'écriture de {path} : {error}"
+      not_undoable_confirm: "Écraser {path} : impossible de sauvegarder le contenu précédent, cette modification est IRREVERSIBLE (/undo ne pourra pas la restaurer). Continuer ?"
+      not_undoable_suffix: " (irréversible : le contenu précédent n'a pas pu être sauvegardé)"
+    undo_edit:
+      nothing_to_undo: "Aucune modification de fichier à annuler."
+      restored: "{path} restauré à son contenu précédent."
+      removed: "{path} supprimé (créé par la modification annulée)."
+      restore_failed: "Échec de la restauration de {path} : {error}"
+      remove_failed: "Échec de la suppression de {path} : {error}"
+      drifted: "Le fichier {path} a changé depuis l'édition de l'IA. Relisez le fichier et réessayez."
+  ask_user:
+    description: "Poser a l'utilisateur une question de clarification ciblee. Avec seulement prompt, ask_user utilise la saisie texte ; avec options, il propose des choix."
+    unknown_kind: "Type inconnu : {kind}"
+    runtime_not_configured: "le runtime ask_user n'est pas configure"
+    execute_failed: "echec de ask_user : {error}"
+    param:
+      kind: "Type d'interaction : text_input pour saisie libre, choice_or_text pour options avec saisie personnalisee"
+      prompt: "La question a poser a l'utilisateur."
+      options: "Choix optionnels a proposer a l'utilisateur. S'ils sont absents ou vides, ask_user utilise la saisie texte."
+      option_value: "Valeur stable de l'option retournee dans les metadonnees de l'outil."
+      option_label: "Libelle affiche a l'utilisateur dans la liste."
+      option_description: "Detail optionnel affiche sous l'option."
+      option_recommended: "Marque visiblement cette option comme recommandee."
+      title: "Titre optionnel pour la question"
+      default: "Valeur par defaut"
+      placeholder: "Texte indicatif"
+      allow_freeform_input: "Quand des options sont presentes, autorise une reponse personnalisee. La valeur par defaut est true."
+      required: "Indique si l'utilisateur doit fournir une reponse (par defaut : true)"
+      allow_cancel: "Indique si l'utilisateur peut annuler/ignorer (par defaut : true)"
+      min_length: "Longueur minimale pour la saisie texte (par defaut : 0)"
+    validation:
+      prompt_empty: "prompt ne peut pas etre vide"
+      option_value_empty: "option value ne peut pas etre vide"
+      option_label_empty: "option label ne peut pas etre vide"
+      option_values_unique: "option value doit etre unique"
+      option_labels_unique: "option label doit etre unique"
+      recommended_unique: "une seule option peut etre marquee comme recommandee au maximum"
+      default_must_match_option: "default doit correspondre a un option value"
+      legacy_choice_requires_options: "options doit etre une liste non vide pour choice_or_text"
+    result:
+      selected: "L'utilisateur a choisi : {label} (valeur : {value})"
+      text: "Saisie utilisateur : {value}"
+      empty_answer: "L'utilisateur a fourni une reponse vide."
+      cancelled: "L'utilisateur a annule la question."
+
+  smart_log:
+    summary:
+      file: "[FICHIER] {ident} : {matched}/{total} lignes correspondantes\nExemple :\n{sample}"
+      dir: "[REP] {path} : {matched}/{total} lignes correspondantes\nExemple :\n{sample}"
+      systemd: "[SYSTEMD] {ident} : {matched}/{total} lignes correspondantes\nExemple :\n{sample}"
+      call_failed: "[{stype}] {ident} : appel echoue\n{output}"
+    no_logs_found: "Aucun journal ou aucune information correspondante trouve(e)."
+
+  bash:
+    invalid_timeout: "Délai invalide : doit être un nombre entier positif de secondes"
+    command_timeout: "Commande interrompue après {timeout}s (délai dépassé). Le résultat est peut-être incomplet."
+    security_handling_required: "la commande bash nécessite un traitement de sécurité de niveau {level}"
+
+  memory:
+    missing_action: "Paramètre 'action' manquant"
+    unknown_action: "Action inconnue : {action}. Utilisez search/store/forget/list."
+    search_missing_query: "Paramètre 'query' manquant pour search"
+    store_missing_content: "Paramètre 'content' manquant pour store"
+    forget_missing_id: "Paramètre 'memory_id' manquant pour forget"
+    no_results: "Aucune mémoire correspondante trouvée."
+    stored: "Enregistré comme mémoire #{id}."
+    forgot: "Mémoire #{id} oubliée."
+    not_found: "Mémoire #{id} introuvable."
+    empty: "Aucune mémoire pour le moment."
+    not_available: "mémoire indisponible"
+    confirm_store: "Confirmer la sauvegarde de la mémoire ?"
+    confirm_forget: "Confirmer l'oubli de la mémoire"
+    field_category: "Catégorie"
+    field_scope: "Portée"
+    field_ttl: "Durée de vie"
+    field_reason: "Raison"
+    field_expires: "expire"
+    expired_tag: "EXPIRÉ"
+    list_header: "Mémoires à long terme :"
+    verify_usage: "Usage : /memory verify <id>"
+    forget_usage: "Usage : /memory forget <id>"
+    invalid_id: "ID de mémoire invalide : {id}"
+    verified: "Mémoire #{id} vérifiée (expiration effacée)."
+    no_expired: "Aucune mémoire expirée."
+    cleared_expired: "{count} mémoire(s) expirée(s) effacée(s)."
+    unknown_subcommand: "Sous-commande inconnue : {subcommand}. Utilisez list/verify/forget/clear-expired."
+
+help:
+  labels:
+    usage: "Utilisation"
+    options: "Options"
+    examples: "Exemples"
+    notes: "Notes"
+    brief_usage: "Utilisation : {usage}"
+  general:
+    title: "Aide AI Shell"
+    markdown: |-
+      ## Démarrage rapide
+      - **Commandes Shell** — saisissez directement : `ls`, `cd`, `vim`, `ssh`, `top` …
+      - **Demander à l'IA** — préfixez par `;` : `;comment trouver les gros fichiers`
+      - **Commandes slash** — appuyez sur `/` sur une ligne vide pour le sélecteur interactif
+
+      ## Commandes Slash
+      | Commande | Description |
+      |----------|-------------|
+      | `/help [page]` | Afficher l'aide (`/help` pour les pages) |
+      | `/quit` | Quitter AI Shell |
+      | `/model [nom]` | Afficher ou changer le modèle IA |
+      | `/setup` | Reconfigurer les paramètres API |
+      | `/setting` | Ouvrir le panneau de configuration interactif |
+      | `/plan [start\|status\|exit]` | Contrôle du mode plan |
+      | `/token` | Afficher l'utilisation des tokens (7 derniers jours) |
+      | `/resume [id]` | Reprendre une session précédente |
+      | `/feedback` | Envoyer un commentaire ou signaler un bug |
+
+      ## Configuration
+      - Fichier de configuration : `~/.config/aish/config.yaml`
+      - Priorité : arguments CLI > variables d'environnement (`AISH_MODEL`, `AISH_API_KEY`, `AISH_API_BASE`) > fichier de config
+      - Exécutez `/setup` ou `aish setup` pour la configuration interactive
+
+      ## Gestion des sessions
+      - `aish -c` — se connecter à une session active (ou choisir dans une liste)
+      - `Ctrl+Q` — détacher la session courante (continue en arrière-plan) ; reconnecter avec `aish -c`
+      - `Ctrl+E` — renommer la session sélectionnée dans le sélecteur
+
+      ## Raccourcis clavier
+      | Touche | Action |
+      |--------|--------|
+      | `Ctrl+C` | Annuler l'opération en cours (appuyer deux fois pour quitter) |
+      | `Ctrl+D` | Quitter le shell |
+      | `Shift+Tab` / `F2` | Basculer le mode plan |
+      | `Ctrl+O` | Parcourir l'historique de sortie |
+      | `Ctrl+Q` | Détacher la session (reconnecter avec `aish -c`) |
+      | `Ctrl+E` | Renommer la session (dans le sélecteur) |
+      | `/` sur ligne vide | Sélecteur de commandes slash |
+
+      ## Pages d'aide
+      `/help <page>` pour les détails sur les fonctions spécifiques d'aish :
+
+      | Page | Contenu |
+      |------|---------|
+      | `ai` | Assistant IA (préfixe `;`, contexte, conversation) |
+      | `model` | Gestion des modèles (afficher, changer, fournisseurs) |
+      | `plan` | Mode plan (flux, approbation, vs mode normal) |
+      | `config` | Configuration (fichiers, variables, priorité) |
+      | `shortcuts` | Raccourcis clavier (édition, contrôle, changement de mode) |
+      | `security` | Politique de sécurité (niveaux, règles, détection) |
+
+      ## Plus
+      - Politique de sécurité : `~/.config/aish/security_policy.yaml`
+      - Base de données de sessions : `~/.local/share/aish/sessions.db`
+      - Journaux : `~/.config/aish/logs/aish.log`
+      - Documentation : https://github.com/AI-Shell-Team/aish
+
+  topics:
+    unknown: "Page d'aide inconnue '{topic}'. Pages disponibles : ai, model, plan, config, shortcuts, security"
+
+    ai:
+      title: "Assistant IA"
+      markdown: |-
+        ## Poser une question à l'IA
+
+        Préfixez votre question avec `;` (point-virgule) ou `；` (point-virgule pleine chasse) :
+
+        ```
+        ; comment trouver les gros fichiers ?
+        ; explique cette commande : ls -la
+        ; suggère une meilleure méthode de compression
+        ```
+
+        L'IA voit le contexte de votre conversation, y compris les commandes shell précédentes et les réponses de l'IA.
+
+        ## Fonctionnement
+
+        - Votre question est envoyée au modèle LLM configuré
+        - L'IA reçoit l'historique de conversation comme contexte
+        - Les réponses sont affichées avec coloration syntaxique et formatage de tableaux
+
+        ## Gestion du contexte
+
+        - L'historique de conversation est maintenu automatiquement
+        - Le compactage automatique se déclenche quand le budget de tokens est dépassé
+        - Les anciens messages sont résumés pour garder le contexte récent
+
+    model:
+      title: "Gestion des modèles"
+      markdown: |-
+        ## Afficher et changer de modèle
+
+        ```
+        /model                    # Afficher le modèle actuel
+        /model gpt-4o             # Passer à GPT-4o
+        /model claude-sonnet-4-6  # Passer à Claude
+        ```
+
+        ## Fournisseurs pris en charge
+
+        | Fournisseur | Préfixe du modèle |
+        |-------------|------------------|
+        | OpenAI | `gpt-*`, `o1-*`, `o3-*`, `o4-*` |
+        | Anthropic | `claude-*` |
+        | Google | `gemini-*`, `gemma-*` |
+        | DeepSeek | `deepseek-*` |
+        | Qwen | `qwen-*`, `qwq-*` |
+        | Mistral | `mistral-*`, `mixtral-*`, `codestral-*` |
+        | xAI | `grok-*` |
+        | Moonshot | `kimi-*`, `moonshot-*` |
+        | Zhipu | `glm-*` |
+        | Local | Ollama, vLLM, API locale |
+
+        ## Comportement du changement
+
+        - Le fournisseur est détecté automatiquement selon le nom du modèle
+        - La connectivité est validée avant le changement
+        - En cas d'échec, le modèle actuel est conservé
+        - La config est sauvegardée automatiquement dans `~/.config/aish/config.yaml`
+
+    plan:
+      title: "Mode Plan"
+      markdown: |-
+        ## Qu'est-ce que le mode Plan ?
+
+        Le mode Plan permet à l'IA d'analyser votre base de code et de créer un plan d'implémentation détaillé avant d'écrire du code. Les modifications ne sont appliquées qu'après votre approbation.
+
+        ## Commandes
+
+        ```
+        /plan start     # Entrer en mode plan
+        /plan status    # Afficher l'état du plan actuel
+        /plan exit      # Quitter le mode plan
+        ```
+
+        Vous pouvez aussi basculer le mode plan avec `Shift+Tab` ou `F2`.
+
+        ## Utilisation
+
+        1. Entrer en mode plan : `/plan start`
+        2. Demander à l'IA de planifier : `; refactoriser le module auth pour utiliser JWT`
+        3. L'IA génère un plan avec des étapes et des modifications de fichiers
+        4. Examiner le plan et approuver ou rejeter chaque étape
+        5. Une fois approuvé, les modifications sont appliquées
+        6. Quitter le mode plan : `/plan exit`
+
+        ## Mode Plan vs Mode Normal
+
+        | | Mode Normal | Mode Plan |
+        |---|---|---|
+        | Outils IA | Accès complet | Lecture seule + écriture du plan |
+        | Modifications | Immédiates | Après approbation |
+        | Idéal pour | Corrections rapides, questions | Refactorisation, nouvelles fonctionnalités |
+
+    config:
+      title: "Configuration"
+      markdown: |-
+        ## Fichier de configuration
+
+        Emplacement : `~/.config/aish/config.yaml`
+
+        Remplaçable avec `$AISH_CONFIG_DIR` ou `$XDG_CONFIG_HOME`.
+
+        ## Priorité
+
+        Arguments CLI > variables d'environnement > fichier de configuration
+
+        ## Variables d'environnement
+
+        | Variable | Usage |
+        |----------|-------|
+        | `AISH_MODEL` | Remplacer le modèle par défaut |
+        | `AISH_API_KEY` | Remplacer la clé API |
+        | `AISH_API_BASE` | Remplacer l'URL de base de l'API |
+        | `AISH_CONFIG_DIR` | Remplacer le répertoire de configuration |
+
+        ## Paramètres principaux
+
+        ```
+        model: gpt-4o                    # Modèle LLM par défaut
+        api_key: sk-xxx                  # Clé API
+        api_base: https://api.openai.com/v1  # Point d'accès API
+        temperature: 0.3                 # Aléatoire des réponses
+        theme: dark                      # Thème UI (dark/light)
+        output_language: fr              # Forcer la langue de sortie
+        ```
+
+        ## Assistant de configuration
+
+        Exécutez `/setup` ou `aish setup` pour une configuration interactive. Les paramètres prennent effet immédiatement sans redémarrage.
+
+        ## Autres fichiers
+
+        - Politique de sécurité : `~/.config/aish/security_policy.yaml`
+        - Base de données de sessions : `~/.local/share/aish/sessions.db`
+        - Journaux : `~/.config/aish/logs/aish.log`
+
+    shortcuts:
+      title: "Raccourcis clavier"
+      markdown: |-
+        ## Édition
+
+        | Touche | Action |
+        |--------|--------|
+        | `Tab` | Auto-complétion |
+        | `↑` / `↓` | Naviguer dans l'historique |
+        | `Ctrl+R` | Rechercher dans l'historique |
+        | `Ctrl+L` | Effacer l'écran |
+        | `Backspace` / `Delete` | Supprimer un caractère |
+
+        ## Contrôle du shell
+
+        | Touche | Action |
+        |--------|--------|
+        | `Ctrl+C` | Annuler l'opération en cours (appuyer deux fois pour quitter) |
+        | `Ctrl+D` | Quitter le shell |
+        | `Ctrl+O` | Parcourir l'historique de sortie |
+        | `Échap` | Annuler la saisie en cours |
+
+        ## Gestion des sessions
+
+        | Touche | Action |
+        |--------|--------|
+        | `Ctrl+Q` | Détacher la session (reste active ; reconnecter avec `aish -c`) |
+        | `Ctrl+E` | Renommer la session sélectionnée (dans le sélecteur) |
+
+        ## Changement de mode
+
+        | Touche | Action |
+        |--------|--------|
+        | `Shift+Tab` / `F2` | Basculer le mode plan |
+        | `/` sur ligne vide | Ouvrir le sélecteur de commandes |
+
+    security:
+      title: "Politique de sécurité"
+      markdown: |-
+        ## Aperçu
+
+        aish utilise un fichier de politique de sécurité pour contrôler quelles commandes et opérations de fichiers nécessitent une confirmation ou sont bloquées.
+
+        ## Emplacement de la configuration
+
+        Chemin :
+        1. Chemin explicitement spécifié
+        2. `~/.config/aish/security_policy.yaml` (généré depuis le modèle embarqué si absent)
+
+        ## Niveaux de risque
+
+        | Niveau | Comportement |
+        |--------|-------------|
+        | `LOW` | Autorisé, journalisé |
+        | `MEDIUM` | Demande de confirmation |
+        | `HIGH` | Bloqué ou nécessite une confirmation explicite |
+
+        ## Structure des règles
+
+        ```yaml
+        rules:
+          - id: protect-system
+            name: Protéger les répertoires système
+            path: ["/boot/**", "/etc/passwd"]
+            operations: [WRITE, DELETE]
+            risk: HIGH
+            reason: "Les fichiers système ne doivent pas être modifiés"
+        ```
+
+        ## Motifs de chemin
+
+        - `*` correspond à un seul segment de chemin
+        - `**` correspond à zéro ou plusieurs segments de chemin
+        - Variables : `$HOME`, `$PWD`
+
+        ## Détection de secrets
+
+        Motifs intégrés pour la détection de clés API (OpenAI, Anthropic, AWS, Google, GitHub, Stripe, Slack), de tokens JWT et d'URL avec mots de passe intégrés. Motifs personnalisés via `secret_patterns`.
+
+  command:
+    history:
+      title: "📚 Historique"
+      description: "Afficher ou manipuler l'historique des commandes"
+      usage: "history [options] [n]"
+      options:
+        - ["--help, -h", "Afficher ce message d'aide"]
+        - ["-c", "Effacer la liste d'historique en supprimant toutes les entrees"]
+        - ["-d offset", "Supprimer l'entree d'historique a la position offset"]
+        - ["n", "Afficher seulement les n dernieres commandes"]
+      examples:
+        - "history              # Afficher tout l'historique des commandes"
+        - "history 10           # Afficher les 10 dernieres commandes"
+        - "history -c           # Effacer tout l'historique"
+        - "history -d 5         # Supprimer l'entree d'historique a la position 5"
+        - "history --help       # Afficher ce message d'aide"
+      notes: "Les entrees d'historique sont enregistrees automatiquement pour toutes les commandes executees et les interactions avec l'IA."
+
+    cd:
+      title: "📁 Changer de repertoire"
+      description: "Changer le repertoire de travail courant avec prise en charge complete des parametres"
+      usage: "cd [-L|[-P [-e]]] [directory]"
+      options:
+        - ["-L", "Forcer le suivi des liens symboliques : resoudre les liens symboliques apres le traitement des occurrences de '..' (par defaut)"]
+        - ["-P", "Utiliser la structure physique des repertoires sans suivre les liens symboliques : resoudre les liens symboliques avant le traitement des occurrences de '..'"]
+        - ["-e", "Si l'option -P est fournie et que le repertoire de travail courant ne peut pas etre determine, quitter avec un code non nul"]
+        # - ["-@", "Sur les systemes qui le prennent en charge, presenter les fichiers avec attributs etendus comme des repertoires contenant les attributs du fichier"]
+        - ["directory", "Chemin du repertoire cible (optionnel, utilise le repertoire personnel par defaut)"]
+        - ["-", "Revenir au repertoire precedent"]
+      examples:
+        - "cd ~                 # Aller au repertoire personnel"
+        - "cd /tmp              # Aller au repertoire /tmp"
+        - "cd -                 # Revenir au repertoire precedent"
+        - "cd \"path with spaces\" # Utiliser des guillemets pour les chemins contenant des espaces"
+        - "cd -P /tmp           # Utiliser la resolution de chemin physique"
+        - "cd -P -e /tmp        # Utiliser la resolution de chemin physique et quitter en cas d'erreur"
+        - "cd -L /tmp           # Forcer le suivi des liens symboliques (comportement par defaut)"
+        # - "cd -@ /tmp           # Afficher les attributs etendus (si pris en charge)"
+      notes: "Prend en charge l'autocompletion par Tab et les chemins avec caracteres speciaux. Le comportement par defaut suit les liens symboliques (-L)."
+
+    pushd:
+      title: "📤 Empiler un repertoire"
+      description: "Ajouter un repertoire a la pile et s'y deplacer"
+      usage: "pushd [directory]"
+      options:
+        - ["directory", "Chemin du repertoire cible"]
+        - ["(no args)", "Echanger les deux repertoires au sommet de la pile"]
+      examples:
+        - "pushd /tmp           # Ajouter le repertoire courant a la pile et aller a /tmp"
+        - "pushd                # Echanger entre le repertoire courant et le precedent"
+      notes: "Maintient une pile de repertoires pour naviguer facilement entre plusieurs repertoires."
+
+    popd:
+      title: "📥 Depiler un repertoire"
+      description: "Retirer un repertoire de la pile et s'y deplacer"
+      usage: "popd"
+      options: []
+      examples:
+        - "popd                 # Revenir au repertoire precedent depuis la pile"
+      notes: "Retire le repertoire au sommet de la pile et s'y deplace."
+
+    dirs:
+      title: "📋 Afficher la pile de repertoires"
+      description: "Afficher la pile de repertoires"
+      usage: "dirs [-c]"
+      options:
+        - ["-c", "Effacer la pile de repertoires"]
+      examples:
+        - "dirs                 # Afficher la pile de repertoires actuelle"
+        - "dirs -c              # Effacer la pile de repertoires"
+      notes: "Affiche tous les repertoires actuellement presents dans la pile de navigation."
+
+    help:
+      title: "❓ Aide"
+      description: "Afficher les commandes et fonctionnalites disponibles"
+      usage: "help"
+      options: []
+      examples:
+        - "help                 # Afficher l'aide generale"
+      notes: "Fournit un apercu de toutes les commandes et fonctionnalites disponibles du shell."
+
+    clear:
+      title: "🧹 Effacer l'ecran"
+      description: "Effacer l'ecran du terminal"
+      usage: "clear"
+      options: []
+      examples:
+        - "clear                # Effacer l'ecran du terminal"
+      notes: "Equivalent a la commande Unix standard clear."
+
+    exit:
+      title: "🚪 Quitter le shell"
+      description: "Quitter AI Shell"
+      usage: "exit"
+      options: []
+      examples:
+        - "exit                 # Quitter le shell"
+        - "quit                 # Methode alternative pour quitter"
+      notes: "Quitte proprement le shell en preservant les donnees de session."
+
+    export:
+      title: "🔧 Exporter les variables d'environnement"
+      description: "Definir ou afficher les variables d'environnement avec attribut d'export"
+      usage: "export [-fn] [name[=value] ...]\nexport -p"
+      options:
+        - ["-f", "Le nom fait reference a une fonction shell (non pris en charge)"]
+        - ["-n", "Retirer l'attribut d'export de chaque nom"]
+        - ["-p", "Afficher la liste de toutes les variables exportees"]
+        - ["--", "Desactiver le traitement ulterieur des options"]
+      examples:
+        - "export PATH=/usr/local/bin:$PATH"
+        - "export EDITOR=vim"
+        - "export -n VAR  # Retirer l'attribut d'export de VAR"
+        - "export -p      # Afficher toutes les variables exportees"
+        - "export JAVA_HOME=\"/usr/lib/jvm/java-11-openjdk\""
+        - "export -- -VAR  # Definir une variable nommee -VAR"
+      notes: "Les variables d'environnement definies avec export sont transmises aux processus enfants."
+
+    unset:
+      title: "🗑️ Supprimer les variables d'environnement"
+      description: "Supprimer les variables et fonctions du shell"
+      usage: "unset [-f] [-v] [-n] [name ...]"
+      options:
+        - ["-f", "Chaque nom fait reference a une fonction shell (non pris en charge)"]
+        - ["-v", "Chaque nom fait reference a une variable shell (par defaut)"]
+        - ["-n", "Chaque nom fait reference a une reference de nom (non pris en charge)"]
+        - ["--", "Desactiver le traitement ulterieur des options"]
+      examples:
+        - "unset TEMP_VAR"
+        - "unset -v VAR1 VAR2"
+        - "unset JAVA_HOME"
+        - "unset -- -VAR  # Supprimer la variable nommee -VAR"
+      notes: "Retire les variables de l'environnement du shell. Les variables inexistantes sont ignorees."
+
+    pwd:
+      title: "📍 Afficher le repertoire courant"
+      description: "Afficher le repertoire de travail courant avec gestion des liens symboliques"
+      usage: "pwd [-L|-P]"
+      options:
+        - ["-L", "Afficher le chemin logique (suivre les liens symboliques, par defaut)"]
+        - ["-P", "Afficher le chemin physique (resoudre les liens symboliques)"]
+      examples:
+        - "pwd                  # Afficher le repertoire courant logique"
+        - "pwd -L               # Afficher le chemin logique (respecte les liens symboliques)"
+        - "pwd -P               # Afficher le chemin physique (resout les liens symboliques)"
+      notes: "Le comportement par defaut affiche le chemin logique en respectant les liens symboliques."
+
+    ";":
+      title: "🤖 Assistant IA"
+      description: "Poser une question a l'assistant IA"
+      usage: "; <question>"
+      options:
+        - ["question", "Votre question pour l'assistant IA"]
+      examples:
+        - "; comment trouver de gros fichiers ?"
+        - "; explique cette commande : ls -la"
+        - "; suggere une meilleure facon de compresser des fichiers"
+      notes: "L'assistant IA peut aider avec les explications de commandes, les suggestions et l'usage general du shell."
+
+    "；":
+      title: "🤖 Assistant IA"
+      description: "Poser une question a l'assistant IA"
+      usage: "； <question>"
+      options:
+        - ["question", "Votre question pour l'assistant IA"]
+      examples:
+        - "； comment trouver de gros fichiers ?"
+        - "； explique cette commande : ls -la"
+        - "； suggere une meilleure facon de compresser des fichiers"
+      notes: "L'assistant IA peut aider avec les explications de commandes, les suggestions et l'usage general du shell."
+
+    "/model":
+      title: "🧠 Changer de modele"
+      description: "Afficher le modele actuel ou passer a un modele specifie"
+      usage: "/model [model]"
+      options:
+        - ["model", "Identifiant du modele cible (verifie pour la prise en charge des appels d'outils)"]
+        - ["--help, -h", "Afficher ce message d'aide"]
+      examples:
+        - "/model               # Afficher le modele actuel"
+        - "/model gpt-4         # Passer a un modele"
+        - "/model --help        # Afficher l'aide"
+      notes: "Le changement verifie la connectivite et la prise en charge des appels d'outils ; en cas d'echec, le modele actuel est conserve."
+
+    "/setup":
+      title: "⚙️ Reconfigurer"
+      description: "Relancer l'assistant de configuration interactif pour modifier les parametres d'API (fournisseur, cle API, modele)"
+      usage: "/setup"
+      options:
+        - ["--help, -h", "Afficher ce message d'aide"]
+      examples:
+        - "/setup               # Lancer l'assistant de configuration"
+        - "/setup --help        # Afficher l'aide"
+      notes: "Les nouveaux parametres sont appliques immediatement sans redemarrage. Une annulation conserve la configuration actuelle."
+
+errors:
+  litellm_not_installed: "Le module litellm n'est pas installe"

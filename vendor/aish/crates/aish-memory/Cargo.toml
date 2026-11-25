@@ -1,0 +1,10 @@
+[package]
+name = "aish-memory"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aish-core.workspace = true
+serde.workspace = true
+chrono.workspace = true
+dirs.workspace = true

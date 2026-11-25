@@ -1,0 +1,133 @@
+# Contributing to AISH
+
+Welcome to make Shell smarter!
+
+## Quick Links
+
+- **GitHub:** https://github.com/AI-Shell-Team/aish
+- **Website:** https://aishell.ai
+- **Documentation:** [CONFIGURATION.md](CONFIGURATION.md) · [QUICKSTART.md](QUICKSTART.md)
+- **Issue Tracker:** https://github.com/AI-Shell-Team/aish/issues
+- **Discussions:** https://github.com/AI-Shell-Team/aish/discussions
+
+## Maintainers
+
+- **AISH TEAM** - Project Lead
+  - GitHub: [@AI-Shell-Team](https://github.com/AI-Shell-Team) · Email: team@aishell.ai 
+
+<!-- TODO: Add more maintainers with their areas of responsibility
+- **Name** - Area of responsibility
+  - GitHub: [@username] · Contact info
+-->
+
+## How to Contribute
+
+1. **Bugs & small fixes** → Open a PR!
+2. **New features / architecture** → Start a [GitHub Discussion](https://github.com/AI-Shell-Team/aish/discussions) first
+3. **Questions** → GitHub [Discussions](https://github.com/AI-Shell-Team/aish/discussions) or [Issues](https://github.com/AI-Shell-Team/aish/issues)
+
+## Before You PR
+
+- Test locally with the Rust binary: `cargo run --bin aish -- --help`
+- Run Rust tests: `cargo test --workspace`
+- Run packaging script smoke tests: `./packaging/tests/release_scripts_smoke.sh`
+- Use the pinned repo toolchain from `rust-toolchain.toml` for local validation
+- Minimum supported Rust version (MSRV) is **1.89** (`rust-version` in the workspace `Cargo.toml`)
+- Run formatting: `make format`
+- Run linting: `make lint`
+- Run the full local CI baseline: `make ci-check`
+- Ensure CI checks pass (if configured)
+- Keep PRs focused (one thing per PR; do not mix unrelated concerns)
+- Describe what & why in your PR description
+- **Include screenshots** — one showing the problem/before, one showing the fix/after (for UI or visual changes)
+
+## CI and Release Workflows
+
+- Code PRs run lint, tests, and cross-platform smoke checks.
+- Packaging-related PRs additionally run Linux bundle build and install smoke checks.
+- `Auto response` is the repository's community bot for Issues and PRs. Reply text lives in `.github/auto-response-config.json`, and runtime logic lives in `.github/scripts/auto-response.cjs`.
+- `Release Metadata` is the shared release action that normalizes release version inputs, validates repository version state, and uploads both markdown and JSON metadata artifacts.
+- `make prepare-release-files VERSION=X.Y.Z[-PRERELEASE] [DATE=YYYY-MM-DD]` updates the workspace version files and inserts a dated release section at the top of `CHANGELOG.md`.
+- Prepare release files locally in a normal PR, merge that PR into `main`, then run `Release Preparation` as the single preflight validation for the target version. It includes release metadata checks and bundle dry-run validation before publication.
+- `Release Preparation` validates the target version, generates a release summary from the versioned changelog section, builds dry-run bundles, and runs install smoke checks before publication.
+- `Release` is triggered by pushing a tag `vX.Y.Z` or `vX.Y.Z-PRERELEASE`. It validates the tag against repository metadata, verifies that the tagged commit is on `main`, creates the GitHub Release entry with the versioned changelog notes, marks prerelease tags as GitHub prereleases, builds release artifacts, then waits on a single protected `release` environment approval before publishing to the CDN. Stable tags also build and publish PyPI packages; prerelease tags skip PyPI.
+- Configure the GitHub Environment named `release` with required reviewers if you want manual approval before production publishing.
+
+## Code Style
+
+This workspace is the Rust implementation. Keep application code in the Cargo workspace, and keep the remaining Python under `packaging/scripts` limited to release automation that only uses the standard library unless a build script explicitly documents otherwise.
+
+**Code comments:** Use English for all code comments (see CLAUDE.md).
+
+**Dependencies:**
+- Prefer `uv` over `pip` for package management
+- Keep dependencies minimal and well-justified
+- Vendor dependencies (like litellm) require explicit approval
+
+## AI/Vibe-Coded PRs Welcome! 🤖
+
+Built with Claude, Copilot, or other AI tools? **Awesome - just mark it!**
+
+Please include in your PR:
+
+- [ ] Mark as AI-assisted in the PR title or description
+- [ ] Note the degree of testing (untested / lightly tested / fully tested)
+- [ ] Include prompts or session logs if possible (super helpful!)
+- [ ] Confirm you understand what the code does
+
+AI PRs are first-class citizens here. We just want transparency so reviewers know what to look for.
+
+## Current Focus & Roadmap 🗺
+
+We are currently prioritizing:
+
+- **Stability**: Fixing edge cases in PTY command execution and interactive program handling.
+- **UX**: Improving the setup wizard (provider/endpoint selection) and error messages.
+- **Provider Support**: Expanding multi-endpoint provider support (Z.AI, MiniMax, Moonshot, etc.).
+- **Security**: Enhancing sandbox and risk assessment features.
+- **Skills**: Expanding the skills/plugin ecosystem.
+
+Check the [GitHub Issues](https://github.com/AI-Shell-Team/aish/issues) for "good first issue" labels!
+
+## Maintainers
+
+We're selectively expanding the maintainer team.
+If you're an experienced contributor who wants to help shape AISH's direction — whether through code, docs, or community — we'd like to hear from you.
+
+Being a maintainer is a responsibility, not an honorary title. We expect active, consistent involvement — triaging issues, reviewing PRs, and helping move the project forward.
+
+Still interested? Email yinshuiboy@gmail.com with:
+
+- Links to your PRs on AISH (if you don't have any, start there first)
+- Links to open source projects you maintain or actively contribute to
+- Your GitHub and other contact handles
+- A brief intro: background, experience, and areas of interest
+- Languages you speak and where you're based
+- How much time you can realistically commit
+
+We welcome people across all skill sets — engineering, documentation, community management, and more.
+We review every application carefully and add maintainers slowly and deliberately.
+Please allow a few weeks for a response.
+
+## Report a Vulnerability
+
+We take security reports seriously. Report vulnerabilities directly to the repository:
+
+- **Core CLI** — [AI-Shell-Team/aish](https://github.com/AI-Shell-Team/aish)
+- **Sandbox subsystem** — [AI-Shell-Team/aish](https://github.com/AI-Shell-Team/aish) (src/aish/security/sandbox)
+- **Skills system** — [AI-Shell-Team/aish](https://github.com/AI-Shell-Team/aish) (src/aish/skills)
+
+For security issues, email **team@aishell.ai** and we'll route it.
+
+### Required in Reports
+
+1. **Title**
+2. **Severity Assessment**
+3. **Impact**
+4. **Affected Component**
+5. **Technical Reproduction**
+6. **Demonstrated Impact**
+7. **Environment**
+8. **Remediation Advice**
+
+Reports without reproduction steps, demonstrated impact, and remediation advice will be deprioritized. Given the volume of AI-generated scanner findings, we must ensure we're receiving vetted reports from researchers who understand the issues.

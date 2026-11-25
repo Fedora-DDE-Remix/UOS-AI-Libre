@@ -1,0 +1,30 @@
+[package]
+name = "aish-tools"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aish-config.workspace = true
+aish-core.workspace = true
+aish-i18n.workspace = true
+aish-llm.workspace = true
+aish-memory.workspace = true
+aish-pty.workspace = true
+aish-security.workspace = true
+aish-skills.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+regex.workspace = true
+libc.workspace = true
+uuid.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+futures.workspace = true
+glob.workspace = true
+shellexpand.workspace = true
+dirs.workspace = true
+inquire.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

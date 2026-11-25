@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a new feature or improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please describe your use case.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence describing the feature
+      placeholder: Support streaming AI responses
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use case
+      description: Describe the problem or need you have
+      placeholder: Long responses make the interface appear frozen with no feedback
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work
+      placeholder: Display AI content in real-time as it generates
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional information

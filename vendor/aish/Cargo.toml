@@ -1,0 +1,147 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/aish-core",
+    "crates/aish-md-table",
+    "crates/aish-config",
+    "crates/aish-hosts",
+    "crates/aish-i18n",
+    "crates/aish-security",
+    "crates/aish-pty",
+    "crates/aish-llm",
+    "crates/aish-mcp",
+    "crates/aish-session",
+    "crates/aish-context",
+    "crates/aish-skills",
+    "crates/aish-memory",
+    "crates/aish-ui",
+    "crates/aish-tools",
+    "crates/aish-scripts",
+    "crates/aish-shell",
+    "crates/aish-cli",
+    "crates/aish-prompts",
+    "crates/aish-chat",
+]
+
+[workspace.package]
+version = "1.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.89"
+
+[workspace.dependencies]
+# Error handling
+thiserror = "2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+semver = "1"
+serde_yaml = "0.9"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls", "blocking"], default-features = false }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Terminal
+crossterm = { version = "0.28", features = ["event-stream"] }
+ratatui = "0.30"
+unicode-width = { version = "0.2", features = ["cjk"] }
+
+# System
+nix = { version = "0.29", features = ["term", "process", "signal", "fs", "ioctl", "poll", "user"] }
+libc = "0.2"
+parking_lot = "0.12"
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# File watching
+notify = "7"
+
+# Token counting
+tiktoken-rs = "0.5"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Regex
+regex = "1"
+
+# Crypto
+sha2 = "0.10"
+base64 = "0.22"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+# Random
+rand = "0.9"
+
+# Misc utilities
+bytes = "1"
+glob = "0.3"
+shellexpand = "2.1"
+inquire = "0.9.4"
+which = "8"
+open = "5"
+cliclack = "0.5.4"
+
+# Readline
+rustyline = { version = "18", features = ["derive", "with-dirs"] }
+
+# UUID
+uuid = { version = "1", features = ["v4"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Markdown
+pulldown-cmark = "0.10"
+richrs = { version = "0.2", features = ["syntax", "markdown"] }
+
+# System info
+sysinfo = "0.33"
+iana-time-zone = "0.1"
+
+# YAML config
+dirs = "5"
+
+# Compile-time directory embedding (bundled skills)
+include_dir = "0.7"
+
+# Observability
+langfuse-ergonomic = "0.6"
+
+# Testing
+tempfile = "3"
+
+# Internal crates
+aish-core = { path = "crates/aish-core" }
+aish-md-table = { path = "crates/aish-md-table" }
+aish-config = { path = "crates/aish-config" }
+aish-hosts = { path = "crates/aish-hosts" }
+aish-i18n = { path = "crates/aish-i18n" }
+aish-security = { path = "crates/aish-security" }
+aish-pty = { path = "crates/aish-pty" }
+aish-llm = { path = "crates/aish-llm" }
+aish-mcp = { path = "crates/aish-mcp" }
+aish-session = { path = "crates/aish-session" }
+aish-context = { path = "crates/aish-context" }
+aish-skills = { path = "crates/aish-skills" }
+aish-memory = { path = "crates/aish-memory" }
+aish-ui = { path = "crates/aish-ui" }
+aish-tools = { path = "crates/aish-tools" }
+aish-shell = { path = "crates/aish-shell" }
+aish-scripts = { path = "crates/aish-scripts" }
+aish-prompts = { path = "crates/aish-prompts" }
+
+[patch.crates-io]
+cliclack = { git = "https://github.com/AI-Shell-Team/cliclack", rev = "1636d63" }

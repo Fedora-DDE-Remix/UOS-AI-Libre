@@ -1,0 +1,21 @@
+[package]
+name = "aish-skills"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aish-core.workspace = true
+serde.workspace = true
+serde_yaml.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+regex.workspace = true
+notify.workspace = true
+dirs.workspace = true
+include_dir.workspace = true
+reqwest = { workspace = true }
+flate2 = "1"
+tar = "0.4"
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,57 @@
+# AI-Shell Security Policy
+# Seeded to ~/.config/aish/security_policy.yaml on first use.
+# First matching rule wins. Paths are absolute; * = one level, ** = recursive.
+
+global:
+  default_risk_level: LOW        # LOW | MEDIUM | HIGH
+  enable_sandbox: false
+  sandbox_off_action: ALLOW      # ALLOW | CONFIRM | BLOCK
+  sandbox_timeout_seconds: 10
+
+audit:
+  enabled: false
+  # include_commands: false
+  # log_path: /var/log/aish/audit.log
+
+# Pre-screen commands before execution.
+# Built-ins: crates/aish-security/src/input_guard/patterns.rs
+input_guard:
+  enabled: true
+  # max_analyzable_bytes: 4096
+  # custom_block_rules:
+  #   - name: no_rm_data
+  #     pattern: "rm\\s+-rf\\s+/data"
+  #     message: deleting /data is forbidden
+
+rules:
+  - id: H-001
+    name: Protect /etc
+    command_list: ["rm"]  # sandbox-off fallback only
+    path: ["/etc/**"]
+    operations: [WRITE, DELETE]
+    risk: HIGH
+    reason: System config changes can break the host
+    suggestion: Edit /etc manually with a backup/change process.
+
+  - id: M-001
+    name: Protect /home
+    command_list: ["rm"]
+    path: ["/home/**"]
+    operations: [WRITE, DELETE]
+    risk: MEDIUM
+    reason: Home-directory writes/deletes can lose user data
+    confirm_message: Write/delete under /home — continue?
+
+  - id: L-001
+    name: Allow /tmp
+    command_list: ["rm"]
+    path: ["/tmp/**"]
+    operations: [WRITE, DELETE]
+    risk: LOW
+    reason: Temporary files are generally safe for AI edits
+
+# Optional custom secret patterns (built-ins already cover common API keys).
+# secret_patterns:
+#   - name: My Internal Token
+#     pattern: "int_[a-zA-Z0-9]{32}"
+#     secret_type: api_key

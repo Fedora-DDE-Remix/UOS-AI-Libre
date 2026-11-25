@@ -1,0 +1,113 @@
+# Path-based PR labels. Label names match auto-response classification groups.
+# Size / contributor labels are applied separately in .github/workflows/labeler.yml.
+
+"core":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-core/**"
+          - "crates/aish-md-table/**"
+
+"pty":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-pty/**"
+          - "crates/aish-hosts/**"
+
+"agent":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-llm/**"
+          - "crates/aish-session/**"
+          - "crates/aish-context/**"
+          - "crates/aish-memory/**"
+          - "crates/aish-prompts/**"
+
+"skills":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-skills/**"
+          - "skills/**"
+
+"tools":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-tools/**"
+
+"security":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-security/**"
+          - "config/security_policy.yaml"
+
+"sandbox":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-security/src/sandbox/**"
+          - "packaging/systemd/**"
+
+"config":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-config/**"
+          - "CONFIGURATION.md"
+
+"cli":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-cli/**"
+          - "crates/aish-shell/**"
+          - "crates/aish-ui/**"
+
+"i18n":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-i18n/**"
+
+"docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "README*.md"
+          - "QUICKSTART.md"
+          - "CONFIGURATION.md"
+          - "CONTRIBUTING.md"
+          - "CHANGELOG.md"
+
+"packaging":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packaging/**"
+          - "build.sh"
+          - "Makefile"
+
+"tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/**/tests/**"
+          - "packaging/tests/**"
+
+"ci-cd":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - ".gitignore"
+
+"dependencies":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "Cargo.toml"
+          - "crates/**/Cargo.toml"
+          - "Cargo.lock"
+          - "rust-toolchain.toml"
+
+"observability":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-llm/src/langfuse.rs"
+
+"builtin":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/aish-scripts/**"
+          - "crates/aish-shell/src/commands.rs"
+          - "crates/aish-ui/src/slash_input.rs"

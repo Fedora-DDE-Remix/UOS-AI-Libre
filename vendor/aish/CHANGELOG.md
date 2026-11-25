@@ -1,0 +1,553 @@
+<!-- markdownlint-disable MD024 -->
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.1.0] - 2026-11-17
+
+### Added
+
+- Remote C/S extensions over SSH (issues #586, #587, #588), with no resident service, open port, or firewall change required on the target host. The target side runs one-shot `aish --remote-*` agent entries only when a client connects.
+  - **Session takeover (#586).** `aish remote session list|attach|rename|kill|replay` inspects, joins, renames, terminates and replays sessions on another host. A session has one Controller and any number of Observers; Observer input is dropped inside the daemon rather than trusted from the client, and taking over requires the current Controller's approval (a 10 s timeout denies it). Controller identity and staleness are persisted in session metadata so `session list` can answer "who is typing" without attaching, and every role change is appended to a `<session>.role-audit.log`. Sessions are recorded continuously as asciinema-v2-compatible `.cast` files (non-UTF-8 bytes preserved as `raw_b64`), which `session replay [--tail N]` reads without attaching.
+  - **Signed policy distribution (#587).** `aish remote policy push|show|status` ships policies as ed25519-signed envelopes (`version|issuer|targets|policy|signature`) over ssh stdin. The target enforces hostname-glob targeting, a strictly increasing version, a trusted signer when signers are configured, parseable YAML and a non-envelope body before atomically replacing the policy file; a bad file is rejected with the exact reason. `policy status` reports `current` / `drifted` / `stale` / `none` / `unreachable` per host, and `push --diff` previews the change first. A remote policy install bumps the policy file's mtime fingerprint, which clears remembered command approvals so an old "yes" cannot outlive a stricter policy.
+  - **Fleet diagnostics (#588).** `aish remote diag run|list|status|retry` fans out whitelisted read-only checks (`svc`, `ports`, `logs`, `disk`, `load`) across hosts, capped at 4 concurrent hosts with a 20 s per-host timeout. Each host resolves to `success` / `unreachable` / `denied` / `timeout` / `evidence-insufficient`; failures are listed separately and excluded from conclusions. Runs persist as task IDs under `~/.local/share/aish/diag-tasks/`, and `diag retry` re-runs only the hosts that failed. There is no arbitrary-command path.
+  - **Incremental audit pull.** `aish remote audit pull --host <h>` tracks a per-host cursor and merges only newer events, de-duplicating by `(host, time, type, command)` so repeated pulls neither miss nor double-count events.
+  - **Operator identity and RBAC.** Each aish instance gets an ed25519 operator identity (`~/.config/aish/identity-key.json`, mode 0600); targets can accept operators via `remote admin trust-operator`, and the signed policy's `remote_access.actions.<action>.operators` list restricts actions by public-key prefix. This is independent of ssh credentials, so password and key auth both get the same identity gate. `remote admin keygen|show-key|show-identity|add-signer|list-signers|trust-operator|list-operators|untrust-operator` manages both the policy-signing and operator-trust keyrings.
+  - **Host aliases and groups.** `remote host add|list|remove` stores aliases, group tags, optional remote binary paths and optional passwords in `remote-hosts.json`; every `--host` accepts an alias, a literal `user@host`, or `group:<tag>`.
+- A bundled `remote-fleet-ops` skill, plus `docs/remote-cs-architecture.md` and `docs/remote-cs-testing-guide.md` for operators and maintainers.
+- CI builds and uploads an `aish-linux-arm64` static musl binary with `cargo-zigbuild`, so aarch64 hosts such as UOS Server can run the same artifact on glibc 2.38 without a `GLIBC_2.39` dependency.
+
+### Changed
+
+- SSH authentication now supports password-only hosts through `sshpass`: set `AISH_REMOTE_PASSWORD` (preferred, never persisted) or `remote host add --password`. Password auth uses `NumberOfPasswordPrompts=1` and `ConnectTimeout=5` so a wrong password fails fast; key auth keeps `BatchMode=yes`.
+- Remote host aliases are validated at `host add` time and reject names that `--host` could not select unambiguously (`@`, `:`, commas, whitespace, leading `-`, or anything that parses as an IP).
+- `AISH_SYSTEM_POLICY_PATH` is honored only in test and debug builds; release builds always use the fixed legacy path, so the override cannot bypass the one-time policy migration.
+
+### Fixed
+
+- The daemon handshake resizes the shared PTY only on the first attach, so a small-window observer can no longer shrink the Controller's terminal.
+- Policy installation, policy show, signer lookup and operator identity checks fail closed when a policy, signer or trust file exists but cannot be read or parsed, instead of silently degrading to unsigned or open mode.
+- `AISH_REMOTE_PASSWORD` now takes priority over a stored alias password when both are set, so a one-off environment credential can override the remembered one; a literal `user@host` reads only the environment variable.
+
+## [1.0.0] - 2026-11-12
+
+### Changed
+
+- `aish skill verify` now exits non-zero when the skill fails verification (issue #651). "Verification completed but invalid" and "skill not found" both exit 1; only a fully valid skill exits 0, so scripts and CI can gate on `$?` instead of parsing the `Valid: NO` output. The human-readable report is unchanged.
+- `temperature` values retain their configured decimal precision in provider requests instead of being rounded through `f32`. (#616)
+- `max_tokens` is no longer sent by default: when the config leaves it unset, the field is omitted from the request so the provider applies the model's own output limit (previously a global 4096/40960 constant, which truncated large-output models and was rejected outright by 16k-output ones). An explicit `max_tokens` at or above **16384** is forwarded as `max_completion_tokens` unchanged. The Anthropic Messages API requires the field, so that path sends a 64k fallback when unset (the lowest output ceiling among current Claude models). A value below 16384 is removed on load with one warning: older releases wrote their own default into the file (the Python shell's pydantic `1000` and the `v0.3.0`-`v0.3.6` wizard's `4096` were released; the `40960` floor of #619 never shipped), and any handwritten cap that small truncates a long reasoning turn into an `incomplete response`. 16384 is the smallest output ceiling among models in use (GPT-4o); current models sit far above it (GLM-5.3 65,536 default / 131,072 max, DeepSeek V4.1 64K default / 393,216 max, Kimi K3 131,072 default, Claude 5.5 and GPT-5.1-Codex-Max 128K, Gemini 3.1 Pro 65,536), so a cap at or above the minimum is a workable deliberate choice. `null` and `0` (both already meaning "no cap") are dropped silently, and `/setting max_tokens` rejects a below-minimum value instead of writing one the next start would erase. (#627)
+
+### Added
+
+- `/report` writes the session's latest answer to an openable HTML page (issue #608). The answer is rendered as Markdown — headings, tables, bold, lists, inline code — inside a self-contained document (inline CSS, no scripts, no external resources, CSP `default-src 'none'`). Below it, every tool call behind the answer appears as a native collapsible `<details>` block with its recorded arguments and output, paired by `tool_call_id` so an out-of-order or missing result cannot shift the list; each row is labelled `ok`, `truncated` (cut at the 4 KB tool cap), `offload preview` (full body is on disk) or `no result`. Tool bodies are escaped into `<pre>` and never parsed as Markdown, so a log line containing `<script>` or `#` stays visible text. Raw HTML in the answer is downgraded to escaped text and link/image destinations are restricted to `http`/`https`/`mailto`/fragment, so a log line or a `javascript:` URL cannot become live markup. It re-reads only the recorded transcript: no command is re-run, no model is called, and the conversation context is untouched.
+- Generation is strictly on demand: only an explicit `/report` writes `<data-dir>/aish/reports/<session-uuid>/report.html` (directory `0700`, file `0600`). There is no trigger heuristic and no `report.*` configuration, so no ordinary question, shell command or AI turn writes a file. On a local graphical session the page opens in the browser right away; with `SSH_CONNECTION`/`SSH_TTY` set or no `DISPLAY`/`WAYLAND_DISPLAY`, the terminal prints the path plus an `scp` hint instead. A failed write prints one warning and never changes the answer already shown.
+- MCP client (`crates/aish-mcp`, issue #564). Servers are declared under `mcp.servers` in `~/.config/aish/config.yaml` with the `stdio` or Streamable HTTP transport, `${VAR}` expansion in `env`/`headers`, and per-server/per-tool `trust` and `side_effects` declarations. Servers connect in the background; `/mcp status|list|tools|reload|reconnect` shows state, and `/status` carries a one-line summary. Credentials never reach status output, logs or audit records.
+- MCP tools are discovered on demand instead of being injected into every request: each server exposes one gateway tool (`mcp__<server>`) with the `list` / `describe` / `call` actions, so only the catalogue names that the model asks for enter the context.
+- Every MCP `call` goes through the normal preflight/approval path. It is auto-approved only when the user declared the server (or that tool) `trust: allow` *and* its effective side effects are `read`; undeclared, write and network tools ask, `trust: block` refuses, and server annotations can only narrow a declaration. An approval is bound to the exact argument set (`mcp:<server>:<tool>#<digest>`), so changed arguments need a new approval.
+- MCP calls honor the same timeout, cancellation, truncation and audit rules as built-in tools: a per-request deadline (default 30s, `0` disables), cancellation through the session token, output capped by `max_output_bytes` then by the shared 4 KB message cap, and `AiTool` audit events that now carry `duration_ms` and an `outcome`. Server exit, protocol errors and timeouts report a classified failure (`connect`/`timeout`/`eof`/`malformed_response`/`json_rpc`/`http_status`/`cancelled`) and child processes are reaped with SIGTERM then SIGKILL.
+- `/mcp` manages servers without hand-editing YAML: `add` (interactive wizard, or quick add with `--transport/--trust/--side-effects/--timeout/--max-output/--env/--header/--url/--token/-- <command…>`), `remove|rm`, `enable`, `disable`, `trust <server> <tool|*>`, `test <server>`, `tool <server> <tool>` and `tools [server]`, plus `/mcp help`. Edits are written to `config.yaml` atomically (unknown keys preserved) and take effect immediately: the runtime connects or drops just that server and its tool is registered or unregistered in the session. `/mcp <sub> <Tab>` completes server names, and `/mcp test` reports the server version, tool count and the first tools, with a hint for the common failure classes.
+- `mcp.servers[].expose: tools` (opt-in) additionally exposes one tool per remote tool (`mcp__<server>_<tool>`) with its real schema, so the model can call it directly instead of discovering through the gateway; the default stays `gateway` so a server's whole catalogue is never injected into the prompt. `/mcp status` now also lists configured-but-disabled servers as `disabled` instead of hiding them.
+- Bare `/mcp` prints the status block and then opens a nine-row interactive menu (every row is reachable by number 1-9): add a server (wizard), tools, test, trust, enable/disable, reconnect, reload, remove, help. Each row opens its own panel — pick the server (rows show `name [transport] status · tools: N`), then the tool or the trust level; the tools row's first entry lists the whole catalogue and its remaining entries print the per-tool detail, the trust row's first entry is `*` for the whole server, and enable/disable is one row that flips the server according to its current runtime state. `Esc` leaves the menu and no action runs without a selection, so every MCP operation is reachable without recalling arguments or hand-editing `config.yaml`; with nothing configured the menu is the `add` row alone (the wizard). The explicit subcommands (`/mcp status|list|tools|tool|add|remove|enable|disable|trust|test|reload|reconnect`) are unchanged, and `/mcp help` now documents the menu.
+
+### Fixed
+
+- `aish -c` preselects the session the user attached to most often instead of defaulting to "create new session" or to a single remembered id. Attach counts live in `~/.cache/aish/session-usage.json` (the previous `last-attach-session` file is imported once with that id and removed), the update is guarded by an advisory lock, and with no history the newest live session is preselected. "Create new session" stays selectable but is never the default row: with no live session the picker is skipped entirely and a session is spawned directly. Sessions whose daemon has exited are ignored.
+- `--config <path>` is now authoritative for the whole session: the welcome panel shows the file that was actually loaded, and `/setting`, `/model`, `/mcp add`, provider-rotation rewrites and the setup wizard all save back to that file instead of always writing `~/.config/aish/config.yaml`. A relative `--config` is resolved against the startup directory, so a later `cd` cannot redirect saves. A valid config that only needed default-field backfill keeps running on the parsed values when the migration rewrite fails (for example on a read-only bind mount), leaving the original file byte-identical and printing one warning instead of falling back to defaults and the setup wizard. Load failures name the resolved path on stderr while the detail (which may contain mistyped secrets) stays at debug level. (#649, #659)
+- Long-term memory de-duplication is scoped by `scope` and source host: identical text stored as a User fact and a Host fact, or stored from two different machines, is kept as separate records. Hostless legacy entries still match, so existing memory files keep de-duplicating as before. (#645)
+- A blank external session id (for example `AISH_SESSION_ID` unset in standalone mode) is no longer persisted; the session gets a fresh UUID instead, so audit events and the resume hint never carry an empty `session_uuid`. (#646)
+- Slash-command ranking prefers an exact name match over keyword and description matches, so `/report` no longer resolves to `/feedback`. (#608)
+
+## [1.0.0-rc1] - 2026-11-02
+
+### Changed
+
+- `aish skill verify` now exits non-zero when the skill fails verification (issue #651). "Verification completed but invalid" and "skill not found" both exit 1; only a fully valid skill exits 0, so scripts and CI can gate on `$?` instead of parsing the `Valid: NO` output. The human-readable report is unchanged.
+- `temperature` values retain their configured decimal precision in provider requests instead of being rounded through `f32`. (#616)
+- `max_tokens` is no longer sent by default: when the config leaves it unset, the field is omitted from the request so the provider applies the model's own output limit (previously a global 4096/40960 constant, which truncated large-output models and was rejected outright by 16k-output ones). An explicit `max_tokens` at or above **16384** is forwarded as `max_completion_tokens` unchanged. The Anthropic Messages API requires the field, so that path sends a 64k fallback when unset (the lowest output ceiling among current Claude models). A value below 16384 is removed on load with one warning: older releases wrote their own default into the file (the Python shell's pydantic `1000` and the `v0.3.0`-`v0.3.6` wizard's `4096` were released; the `40960` floor of #619 never shipped), and any handwritten cap that small truncates a long reasoning turn into an `incomplete response`. 16384 is the smallest output ceiling among models in use (GPT-4o); current models sit far above it (GLM-5.3 65,536 default / 131,072 max, DeepSeek V4.1 64K default / 393,216 max, Kimi K3 131,072 default, Claude 5.5 and GPT-5.1-Codex-Max 128K, Gemini 3.1 Pro 65,536), so a cap at or above the minimum is a workable deliberate choice. `null` and `0` (both already meaning "no cap") are dropped silently, and `/setting max_tokens` rejects a below-minimum value instead of writing one the next start would erase. (#627)
+
+### Added
+
+- `/report` writes the session's latest answer to an openable HTML page (issue #608). The answer is rendered as Markdown — headings, tables, bold, lists, inline code — inside a self-contained document (inline CSS, no scripts, no external resources, CSP `default-src 'none'`). Below it, every tool call behind the answer appears as a native collapsible `<details>` block with its recorded arguments and output, paired by `tool_call_id` so an out-of-order or missing result cannot shift the list; each row is labelled `ok`, `truncated` (cut at the 4 KB tool cap), `offload preview` (full body is on disk) or `no result`. Tool bodies are escaped into `<pre>` and never parsed as Markdown, so a log line containing `<script>` or `#` stays visible text. Raw HTML in the answer is downgraded to escaped text and link/image destinations are restricted to `http`/`https`/`mailto`/fragment, so a log line or a `javascript:` URL cannot become live markup. It re-reads only the recorded transcript: no command is re-run, no model is called, and the conversation context is untouched.
+- Generation is strictly on demand: only an explicit `/report` writes `<data-dir>/aish/reports/<session-uuid>/report.html` (directory `0700`, file `0600`). There is no trigger heuristic and no `report.*` configuration, so no ordinary question, shell command or AI turn writes a file. On a local graphical session the page opens in the browser right away; with `SSH_CONNECTION`/`SSH_TTY` set or no `DISPLAY`/`WAYLAND_DISPLAY`, the terminal prints the path plus an `scp` hint instead. A failed write prints one warning and never changes the answer already shown.
+- MCP client (`crates/aish-mcp`, issue #564). Servers are declared under `mcp.servers` in `~/.config/aish/config.yaml` with the `stdio` or Streamable HTTP transport, `${VAR}` expansion in `env`/`headers`, and per-server/per-tool `trust` and `side_effects` declarations. Servers connect in the background; `/mcp status|list|tools|reload|reconnect` shows state, and `/status` carries a one-line summary. Credentials never reach status output, logs or audit records.
+- MCP tools are discovered on demand instead of being injected into every request: each server exposes one gateway tool (`mcp__<server>`) with the `list` / `describe` / `call` actions, so only the catalogue names that the model asks for enter the context.
+- Every MCP `call` goes through the normal preflight/approval path. It is auto-approved only when the user declared the server (or that tool) `trust: allow` *and* its effective side effects are `read`; undeclared, write and network tools ask, `trust: block` refuses, and server annotations can only narrow a declaration. An approval is bound to the exact argument set (`mcp:<server>:<tool>#<digest>`), so changed arguments need a new approval.
+- MCP calls honor the same timeout, cancellation, truncation and audit rules as built-in tools: a per-request deadline (default 30s, `0` disables), cancellation through the session token, output capped by `max_output_bytes` then by the shared 4 KB message cap, and `AiTool` audit events that now carry `duration_ms` and an `outcome`. Server exit, protocol errors and timeouts report a classified failure (`connect`/`timeout`/`eof`/`malformed_response`/`json_rpc`/`http_status`/`cancelled`) and child processes are reaped with SIGTERM then SIGKILL.
+- `/mcp` manages servers without hand-editing YAML: `add` (interactive wizard, or quick add with `--transport/--trust/--side-effects/--timeout/--max-output/--env/--header/--url/--token/-- <command…>`), `remove|rm`, `enable`, `disable`, `trust <server> <tool|*>`, `test <server>`, `tool <server> <tool>` and `tools [server]`, plus `/mcp help`. Edits are written to `config.yaml` atomically (unknown keys preserved) and take effect immediately: the runtime connects or drops just that server and its tool is registered or unregistered in the session. `/mcp <sub> <Tab>` completes server names, and `/mcp test` reports the server version, tool count and the first tools, with a hint for the common failure classes.
+- `mcp.servers[].expose: tools` (opt-in) additionally exposes one tool per remote tool (`mcp__<server>_<tool>`) with its real schema, so the model can call it directly instead of discovering through the gateway; the default stays `gateway` so a server's whole catalogue is never injected into the prompt. `/mcp status` now also lists configured-but-disabled servers as `disabled` instead of hiding them.
+- Bare `/mcp` prints the status block and then opens a nine-row interactive menu (every row is reachable by number 1-9): add a server (wizard), tools, test, trust, enable/disable, reconnect, reload, remove, help. Each row opens its own panel — pick the server (rows show `name [transport] status · tools: N`), then the tool or the trust level; the tools row's first entry lists the whole catalogue and its remaining entries print the per-tool detail, the trust row's first entry is `*` for the whole server, and enable/disable is one row that flips the server according to its current runtime state. `Esc` leaves the menu and no action runs without a selection, so every MCP operation is reachable without recalling arguments or hand-editing `config.yaml`; with nothing configured the menu is the `add` row alone (the wizard). The explicit subcommands (`/mcp status|list|tools|tool|add|remove|enable|disable|trust|test|reload|reconnect`) are unchanged, and `/mcp help` now documents the menu.
+
+### Fixed
+
+- `aish -c` preselects the session the user attached to most often instead of defaulting to "create new session" or to a single remembered id. Attach counts live in `~/.cache/aish/session-usage.json` (the previous `last-attach-session` file is imported once with that id and removed), the update is guarded by an advisory lock, and with no history the newest live session is preselected. "Create new session" stays selectable but is never the default row: with no live session the picker is skipped entirely and a session is spawned directly. Sessions whose daemon has exited are ignored.
+
+## [0.3.15] - 2026-10-14
+
+### Added
+
+- Project instructions: `aish` loads `AGENTS.md` from the repository root and from the directories in use (including `@`-style file pointers), injects them prefix-cache-safe, and refreshes that directory context as you `cd`. `/instructions` prints the current state and loaded files, `/instructions off` disables project instructions for the session and clears every injected block, and `/instructions on` re-discovers them on the next turn. (#562, #590)
+- New `web_search` tool: queries the web through a fallback chain (keyed providers first, then credential-free Bing and DuckDuckGo) and returns a bounded, deduplicated list of candidate sources with title, URL, snippet, and fetch time. Output is capped at 4 KB and page text is rendered as untrusted data. (#566, #576)
+
+### Fixed
+
+- `aish update` and the startup update notice read the latest version from `https://www.aishell.ai/repo/latest` instead of `cdn.aishell.ai`. Release bundles download from GitHub Releases, then from the official site. `AISH_DOWNLOAD_BASE_URL` (or `AISH_REPO_URL`) and `AISH_BETA_DOWNLOAD_BASE_URL` still add a mirror using the previous `/releases/<version>/` layout. A GitHub connection that does not complete within 30 seconds falls through to the official site; a transfer already in progress still has 300 seconds. CDN `/latest` was still serving 0.3.13 after 0.3.14 shipped (#561).
+- `aish -c` preselects the last session the user attached to instead of always defaulting to "create new session". The attach success is remembered in `~/.cache/aish/last-attach-session`; repeated `aish -c` runs land on the same session without re-picking, and the default falls back to "create new" when that session is gone or no attach was recorded.
+- TUI panels no longer panic on terminals shorter than 7 rows. `ChoicePanel`, `SearchSelectPanel`, and `SettingsPanel` clamped `(MIN_PANEL_HEIGHT, terminal_height)` with min > max, which panics; the upper bound is now applied before the minimum (same fix `SkillPanel` already had). Found while testing `aish -c` under expect.
+- `/model` closes its picker after Enter instead of reopening it. The switching branch kept looping back into the panel, so the switch message was followed by a fresh list that kept consuming keystrokes (searching, `No matches`) until Esc. Enter now ends the picker for both a real switch and a re-pick of the current model; `a` (add account) and `m` (manage) still return to the list, and Esc still cancels without changing the model.
+- Running commands now follow terminal window resizes. The child PTY was only sized before the command started, so a full-screen program (omp, vim, htop, …) kept drawing for the old width after a resize and its frames wrapped into duplicated lines on the real terminal. Sizes are checked every 100 ms while the command runs and the child's foreground group is signalled. `terminal_resize_mode` is now honored on this path: `off` also skips the pre-command sync so the geometry stays frozen.
+- Terminal device queries (`ESC[6n`, `ESC[c`, `ESC[>c`, `ESC[…$p`, …) are no longer deleted from a command's output. Full-screen programs measure the surface, anchor their live region and detect host-side resizes from the terminal's answers; stripping the requests made them fall back to degraded repaint modes (`TSP: terminal did not confirm the surface`, `resize anchor … cpr=timeout`).
+- A command's newline is no longer translated twice on its way to the terminal (`printf 'A\nB\n'` used to display as `A\r\r\nB\r\r\n`). Both the child PTY's slave and the real terminal applied `OPOST|ONLCR`; the relay now compensates for the second translation.
+- Answers to terminal device queries are still kept out of line-oriented commands, but the filter moved from the output side to stdin: reports are dropped until a command shows full-screen behaviour (alternate screen, hidden cursor, mouse tracking, bracketed paste, synchronized output, APC) and then forwarded, so TUIs receive their answers while `cat`/`read`/pagers never see them echoed or executed. A prefix held back as a possible report is handed to the child after 500 ms (and a fingerprint split across two reads still counts), so genuine input is never withheld.
+- Backend command payloads no longer glue the command and its pager-restore suffix onto one line, so a trailing `&` or a heredoc terminator no longer corrupts the persistent shell, wedges follow-up commands behind a stuck `PS2` continuation, or waits out a ~1-year timeout. The restore is deferred until after the command reaches a terminal state so `read`/`cat` cannot consume it, the bash tool's default wait is bounded at 3600 s, and Ctrl+O output panels open reliably even when the terminal does not answer cursor-position queries. (#541, #555)
+- `/export` keeps the full AI conversation across context compaction: turns absorbed into a summary are recorded in a new append-only transcript and no longer vanish from the export, older sessions still fall back to the previous snapshot, and an incomplete transcript is surfaced as a warning. (#530, #556)
+- A turn that stops at the tool-iteration limit keeps its completed tool calls and results in the session instead of dropping them, so the model does not re-run side effects that already happened. (#572)
+- A sub-agent that ends in `Fatal` now prints the failure category and the completed-tool summary instead of ending the turn silently. `/token` and the footer track provider cache hits separately, so cached tokens no longer inflate input usage. (#579, #580)
+- The shell keeps `sudo`/`su` command text intact on every input path, popup recovery included, so quoted spaces survive and a command is never recorded as a success without running; a blocked builtin no longer adds a second history row with exit code 0. Shell state is copied from the session after a compound line that starts with `cd`, `export`, or `unset`; state reads no longer depend on an external `base64` (a missing or incompatible one could wipe the process environment); and a variable the session unset is removed from the process on the first read. (#546, #574)
+- The prompt's git-dirty check no longer blocks rendering: a cache hit returns immediately and a stale entry returns the last known value while a single background refresh runs, so the prompt never stalls and the dirty dot lags by at most ~2 s. (#599, #600)
+
+## [0.3.14] - 2026-09-23
+
+### Added
+
+- Manual `/compact [focus]` compacts the current context on demand, rolls the context back if the summary fails or is cancelled, and reports tokens before and after. The optional focus is used only as retention criteria.
+- Context usage footer: a `ctx` bar shows the last request's prompt tokens against the full window (default window is now 256k). Session-cumulative `used` and `out` tokens include sub-agent, SSH follow-up, and remote-query usage.
+- Each turn's environment block includes the local date, time, timezone, and UTC offset from the OS clock, so relative ranges such as "today" or "last two months" are not guessed from training data.
+- Large-file tools: `read_file` returns a bounded line window above 256 KiB; `edit_file` can edit by line range without loading the whole file; `write_file` replaces the file atomically. Overwriting a file that cannot be snapshotted asks for confirmation first.
+- When `edit_file`'s `old_string` misses, the error includes the longest matching prefix so a suffix mismatch does not need another full guess.
+- The slash-command panel is searchable, grouped by scenario, and shows whether a command is available (including undo counts and the current plan state). Commands that only fill the input line require a second confirmation.
+- After an upgrade, the welcome panel header shows the version range and renders Removed, Deprecated, and Security badges together with Added, Changed, and Fixed.
+
+### Changed
+
+- `/export` redacts secrets by default, shows a preview of the path, counts, and hit count, and asks before writing. `--raw` skips redaction but always requires a separate high-risk confirmation. The file records whether it was redacted and which scanner rules were used, and is forced to owner-only `0600` even when it already exists.
+- `python_exec` uses a 120-second default deadline that can be raised up to 3600 seconds or disabled with `timeout: 0`. Cancellation still stops the whole process group.
+- `aish check-tool-support` verifies a full tool-calling loop (probe call, local execution, and a final answer that cites the result) instead of treating one streamed chunk as success.
+- Skill search is reserved for explicit skill requests. Ordinary package install, upgrade, and query tasks stay on the OS package manager. `skill_search` reports failure only when every registry failed.
+
+### Fixed
+
+- Sandbox sudo payloads start with no capabilities and receive only the write capabilities needed to assess overlay changes, so a root payload cannot leave the mount namespace. `sudo -u` or `-g` targeting a non-root user is no longer treated as root.
+- `python_exec`, `grep`, and SSH channel bash honor cancellation and a wall-clock budget, so one stuck tool no longer blocks the agent turn. Cancelled runs return the output collected so far.
+- Quick-fix (`;`) error correction runs as a read-only diagnose sub-agent and will not offer the original failed command again, including when that command contained a redacted secret.
+- Closing the terminal no longer leaves `aish` spinning at full CPU. Interactive sessions exit when the TTY is gone, and command history is saved after each accepted line.
+- If the provider fails after tools have already run, those tool calls and results are kept and the turn is marked interrupted, so the next turn does not repeat the finished side effects.
+- Same-frame streamed responses keep tool names and text together. A stream that yields only nameless tool calls fails the turn instead of looking complete.
+- Prefix-hint scans after an `edit_file` miss are bounded, and the Spanish hint no longer assumes a plural count.
+- Audit tool and security-decision events follow the live session after `/resume`, `/sessions`, `/fork`, or `aish resume`.
+- `/audit` output is localized. Unknown flags, bad limits, invalid timestamps, and unknown event types are rejected with usage instead of silently using the default query.
+- `/undo` and `/rollback` detect files that changed on disk since the snapshot, show a diff, and ask before restoring. `--force` still requires that confirmation. A change that appears while the prompt is open blocks the restore.
+- Attaching to a PTY that replays no output falls back to the standalone shell and welcome panel instead of a blank screen.
+- Tool completion rows include the tool name. Parallel sub-agents are tagged so their start and end lines can be paired.
+
+## [0.3.13] - 2026-09-04
+
+### Removed
+
+- System-level security policy: `/etc/aish/security_policy.yaml` is no longer read; the user-level `~/.config/aish/security_policy.yaml` (auto-seeded from the shipped template when missing) is the sole source of security settings. Administrators who relied on a system-wide policy must migrate its content to each user's policy file. On upgrade, if the user-level file is missing and a leftover `/etc/aish/security_policy.yaml` exists, its content is copied to the user-level path instead of being silently discarded. The uninstaller still removes leftover `/etc/aish` from older installers.
+
+### Fixed
+
+- After an upgrade, the Keep-a-Changelog startup summary is no longer consumed by a flash start (version probe, immediate quit, Ctrl-D, or a daemon-attach race). The `last-changelog-version` marker is only advanced after the user actually uses the shell, so the next real session still shows the notes.
+
+## [0.3.12] - 2026-09-03
+
+### Added
+
+- `/doctor` Shell Compatibility checker: identity, startup files, startup speed, environment inheritance (proxy values redacted), secret detection (set/unset only), PTY bash compatibility probe, and alias/function/completion counts. `aish doctor --json` and `/doctor --json` emit machine-readable results.
+- Live-session resource monitoring: `/live_sessions` shows CPU% and RSS per session; configurable alerts when a detached session exceeds CPU/RSS thresholds (`pty_resource_check_interval_secs` / `_cpu_percent` / `_rss_mb`). Killing a session now terminates the full worker process tree with pidfd-pinned SIGTERM then SIGKILL so recycled PIDs are not hit.
+- Long-term memory: confirm before store/forget, provenance, expiry/TTL, `/memory` (list / verify / forget), and a category-aware TTL policy with an explicit `permanent` flag.
+- `/audit export`: portable audit package (`audit.md` + `events.jsonl` + `manifest.json`) with `--until` and `--session` filters, SHA-256 hashes, and owner-only permissions.
+- System-level security policy: `/etc/aish/security_policy.yaml` takes full precedence over the user-level `~/.config/aish/security_policy.yaml`.
+
+### Changed
+
+- `glob` tool uses pruned DFS (skips `target` / `node_modules` / … at traversal time), a 60s wall-clock budget, Ctrl+C cancellation, and `spawn_blocking`. Cancellation returns partial results so the agent does not retry into another cancelled walk. Absolute patterns start at the longest wildcard-free prefix instead of scanning from `/`.
+- Session database (`sessions.db`) and its WAL/SHM siblings are created or tightened to owner-only `0600` on open.
+
+### Fixed
+
+- `web_fetch` returns a structured failure (`ok=false`, `http_status`) on HTTP 4xx/5xx instead of treating error pages as success, caching them, and sending them to the secondary LLM.
+- `/doctor` no longer hangs forever in the REPL: probe subprocesses are detached from the controlling TTY so interactive bash cannot SIGTTOU-stop itself. Probe stderr noise is a warning rather than a fatal baseline error, and API connectivity treats 401/403/404 as reachable (only 5xx and network errors fail that check).
+- Nested-confirm buffer truncation no longer panics on a UTF-8 character boundary (for example a large CJK MOTD inside nested SSH), and the kept tail is hard-capped.
+- Sub-agent fatal outcomes preserve already-completed tool results and a structured `error_category`, so the parent can continue without redoing finished work.
+- Main session now persists AI tool-call history, so a follow-up question can see what the AI just executed instead of misattributing those commands to the user.
+- Thinking-animation frames no longer swallow tracing log lines, so LLM retry warnings stay visible.
+- Ctrl+C now stops the sub-agent thinking animation thread; tool-result status lines no longer overlap leftover frames.
+
+## [0.3.11] - 2026-08-18
+
+### Added
+
+- Startup update check in the interactive shell: after entering the REPL, if `cdn.aishell.ai` has a newer release, show a one-time omp-style tip (`check_update_on_startup`, default `true`; failures stay silent).
+- Setup model picker shows the built-in local catalog immediately instead of blocking on `GET /models`; only Ollama, vLLM, and endpoints without a local catalog discover models online, and failed discovery no longer silently substitutes a built-in list.
+- Refreshed the built-in local model catalog so known providers show current model IDs in setup.
+
+### Changed
+
+- `aish update` output is denser and less debug-like, progress placeholders are fixed, and the `y/N` confirm is dropped so at most one sudo prompt remains.
+
+### Fixed
+
+- WebFetch "remember this session" now keys on Host (not bash command memory), shows the full URL in the confirm panel, and treats `web_fetch` as an alias of `WebFetch` for skills and display.
+- Chat Completions requests send `max_completion_tokens` so newer OpenAI-compatible gateways that reject `max_tokens` or treat a missing budget as `0` no longer break tool probes and live tool calls.
+- Setup live model discovery strips ANSI/control sequences from untrusted HTTP error bodies before they reach the terminal.
+
+## [0.3.10] - 2026-08-10
+
+### Added
+
+- Multi-source skill registry with search, install, verify, trust/quarantine, and an AI-callable `skill_install` tool (`/skill`, `aish skill`), including built-in adapters for `skills.sh` and `skillhub.cn`.
+- Interactive `/skill` manager panel (Installed / Browse / Registries tabs) for search, install, trust, verify, remove, and registry enable/disable; complete-arg subcommands still run directly.
+- `/model` multi-account rotation and interactive model picker: recoverable failures (429 / usage limits) rotate across configured API accounts.
+- Session workflow commands: `/export [md]` (session → Markdown), `/fork` (branch a session while preserving the original), and `/sessions` (browse the session tree and switch).
+- File-change snapshot store with `/undo [path]` and interactive `/rollback` to restore prior checkpoints in the current session; `write_file` / `edit_file` results report when a write is not undoable.
+- Parallel execution for batches of independent `Agent` (sub-agent) tool calls.
+- After upgrading, the next interactive `aish` launch shows a Keep-a-Changelog summary for every version between the previously seen release and the newly installed one (oldest → newest), sourced from the `CHANGELOG.md` embedded in the binary. A `~/.config/aish/last-changelog-version` marker tracks what has already been shown.
+- Built-in local ops diagnostic skills: rewritten symptom-first `diagnose_system_lag`, plus `network-path-diagnose`, `dns-diagnose`, `nfs-cifs-mount-diagnose`, and `ssl-cert-toolkit`.
+
+### Changed
+
+- `security_policy.yaml` is the sole source of truth for security settings: `/setting` reads/writes the live `SecurityManager`, security fields are stripped from `config.yaml` on load (with a warning), and installs no longer write `/etc/aish` security config.
+- Hardened the read-only bash classifier so harmless inspection redirects/globs are allowed while real write redirects are not misclassified as read-only.
+- File-edit diffs render as centered hunks with bounded context so edits near the end of large files stay visible.
+
+### Fixed
+
+- Restored rich sandbox policy reasons (rule id / paths / human-facing `reason`) instead of generic HIGH-level block text; wired the security panel UI with a closed confirm layout and independent Paths / degraded-sandbox Note rows.
+- Fixed PTY handling so terminal device-query responses (CPR/DA/DSR) no longer leak into stdin as garbage keystrokes (e.g. `0;115;0c`) under ssh/tmux/pager scenarios.
+- CI always reports the Lint and test required check for docs-only PRs, and treats `Makefile` / `rust-toolchain.toml` as code changes.
+
+## [0.3.9] - 2026-07-27
+
+### Added
+
+- Added session-scoped command approval memory when the sandbox is enabled: choosing "allow and don't ask again" remembers the same host + command for the rest of the session (`[a]`), with `/forget-approvals` to clear. Path-bearing commands hide the remember option; denials are never persisted, and `sudo` is not stripped during normalization so a non-root approval cannot auto-authorize the root variant.
+
+### Changed
+
+- Dropped unused crate dependencies, centralized local version pins under `workspace.dependencies`, and set MSRV to `1.89`.
+- `aish update` now relies on CDN `/latest` instead of hard-depending on the GitHub Releases API after the CDN check, so rate-limit `403` responses no longer fail updates.
+
+### Fixed
+
+- Fixed packaged skills so they are compile-time embedded in the `aish` binary and loaded for every user (including bare-root installs), instead of seeding `~/.config/aish/skills` at install time (which skipped root and could leave root-owned config dirs).
+- Made builtin skill materialization race-safe with unique staging directories and a `.complete` marker before rename.
+- Hardened packaging smoke tests to assert the installer/bundle no longer ship or invoke skill seeding, and to fail closed when `build_bundle.sh` is missing.
+- Show a one-line terminal tip on the interactive session that performs the temporary legacy seed migration (only when skills were actually moved).
+- Fixed `/setting` sandbox and security toggles so they take effect immediately and sync to `security_policy.yaml` (atomic write with fallback when the policy directory is not writable).
+- Fixed welcome panel label formatting (no duplicated colon) and right-border alignment under CJK locales / WeTTY.
+- Restored PTY echo for cooked-mode user prompts so typed input is visible for confirms such as `aish update [y/N]`.
+- Reject prerelease tags on the stable CDN channel so a mis-tagged stable `/latest` cannot offer beta builds when `include_pre_release` is false.
+- Improved `aish uninstall` sudo authentication UX: authenticate before printing progress, suppress cancel-only sudo noise while surfacing real failures, avoid blank-line side effects on Ctrl+C, and localize the cancelled message (including French `Annulé`).
+
+### Removed
+
+- Removed the `seed-skills.sh` installer helper; packaged skills no longer need a post-install copy into user config.
+
+### Deprecated
+
+- The one-shot migration of pre-embed install-seeded skills (`migrate_seeded`, backup dir `~/.config/aish/migrated-seeded-skills/`, marker `.skills-seed-migrated-v1`) is temporary and will be removed in a future release once leftover seeds are uncommon.
+
+## [0.3.8] - 2026-07-22
+
+### Added
+
+- Added `@path` file-mention popup in AI mode with fuzzy search, Tab longest-common-prefix completion, and directory drill-down.
+- Added a CJK-aware Markdown rendering pipeline (`aish-md-table` + `md_render`) for width-aware tables, inline styles, nested lists, and terminal wrapping.
+- Added response-footer compaction markers (`⟳compacted` / `⟳micro`) when automatic context compaction runs during a turn.
+
+### Changed
+
+- Renamed the response-footer token label from `ctx` to `req` to reflect per-request window usage rather than cumulative conversation history.
+- Added shared HTTP retry with exponential backoff for transient 429/5xx and network errors across OpenAI, Anthropic, and Codex providers.
+
+### Fixed
+
+- Fixed the inline completion spinner so CJK terminals no longer shift the `aish` mode icon.
+- Fixed PTY detach after session exit to skip the Detach write and avoid Broken-pipe WARN noise (Ctrl+Q still sends Detach).
+- Fixed packaged skills seeding to write into `~/.config/aish/skills` as the target user (no `/usr/local` install + leaf-only chown), including a one-shot repair for leftover root-owned config trees from older installers.
+- Hardened the packaging ownership smoke test to require seed/install scripts and assert privilege drop instead of fakeroot ownership checks.
+
+## [0.3.7] - 2026-07-20
+
+### Added
+
+- Added the Agent tool and built-in sub-agents (`explore`, `plan`, `general-purpose`, `troubleshoot`), including spawn progress in the shell TUI and isolated skill execution through spawn.
+- Added an interactive `/setting` panel for config editing, with a flat single-panel layout, choice picker, category memory, and slash-command prefill.
+- Added a centralized theme system with display polish and session management improvements.
+- Added audit logging for shell and agent activity.
+- Added PTY daemon attach architecture for session persistence across reconnects.
+- Added inline AI completion with ghost text in the interactive shell.
+- Added `PromptAssembly` to unify MainChat and sub-agent system prompt and tool spec assembly.
+
+### Changed
+
+- Moved per-tool routing guidance into tool descriptions; tool usage remains in tool prompts. Oracle delegates tool choice to descriptions (no duplicated routing tables). If you customize `~/.config/aish/prompts/oracle.md`, remove duplicated tool-selection sections that mirror tool descriptions.
+- Added explicit routing between `Agent(subagent_type=plan)` and `enter_plan_mode`; `enter_plan_mode` keeps routing in its description and usage-only text in its prompt appendix.
+- Expanded built-in sub-agent system prompts (explore/plan/general-purpose) with read-only rules and efficient search strategy; Agent `prompt` schema now requires scope and thoroughness.
+- Converted embedded LLM prompt templates (`oracle`, `cmd_error`, `failure_diagnose`) to English-only; SSH error-correction context injection is English as well.
+- Migrated `/diagnose` to the troubleshoot sub-agent spawn path.
+
+### Fixed
+
+- Fixed `web_fetch` HTML entity decoding to a single pass to prevent double-decoding.
+- Fixed PTY Ctrl+C handling to kill the foreground process group so pagers unblock reliably.
+- Fixed PTY bash rcfile handling to use a unique temp file created with mode `0600`.
+- Fixed a PTY file-descriptor leak and sub-shell echo behavior.
+- Fixed sub-agent tool inheritance from the parent and abort-on-Ctrl+C cancellation.
+- Fixed the sub-agent UI flag reset when the Agent tool ends.
+- Fixed packaged skills seeding so install overwrites bundled skill files as intended.
+- Fixed the setup wizard so the config directory is created before the first-run save.
+- Fixed diagnose confirm-execute to use `has_alternatives` when presenting choices.
+- Fixed Release Preparation preflight so `resolve-release-pr` preserves `--pr-number` after YAML parsing.
+
+### Removed
+
+- Removed unused embedded prompt templates (`error_detect`, `system_diagnose`, `guess_command`) and stale copies under `crates/aish-shell/prompts/`.
+- Removed legacy `LlmSession` prompt filtering APIs in favor of `PromptAssembly`.
+- Removed `docs/skills-guide.md`.
+
+## [0.3.6] - 2026-07-03
+
+### Added
+
+- Added `/diagnose` for read-only failure diagnosis when shell commands are blocked.
+- Added read-only mode support for the bash tool, with hardened parsing for sudo segments and escapes.
+- Added bash-style multi-column tab completion with a custom pager.
+- Added environment-aware remote PS1 with danger escalation, including SSH host and git branch display.
+- Added a welcome changelog panel on startup.
+- Added a cliclack-based setup wizard with Codex OAuth login and OpenClaw-aligned auth flows.
+- Added bundled ops skills that seed to the user directory on install.
+- Added a multi API dialect registry for Anthropic and Codex, with streaming via an OpenAI SSE bridge.
+
+### Changed
+
+- Improved setup wizard UX, provider copy, and localized verification error messages.
+- Normalized model IDs for setup/runtime and adjusted default `max_tokens`.
+
+### Fixed
+
+- Fixed read-only bash enforcement gaps in the parser and session.
+- Fixed remote path detection for `host:/path` syntax and stdin draining before `--More--` prompts.
+- Fixed `send_command_interactive` blocking after sudo/PAM authentication.
+- Fixed PTY `PRINTF_ERASE` chunk-boundary leak.
+- Fixed Codex auth, SSE streaming, and Responses adapter `temperature` / `max_tokens` passthrough.
+
+## [0.3.5] - 2026-06-24
+
+### Added
+
+- Added `/record start|stop` for asciinema v2 session recording, including real-time PTY output and error-correction flow capture.
+- Added native bash Tab completion via control-pipe JSON, with readline forwarding and Bash 4.2 compatibility.
+- Added InputGuard pre-execution screening for shell commands and AI prompts (Allow / Confirm / Block), including SSH/PTY sessions.
+- Added `/status` to display system environment (hostname, OS, CPU, memory, network, services, errors) in local and remote SSH modes.
+- Added `/doctor` for parallel environment diagnostics (config, API key, dirs, session, tools, skills, memory, connectivity).
+
+### Changed
+
+- Improved slash-command popup Enter/Tab UX, viewport stability, and arrow navigation.
+- Improved SSH error correction with exit codes, remote host context, and broader shell error-prefix support.
+- Added release profile size optimizations (LTO, strip).
+
+### Fixed
+
+- Fixed cast replay by preserving standalone `\r` and recording Ctrl+C events.
+- Fixed Tab completion timeout for slow native completions (e.g. systemctl).
+- Fixed Tab completion on Bash 4.2 (CentOS 7).
+
+### Removed
+
+- Removed deprecated dead code from the Rust runtime (LiteLLMClient, legacy diagnose agent, state_capture).
+
+## [0.3.4] - 2026-06-08
+
+### Added
+
+- Added multimodal image support so user messages can attach local image files and send them as structured content blocks to compatible models.
+- Added an interactive `/feedback` command that collects system context, redacts sensitive log lines, and opens a pre-filled GitHub issue in the browser.
+- Added `/help` with topic-based help pages and markdown rendering, plus `/quit` as an exit alias for the interactive shell.
+- Added a `web_fetch` tool so the agent can retrieve and summarize web page content during a session.
+- Added ESC handling in readline to cancel the current input line without leaving the shell.
+
+### Changed
+
+- Changed the feedback issue template to include bug-report sections such as steps to reproduce, expected behavior, and actual behavior.
+- Changed the project license metadata from MIT to Apache-2.0 so packaging files match the shipped `LICENSE`.
+
+### Fixed
+
+- Fixed confirmation panel rendering so the right border draws correctly in the terminal UI.
+- Fixed feedback log attachment so oversized bodies keep as many recent log lines as possible instead of dropping logs entirely when the GitHub issue URL would exceed the length limit.
+
+## [0.3.3] - 2026-06-03
+
+### Added
+
+- Added a slash-command suggestion popup and a built-in `/feedback` command so interactive command discovery is faster inside the shell.
+- Added ESC interrupt handling, richer keyboard events, and improved inline dialogs and panels for interactive shell flows.
+
+### Changed
+
+- Changed `ask_user` interactions to use the new dialog flow with clearer validation, cancel handling, and localized prompt copy.
+
+### Fixed
+
+- Fixed PTY cleanup on shell shutdown so background terminal resources are released more reliably.
+- Fixed prompt cwd refresh after `ai bash` changes directory so the shell prompt stays in sync.
+- Fixed `ask_user` default matching and validation reporting so trimmed defaults and structured errors behave consistently.
+- Fixed slash popup anchoring so the menu stays attached to the active prompt line.
+
+
+## [0.3.2] - 2026-05-29
+
+### Added
+
+- Added official PyPI packaging for stable Linux amd64 and arm64 releases, including a packaged `aish` launcher that installs via `pip`.
+- Added release workflow steps to build, smoke test, and publish PyPI artifacts alongside the existing bundle release assets.
+
+### Changed
+
+- Changed self-update and uninstall flows to detect pip-based installations and preserve the original install channel details when upgrading.
+
+### Fixed
+
+- Fixed release CI follow-up issues around formatting, lint gates, and the sandbox worker test so the new PyPI release path can pass the full validation pipeline reliably.
+
+## [0.3.1] - 2026-05-29
+
+### Fixed
+
+- Fixed competing stdin readers around `ask_user` and related interactive flows so prompts no longer fight with shell input watchers.
+- Fixed UTF-8 slicing bugs that could panic on non-ASCII paths or truncated error bodies during setup and prompt rendering.
+
+## [0.3.0] - 2026-05-26
+
+### Added
+
+- Added nested SSH session detection with stronger interrupt handling so remote interactive sessions can be identified and interrupted more reliably.
+- Added a host dossier pipeline and the `host_note` AI tool so per-host notes and profile data can persist across sessions.
+
+### Changed
+
+- Changed the Rust PTY and secure-bash flow to better support nested remote session execution and follow-up tool work.
+
+### Fixed
+
+- Fixed `host_note` persistence so profile-save failures are surfaced instead of being reported as success.
+- Fixed Rust CI and clippy regressions introduced by the SSH and host-dossier changes.
+
+## [0.3.0-beta.3] - 2026-05-13
+
+### Added
+
+- Added nested SSH session detection with stronger interrupt handling so remote interactive sessions can be identified and interrupted more reliably.
+- Added a host dossier pipeline and the `host_note` AI tool so per-host notes and profile data can persist across sessions.
+
+### Changed
+
+- Changed the Rust PTY and secure-bash flow to better support nested remote session execution and follow-up tool work.
+
+### Fixed
+
+- Fixed `host_note` persistence so profile-save failures are surfaced instead of being reported as success.
+- Fixed Rust CI and clippy regressions introduced by the SSH and host-dossier changes.
+
+## [0.2.0] - 2026-04-03
+
+### Added
+
+- Added `aish models usage` so the CLI can show the current model, resolved provider, credential source or auth state, and provider dashboard entry.
+- Added `prompt_theme` configuration for reusable shell prompt styles on top of the existing prompt scripting support.
+- Added opt-in live smoke coverage for real provider credentials and installed bundle verification before release.
+
+### Changed
+
+- Changed the shell architecture from the old `shell.py` plus `shell_enhanced` and `tui` helpers into dedicated `shell/runtime`, `shell/ui`, `shell/pty`, shared `pty`, and `interaction` modules.
+- Changed the interactive shell flow to use explicit backend control events and editing phases, improving multiline input, completions, confirmation panels, ask_user dialogs, and recovery after long-running terminal sessions.
+- Changed model auth entry so `aish models auth` is the primary command path, while the old `login` path remains as a compatibility alias.
+
+### Removed
+
+- Removed the unfinished plan, research, think, and old TUI-oriented code paths from the active shell implementation.
+
+### Fixed
+
+- Fixed Ctrl+C handling for AI operations and interactive PTY sessions so control returns to the shell more predictably after interruptions.
+- Fixed false error hints for normal SIGPIPE-based pager exits such as quitting `less`.
+- Fixed packaged bundle startup by including the bash wrapper assets required by the PTY shell.
+
+### Security
+
+- Fixed a history command injection vulnerability in the shell execution path.
+
+## [0.1.3] - 2026-03-19
+
+### Added
+
+- Added shell prompt scripting support with built-in templates, examples, and hot reload so prompts can be customized without modifying core code.
+- Added full localized interface coverage for German, Spanish, French, Japanese, and Chinese alongside the existing English experience.
+
+### Changed
+
+- Changed the setup wizard to better guide provider configuration with clearer loading feedback during key assignment and verification.
+- Changed assistant response rendering to use a more compact message box layout for long replies in the terminal UI.
+
+### Fixed
+
+- Fixed transient OpenAI Codex request failures by retrying temporary upstream errors during provider requests.
+- Fixed sandbox startup and IPC routing so sandboxed execution remains reliable in both normal and frozen binary environments.
+- Fixed missing localized labels for sandbox approval actions in non-English interfaces.
+
+## [0.1.2] - 2026-03-14
+
+### Added
+
+- Added a provider abstraction layer for OAuth-backed integrations, including a reusable provider registry and shared OAuth helpers.
+- Added regression coverage for release metadata extraction so tagged releases read notes from the versioned changelog section.
+
+### Changed
+
+- Changed the release pipeline to be fully tag-driven by removing the manual Release PR workflow and creating GitHub Releases directly from stable tag pushes.
+- Changed OpenAI Codex provider internals to use the shared provider/OAuth architecture for future provider expansion.
+
+### Fixed
+
+- Fixed LiteLLM provider tool calls so forwarded tool parameters reach the provider correctly.
+
+## [0.1.1] - 2026-03-13
+
+### Added
+
+- Added built-in OpenAI Codex OAuth support.
+- Added a unified Release Preparation workflow that validates the target version and dry-runs release bundles before the final release.
+- Added tag-driven GitHub Release publishing for stable `vX.Y.Z` pushes.
+
+### Changed
+
+- Changed the release pipeline to publish Linux binary bundles for amd64 and arm64 from stable git tags, with install and smoke-test verification in CI.
+- Changed release metadata handling so version normalization, versioned changelog extraction, and previous-tag discovery are generated consistently for release workflows.
+
+### Removed
+
+- Removed Debian package publishing from the release path; new releases should be installed from the published binary bundle instead of a .deb package.
+
+### Fixed
+
+- Fixed bundle install and uninstall scripts so packaged binaries, services, and install layout are handled consistently.
+- Fixed Linux bundle smoke tests to match the installer layout used by release artifacts.
+- Fixed startup welcome screen rendering regressions.
+- Fixed official website redirection failures.
+
+## [0.1.0] - 2025-12-29
+
+### Added
+
+- Initial public project structure.
+
+### Changed
+
+- Established the first project release and Debian packaging baseline.

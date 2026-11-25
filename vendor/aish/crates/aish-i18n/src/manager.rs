@@ -1,0 +1,525 @@
+use std::collections::HashMap;
+
+use aish_core::Result;
+use tracing::debug;
+
+// Embed all locale files at compile time so the binary works standalone.
+const EN_US_YAML: &str = include_str!("../locales/en-US.yaml");
+const ZH_CN_YAML: &str = include_str!("../locales/zh-CN.yaml");
+const JA_JP_YAML: &str = include_str!("../locales/ja-JP.yaml");
+const DE_DE_YAML: &str = include_str!("../locales/de-DE.yaml");
+const ES_ES_YAML: &str = include_str!("../locales/es-ES.yaml");
+const FR_FR_YAML: &str = include_str!("../locales/fr-FR.yaml");
+
+/// Compile-time embedded locales: locale tag → YAML content.
+static EMBEDDED_LOCALES: &[(&str, &str)] = &[
+    ("en-US", EN_US_YAML),
+    ("zh-CN", ZH_CN_YAML),
+    ("ja-JP", JA_JP_YAML),
+    ("de-DE", DE_DE_YAML),
+    ("es-ES", ES_ES_YAML),
+    ("fr-FR", FR_FR_YAML),
+];
+
+/// Manages locale detection, YAML loading and key lookup.
+pub struct I18nManager {
+    translations: HashMap<String, String>,
+    fallback_translations: HashMap<String, String>,
+    locale: String,
+}
+
+impl I18nManager {
+    /// Create a new manager, auto-detecting the locale from `LANG` / `LC_ALL`.
+    /// Falls back to `"en-US"` when the environment variables are absent or
+    /// don't match a known locale file.
+    pub fn new() -> Self {
+        let locale = Self::detect_locale();
+        Self::new_with_locale(&locale)
+    }
+
+    /// Create a manager for the given locale, falling back to `"en-US"` when
+    /// the requested locale file cannot be found.
+    pub fn new_with_locale(locale: &str) -> Self {
+        let english_override = Self::load_locale_yaml_from_disk("en-US");
+        let fallback_translations = english_fallback_translations(english_override.as_deref());
+        let translations = match Self::load_translations(locale) {
+            Some(t) => t,
+            None => if locale != "en-US" {
+                debug!(
+                    target: "aish_i18n",
+                    "locale {:?} not found, falling back to en-US",
+                    locale
+                );
+                Self::load_translations("en-US")
+            } else {
+                None
+            }
+            .unwrap_or_else(|| {
+                debug!(
+                    target: "aish_i18n",
+                    "en-US also missing, using embedded en-US as last resort"
+                );
+                parse_yaml(EN_US_YAML)
+            }),
+        };
+
+        Self {
+            translations,
+            fallback_translations,
+            locale: locale.to_string(),
+        }
+    }
+
+    /// Load translations from embedded YAML files.
+    /// Equivalent to [`new()`] but returns a `Result` for explicit error handling.
+    pub fn load() -> Result<Self> {
+        Ok(Self::new())
+    }
+
+    /// Look up a dot-separated key. Returns the selected translation, then
+    /// the English fallback, or the key itself when neither locale has it.
+    pub fn t(&self, key: &str) -> String {
+        match self.translations.get(key) {
+            Some(val) => val.clone(),
+            None => match self.fallback_translations.get(key) {
+                Some(val) => val.clone(),
+                None => {
+                    debug!(target: "aish_i18n", "missing i18n key: {:?}", key);
+                    key.to_string()
+                }
+            },
+        }
+    }
+
+    /// Look up a key and substitute `{variable}` placeholders from `args`.
+    ///
+    /// Placeholders that have no matching entry in `args` are left as-is.
+    pub fn t_with_args(&self, key: &str, args: &HashMap<String, String>) -> String {
+        let template = self.t(key);
+        substitute_placeholders(&template, args)
+    }
+
+    /// Return the locale code this manager was initialised with.
+    pub fn current_locale(&self) -> &str {
+        &self.locale
+    }
+
+    // -- internal helpers ---------------------------------------------------
+
+    pub fn detect_locale() -> String {
+        // LC_ALL takes precedence over LANG.
+        for var in &["LC_ALL", "LANG"] {
+            if let Ok(val) = std::env::var(var) {
+                // Common formats: "en_US.UTF-8", "en_US", "en-US"
+                let normalized = val.split('.').next().unwrap_or("").replace('_', "-");
+                // Only return if it looks plausible (contains at least a language code).
+                if !normalized.is_empty() && normalized != "C" {
+                    return normalized;
+                }
+            }
+        }
+        "en-US".to_string()
+    }
+
+    /// Try to load and parse a locale YAML.
+    ///
+    /// Search order:
+    /// 1. Filesystem override (user config → system → development path)
+    /// 2. Embedded compile-time locale
+    fn load_translations(locale: &str) -> Option<HashMap<String, String>> {
+        // Try filesystem first (allows user overrides)
+        if let Some(content) = Self::load_locale_yaml_from_disk(locale) {
+            return Some(parse_yaml(&content));
+        }
+
+        // Fall back to embedded locale
+        for &(tag, yaml) in EMBEDDED_LOCALES {
+            if tag == locale {
+                debug!(
+                    target: "aish_i18n",
+                    "using embedded locale {:?}",
+                    locale
+                );
+                return Some(parse_yaml(yaml));
+            }
+        }
+
+        None
+    }
+
+    /// Try to load a locale YAML from disk (user override, system, or dev path).
+    fn load_locale_yaml_from_disk(locale: &str) -> Option<String> {
+        // User override in their config directory (highest priority)
+        let user_path = dirs::home_dir()
+            .map(|h| format!("{}/.config/aish/locales/{}.yaml", h.display(), locale));
+
+        // Installed system-wide path
+        let system_path = format!("/usr/share/aish/locales/{}.yaml", locale);
+
+        // Development path (relative to workspace root)
+        let dev_path = format!("crates/aish-i18n/locales/{}.yaml", locale);
+
+        let paths: Vec<String> = if let Some(ref up) = user_path {
+            vec![up.clone(), system_path, dev_path]
+        } else {
+            vec![system_path, dev_path]
+        };
+
+        for path in &paths {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                debug!(target: "aish_i18n", "loaded locale {:?} from {:?}", locale, path);
+                return Some(content);
+            }
+        }
+        None
+    }
+}
+
+impl Default for I18nManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// YAML helpers
+// ---------------------------------------------------------------------------
+
+/// Recursively flatten a YAML value tree into `"section.key" -> "value"` pairs.
+fn flatten_yaml(prefix: &str, value: &serde_yaml::Value, map: &mut HashMap<String, String>) {
+    match value {
+        serde_yaml::Value::Mapping(m) => {
+            for (k, v) in m {
+                if let serde_yaml::Value::String(key) = k {
+                    let new_prefix = if prefix.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{}.{}", prefix, key)
+                    };
+                    flatten_yaml(&new_prefix, v, map);
+                }
+            }
+        }
+        serde_yaml::Value::String(s) => {
+            map.insert(prefix.to_string(), s.clone());
+        }
+        serde_yaml::Value::Number(n) => {
+            map.insert(prefix.to_string(), n.to_string());
+        }
+        serde_yaml::Value::Bool(b) => {
+            map.insert(prefix.to_string(), b.to_string());
+        }
+        // Sequences and null are stored as their debug representation.
+        other => {
+            map.insert(prefix.to_string(), format!("{:?}", other));
+        }
+    }
+}
+
+/// Parse a YAML string into a flat key-value map.
+fn parse_yaml(content: &str) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    match serde_yaml::from_str::<serde_yaml::Value>(content) {
+        Ok(root) => flatten_yaml("", &root, &mut map),
+        Err(e) => {
+            debug!(target: "aish_i18n", "failed to parse YAML: {}", e);
+        }
+    }
+    map
+}
+
+/// Build the English fallback from embedded strings plus any partial en-US
+/// filesystem override. User-provided values take precedence over embedded
+/// values, while missing override keys retain their embedded translations.
+fn english_fallback_translations(locale_override: Option<&str>) -> HashMap<String, String> {
+    let mut translations = parse_yaml(EN_US_YAML);
+    if let Some(locale_override) = locale_override {
+        translations.extend(parse_yaml(locale_override));
+    }
+    translations
+}
+
+/// Replace `{name}` tokens in `template` with values from `args`.
+fn substitute_placeholders(template: &str, args: &HashMap<String, String>) -> String {
+    let mut result = template.to_string();
+    for (key, value) in args {
+        let pattern = format!("{{{}}}", key);
+        result = result.replace(&pattern, value);
+    }
+    result
+}
+
+/// Extract every literal i18n key referenced through `t("…")` /
+/// `t_with_args("…")` from the workspace's Rust sources. Used by the
+/// completeness guard test below so a key added in code but missing from
+/// the locale files fails CI instead of rendering as a raw dotted key in
+/// the UI.
+#[cfg(test)]
+fn scan_source_i18n_keys() -> std::collections::BTreeSet<String> {
+    let mut keys = std::collections::BTreeSet::new();
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let crates_dir = std::path::Path::new(manifest)
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("crates dir")
+        .join("crates");
+    let mut stack = vec![crates_dir];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                // Skip generated/legacy trees that never touch aish_i18n.
+                if path.ends_with("target") || path.ends_with("src/aish") {
+                    continue;
+                }
+                stack.push(path);
+                continue;
+            }
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let Ok(source) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            // Only the crate's free functions with a string-literal first
+            // argument count. Matching the `aish_i18n::` qualifier avoids
+            // false positives from arbitrary text containing `t(` inside
+            // string literals (URLs, file names, prose).
+            let mut rest = source.as_str();
+            while let Some(pos) = rest.find("aish_i18n::t") {
+                let after = &rest[pos + "aish_i18n::t".len()..];
+                let call = if after.starts_with("_with_args(") {
+                    "_with_args("
+                } else if after.starts_with('(') {
+                    "("
+                } else {
+                    rest = &rest[pos + 1..];
+                    continue;
+                };
+                if let Some(value) = after[call.len()..].trim_start().strip_prefix('"') {
+                    if let Some(end) = value.find('"') {
+                        let key = &value[..end];
+                        if key.contains('.') {
+                            keys.insert(key.to_string());
+                        }
+                    }
+                }
+                rest = &rest[pos + "aish_i18n::t".len()..];
+            }
+        }
+    }
+    keys
+}
+
+#[cfg(test)]
+mod completeness_guard {
+    //! Auto-scanning guard: every i18n key referenced by workspace source
+    //! must exist in every embedded locale. Replaces hand-maintained key
+    //! lists that went stale (stale_tag, not_undoable_confirm).
+
+    use super::*;
+
+    #[test]
+    fn every_source_referenced_key_exists_in_all_embedded_locales() {
+        let keys = scan_source_i18n_keys();
+        assert!(
+            keys.len() > 100,
+            "scanner found only {} keys — workspace source layout changed?",
+            keys.len()
+        );
+        // Full coverage is enforced for en-US and zh-CN. de-DE/es-ES/fr-FR
+        // and ja-JP carry a large historical debt (~60 keys each) tracked in
+        // issue #524; extending full coverage there is a follow-up.
+        let full_coverage: &[&str] = &["en-US", "zh-CN"];
+        let mut missing: Vec<String> = Vec::new();
+        for &(tag, yaml) in EMBEDDED_LOCALES {
+            let translations = parse_yaml(yaml);
+            for key in &keys {
+                if !translations.contains_key(key) {
+                    missing.push(format!("{tag}: {key}"));
+                }
+            }
+        }
+        missing.retain(|entry| {
+            let tag = entry.split(':').next().unwrap_or("");
+            full_coverage.contains(&tag)
+        });
+        assert!(
+            missing.is_empty(),
+            "i18n keys referenced in source but missing from embedded locales:\n{}",
+            missing.join("\n")
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flatten_simple_key() {
+        let yaml = r#"
+cli:
+  app_help: "Hello world"
+"#;
+        let map = parse_yaml(yaml);
+        assert_eq!(map.get("cli.app_help").unwrap(), "Hello world");
+    }
+
+    #[test]
+    fn flatten_nested_keys() {
+        let yaml = r#"
+shell:
+  welcome2:
+    header: ">_ AI Shell {version}"
+"#;
+        let map = parse_yaml(yaml);
+        assert_eq!(
+            map.get("shell.welcome2.header").unwrap(),
+            ">_ AI Shell {version}"
+        );
+    }
+
+    #[test]
+    fn substitute_works() {
+        let mut args = HashMap::new();
+        args.insert("version".to_string(), "0.2.0".to_string());
+        let result = substitute_placeholders(">_ AI Shell {version}", &args);
+        assert_eq!(result, ">_ AI Shell 0.2.0");
+    }
+
+    #[test]
+    fn missing_key_returns_key() {
+        let mgr = I18nManager::new_with_locale("en-US");
+        assert_eq!(mgr.t("nonexistent.key"), "nonexistent.key");
+    }
+
+    #[test]
+    fn missing_locale_key_falls_back_to_english() {
+        let mut mgr = I18nManager::new_with_locale("zh-CN");
+        let key = "shell.security.input_guard.labels.targets";
+        mgr.translations.remove(key);
+        assert_eq!(mgr.t(key), "Targets");
+    }
+
+    #[test]
+    fn partial_english_override_keeps_embedded_fallback_keys() {
+        let fallback = english_fallback_translations(Some(
+            "shell:\n  security:\n    input_guard:\n      labels:\n        targets: Custom targets\n",
+        ));
+
+        assert_eq!(
+            fallback.get("shell.security.input_guard.labels.targets"),
+            Some(&"Custom targets".to_string())
+        );
+        assert_eq!(
+            fallback.get("shell.security.input_guard.labels.safer"),
+            Some(&"Safer".to_string())
+        );
+    }
+
+    #[test]
+    fn unknown_locale_falls_back() {
+        // "xx-XX" has no YAML file, but en-US is embedded so this should still work.
+        let mgr = I18nManager::new_with_locale("xx-XX");
+        assert!(!mgr.t("cli.app_help").is_empty());
+        assert_ne!(mgr.t("cli.app_help"), "cli.app_help");
+    }
+
+    #[test]
+    fn embedded_zh_cn_works() {
+        // zh-CN is embedded at compile time, should work without filesystem access.
+        let mgr = I18nManager::new_with_locale("zh-CN");
+        // Should return Chinese text, not the key itself
+        let provider_header = mgr.t("cli.setup.provider_header");
+        assert_ne!(provider_header, "cli.setup.provider_header");
+        assert!(
+            provider_header.contains("Provider"),
+            "Expected Chinese text, got: {}",
+            provider_header
+        );
+    }
+
+    #[test]
+    fn all_embedded_locales_loadable() {
+        for &(tag, _) in EMBEDDED_LOCALES {
+            let mgr = I18nManager::new_with_locale(tag);
+            let val = mgr.t("cli.app_help");
+            assert_ne!(val, "cli.app_help", "Locale {} failed to load", tag);
+        }
+    }
+
+    #[test]
+    fn picker_keys_present_in_all_embedded_locales() {
+        // Regression guard: the /model picker + accounts i18n keys must exist
+        // in every embedded locale, else the panel renders raw key strings.
+        for &(tag, _) in EMBEDDED_LOCALES {
+            let mgr = I18nManager::new_with_locale(tag);
+            for key in [
+                "shell.model.picker_title",
+                "shell.model.picker_subtitle",
+                "shell.model.picker_search",
+                "shell.model.picker_footer",
+                "shell.model.action_add",
+                "shell.model.action_manage",
+                "shell.model.action_session",
+                "shell.model.switch_saved",
+                "shell.model.switch_session_only",
+                "shell.model.manage_title",
+                "shell.accounts.name_label",
+                "shell.common.cancelled",
+                // Regression guard: the failure_diagnose tail must stay under
+                // shell.failure_diagnose (a prior i18n splice stranded it).
+                "shell.failure_diagnose.conclusion_fixed",
+                "shell.failure_diagnose.no_evidence",
+            ] {
+                let val = mgr.t(key);
+                assert_ne!(
+                    val, key,
+                    "embedded locale {:?} is missing key {:?} (returned the key itself)",
+                    tag, key
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn audit_export_keys_present_in_all_embedded_locales() {
+        // Regression guard: /audit export initially shipped its keys in
+        // en-US/zh-CN only, so four locales rendered raw dotted keys.
+        // Build the manager straight from the embedded YAML so a host-side
+        // locale file override cannot mask a missing embedded key.
+        for &(tag, yaml) in EMBEDDED_LOCALES {
+            let translations = parse_yaml(yaml);
+            let mgr = I18nManager {
+                translations: translations.clone(),
+                fallback_translations: english_fallback_translations(None),
+                locale: tag.to_string(),
+            };
+            for key in [
+                "shell.audit_export.usage",
+                "shell.audit_export.no_events",
+                "shell.audit_export.mkdir_failed",
+                "shell.audit_export.build_failed",
+                "shell.audit_export.publish_failed",
+                "shell.audit_export.exported",
+            ] {
+                assert!(
+                    translations.contains_key(key),
+                    "embedded locale {:?} is missing key {:?}",
+                    tag,
+                    key
+                );
+                let val = mgr.t(key);
+                assert_ne!(
+                    val, key,
+                    "embedded locale {:?} is missing key {:?} (returned the key itself)",
+                    tag, key
+                );
+            }
+        }
+    }
+}

@@ -1,0 +1,21 @@
+[package]
+name = "aish-chat"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Headless chat/agent session API shared by GUI frontends"
+
+[dependencies]
+aish-config = { path = "../aish-config" }
+aish-core = { path = "../aish-core" }
+aish-llm = { path = "../aish-llm" }
+aish-session = { path = "../aish-session" }
+aish-tools = { path = "../aish-tools" }
+base64 = "0.22"
+chrono.workspace = true
+parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }

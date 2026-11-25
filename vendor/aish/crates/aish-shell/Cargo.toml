@@ -1,0 +1,57 @@
+[package]
+name = "aish-shell"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aish-core.workspace = true
+aish-md-table.workspace = true
+base64.workspace = true
+aish-config.workspace = true
+aish-hosts.workspace = true
+aish-i18n.workspace = true
+aish-pty.workspace = true
+aish-scripts.workspace = true
+aish-llm.workspace = true
+aish-mcp.workspace = true
+aish-session.workspace = true
+rusqlite.workspace = true
+aish-context.workspace = true
+aish-skills.workspace = true
+aish-memory.workspace = true
+aish-ui.workspace = true
+aish-tools.workspace = true
+aish-prompts.workspace = true
+aish-security.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+crossterm.workspace = true
+ratatui.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+dirs.workspace = true
+reqwest.workspace = true
+semver.workspace = true
+richrs.workspace = true
+pulldown-cmark.workspace = true
+regex.workspace = true
+shellexpand.workspace = true
+sysinfo.workspace = true
+rustyline.workspace = true
+inquire.workspace = true
+unicode-width.workspace = true
+which.workspace = true
+nix.workspace = true
+libc.workspace = true
+open.workspace = true
+cliclack.workspace = true
+parking_lot.workspace = true
+sha2.workspace = true
+iana-time-zone.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

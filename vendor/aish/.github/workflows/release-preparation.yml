@@ -1,0 +1,290 @@
+name: Release Preparation
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Upstream release PR number (manual trigger only)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: release-preparation-pr-${{ github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: Validate release PR context
+    runs-on: ubuntu-26.04
+    outputs:
+      checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      head_ref: ${{ steps.resolve.outputs.head_ref }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Resolve release PR context
+        id: resolve
+        uses: ./.github/actions/resolve-release-pr
+        with:
+          pr_number: ${{ github.event.inputs.pr_number }}
+
+  release-meta:
+    name: Compute release metadata
+    needs: preflight
+    runs-on: ubuntu-26.04
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      previous_stable_tag: ${{ steps.metadata.outputs.previous_stable_tag }}
+      release_notes: ${{ steps.metadata.outputs.release_notes }}
+    steps:
+      - name: Checkout release merge ref
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.checkout_ref }}
+
+      - name: Resolve target version
+        id: target_version
+        shell: bash
+        env:
+          PREFLIGHT_VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "${PREFLIGHT_VERSION}" ]; then
+            echo "value=${PREFLIGHT_VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            version="$(python3 packaging/scripts/release_metadata.py --print-json | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')"
+            echo "value=${version}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute release metadata
+        id: metadata
+        uses: ./.github/actions/release-metadata
+        with:
+          version: ${{ steps.target_version.outputs.value }}
+          artifact_prefix: release-preparation
+
+  prepare-release:
+    name: Summarize release preparation output
+    needs:
+      - preflight
+      - release-meta
+    runs-on: ubuntu-26.04
+    outputs:
+      version: ${{ needs.release-meta.outputs.version }}
+      tag: ${{ needs.release-meta.outputs.tag }}
+      previous_stable_tag: ${{ needs.release-meta.outputs.previous_stable_tag }}
+    steps:
+      - name: Write job summary
+        env:
+          RELEASE_VERSION: ${{ needs.release-meta.outputs.version }}
+          RELEASE_TAG: ${{ needs.release-meta.outputs.tag }}
+          PREFLIGHT_PR_NUMBER: ${{ needs.preflight.outputs.pr_number }}
+          PREFLIGHT_HEAD_REF: ${{ needs.preflight.outputs.head_ref }}
+          PREFLIGHT_CHECKOUT_REF: ${{ needs.preflight.outputs.checkout_ref }}
+          RELEASE_PREVIOUS_STABLE_TAG: ${{ needs.release-meta.outputs.previous_stable_tag || 'none' }}
+          RELEASE_NOTES: ${{ needs.release-meta.outputs.release_notes }}
+        run: |
+          {
+            echo "# Release Preparation Ready"
+            echo ""
+            echo "- Version: ${RELEASE_VERSION}"
+            echo "- Tag: ${RELEASE_TAG}"
+            echo "- PR: #${PREFLIGHT_PR_NUMBER}"
+            echo "- Head branch: ${PREFLIGHT_HEAD_REF}"
+            echo "- Checkout ref: ${PREFLIGHT_CHECKOUT_REF}"
+            echo "- Previous stable tag: ${RELEASE_PREVIOUS_STABLE_TAG}"
+            echo ""
+            echo "## Release Notes"
+            echo ""
+            printf '%s\n' "${RELEASE_NOTES}";
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  dry-run-package-validation:
+    name: Dry-run package validation (${{ matrix.arch }})
+    needs:
+      - preflight
+      - release-meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-unknown-linux-musl
+            runs_on: ubuntu-26.04
+          - arch: arm64
+            target: aarch64-unknown-linux-musl
+            runs_on: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runs_on }}
+
+    steps:
+      - name: Checkout release merge ref
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.checkout_ref }}
+
+      - name: Set up build environment
+        env:
+          AISH_BUILD_TARGET: ${{ matrix.target }}
+        run: ./packaging/scripts/setup-ci-env.sh
+
+      - name: Build bundle
+        run: |
+          VERSION="${{ needs.release-meta.outputs.version }}"
+          OUTPUT_DIR="artifacts/${{ matrix.arch }}"
+          VERSION="$VERSION" PLATFORM="linux" ARCH="${{ matrix.arch }}" AISH_BUILD_TARGET="${{ matrix.target }}" OUTPUT_DIR="$OUTPUT_DIR" ./packaging/build_bundle.sh
+          ls -lah "$OUTPUT_DIR"
+
+      - name: Smoke test bundle install
+        run: |
+          VERSION="${{ needs.release-meta.outputs.version }}"
+          OUTPUT_DIR="artifacts/${{ matrix.arch }}"
+          BUNDLE="aish-${VERSION}-linux-${{ matrix.arch }}"
+          EXTRACT_DIR="$PWD/build/install-smoke/${{ matrix.arch }}"
+          INSTALL_ROOT="$PWD/build/install-root/${{ matrix.arch }}"
+
+          rm -rf "$EXTRACT_DIR" "$INSTALL_ROOT"
+          mkdir -p "$EXTRACT_DIR" "$INSTALL_ROOT"
+
+          tar -xzf "$OUTPUT_DIR/${BUNDLE}.tar.gz" -C "$EXTRACT_DIR"
+          AISH_INSTALL_ROOT="$INSTALL_ROOT" AISH_SKIP_SYSTEMD=1 "$EXTRACT_DIR/${BUNDLE}/install.sh"
+
+          test -x "$INSTALL_ROOT/usr/local/bin/aish"
+          test -f "$INSTALL_ROOT/etc/systemd/system/aish-sandbox.service"
+          test -f "$INSTALL_ROOT/etc/systemd/system/aish-sandbox.socket"
+
+      - name: Upload dry-run artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-preparation-aish-linux-${{ matrix.arch }}
+          path: artifacts/${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  dry-run-pypi-validation:
+    name: Dry-run PyPI validation (${{ matrix.arch }})
+    needs:
+      - preflight
+      - release-meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-unknown-linux-musl
+            runs_on: ubuntu-26.04
+          - arch: arm64
+            target: aarch64-unknown-linux-musl
+            runs_on: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runs_on }}
+
+    steps:
+      - name: Skip PyPI validation for prerelease versions
+        if: ${{ contains(needs.release-meta.outputs.version, '-') }}
+        run: |
+          echo "Skipping PyPI wheel validation for prerelease version ${{ needs.release-meta.outputs.version }}."
+
+      - name: Checkout release merge ref
+        if: ${{ !contains(needs.release-meta.outputs.version, '-') }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.checkout_ref }}
+
+      - name: Set up build environment
+        if: ${{ !contains(needs.release-meta.outputs.version, '-') }}
+        env:
+          AISH_BUILD_TARGET: ${{ matrix.target }}
+        run: ./packaging/scripts/setup-ci-env.sh
+
+      - name: Set up Python
+        if: ${{ !contains(needs.release-meta.outputs.version, '-') }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install Python build tooling
+        if: ${{ !contains(needs.release-meta.outputs.version, '-') }}
+        run: python -m pip install --upgrade pip build
+
+      - name: Build PyPI wheel
+        if: ${{ !contains(needs.release-meta.outputs.version, '-') }}
+        run: |
+          VERSION="${{ needs.release-meta.outputs.version }}"
+          DIST_DIR="$PWD/artifacts/pypi/${{ matrix.arch }}"
+          VERSION="$VERSION" DIST_DIR="$DIST_DIR" AISH_PYPI_REPOSITORY_LABEL="PyPI" AISH_BUILD_TARGET="${{ matrix.target }}" ./packaging/scripts/build_testpypi_package.sh
+          ls -lah "$DIST_DIR"
+
+      - name: Smoke test wheel install
+        if: ${{ !contains(needs.release-meta.outputs.version, '-') }}
+        shell: bash
+        run: |
+          DIST_DIR="$PWD/artifacts/pypi/${{ matrix.arch }}"
+          VENV_DIR="$PWD/build/pypi-smoke/${{ matrix.arch }}"
+
+          rm -rf "$VENV_DIR"
+          python -m venv "$VENV_DIR"
+          source "$VENV_DIR/bin/activate"
+
+          python -m pip install --upgrade pip
+          python -m pip install "$DIST_DIR"/aish_rust-*.whl
+          aish --version >/dev/null
+          python -m pip uninstall -y aish-rust
+
+      - name: Upload PyPI dry-run artifacts
+        if: ${{ !contains(needs.release-meta.outputs.version, '-') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-preparation-pypi-linux-${{ matrix.arch }}
+          path: artifacts/pypi/${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  live-smoke-validation:
+    name: Live smoke validation
+    needs:
+      - preflight
+      - release-meta
+      - dry-run-package-validation
+    uses: ./.github/workflows/live-smoke.yml
+    with:
+      ref: ${{ needs.preflight.outputs.checkout_ref }}
+    secrets: inherit
+
+  release-preparation-summary:
+    name: Release preparation summary
+    needs:
+      - preflight
+      - release-meta
+      - prepare-release
+      - dry-run-package-validation
+      - dry-run-pypi-validation
+      - live-smoke-validation
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Write final summary
+        env:
+          RELEASE_VERSION: ${{ needs.release-meta.outputs.version }}
+          RELEASE_TAG: ${{ needs.release-meta.outputs.tag }}
+          PREFLIGHT_PR_NUMBER: ${{ needs.preflight.outputs.pr_number }}
+          PREFLIGHT_HEAD_REF: ${{ needs.preflight.outputs.head_ref }}
+          PREFLIGHT_CHECKOUT_REF: ${{ needs.preflight.outputs.checkout_ref }}
+          RELEASE_PREVIOUS_STABLE_TAG: ${{ needs.release-meta.outputs.previous_stable_tag || 'none' }}
+        run: |
+          {
+            echo "# Release Preparation Complete"
+            echo ""
+            echo "- Version: ${RELEASE_VERSION}"
+            echo "- Tag: ${RELEASE_TAG}"
+            echo "- PR: #${PREFLIGHT_PR_NUMBER}"
+            echo "- Head branch: ${PREFLIGHT_HEAD_REF}"
+            echo "- Checkout ref: ${PREFLIGHT_CHECKOUT_REF}"
+            echo "- Previous stable tag: ${RELEASE_PREVIOUS_STABLE_TAG}"
+            echo ""
+            echo "Release metadata artifacts, dry-run bundle validation, stable-only PyPI wheel validation, and live smoke validation have completed successfully."
+          } >> "$GITHUB_STEP_SUMMARY"
