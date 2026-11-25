@@ -1418,6 +1418,20 @@ impl LlmSession {
                                 for event in events {
                                     match event {
                                         SseEvent::ContentDelta(delta) => {
+                                            // The model has moved from reasoning to
+                                            // the visible answer. Close the reasoning
+                                            // segment before emitting content so a GUI
+                                            // can collapse the thinking card at the
+                                            // right moment instead of waiting for EOF.
+                                            if reasoning_started {
+                                                reasoning_started = false;
+                                                self.emit_event(LlmEvent {
+                                                    event_type: LlmEventType::ReasoningEnd,
+                                                    data: serde_json::json!({}),
+                                                    timestamp: now_timestamp(),
+                                                    metadata: None,
+                                                });
+                                            }
                                             accumulated.push_str(&delta);
                                             // Python pattern: only emit content
                                             // delta during streaming when tool

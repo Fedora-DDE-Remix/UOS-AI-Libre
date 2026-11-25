@@ -48,3 +48,11 @@ XDG default) and resolves the default `~/.local/share/aish/sessions.db` when
 the config does not override `session_db_path`. `ChatSession` writes both the
 append-only `ai_messages` transcript and the `sessions.state` snapshot, so the
 CLI's resume selector and the GUI see the same conversation.
+
+## 6. Reasoning ordering
+
+When the first visible `ContentDelta` arrives, `aish-llm` now emits
+`ReasoningEnd` before the content delta and then stops the reasoning segment.
+A GUI can collapse the thinking card exactly when the answer begins; if a
+provider interleaves more reasoning later, a new `ReasoningStart` segment is
+opened.
