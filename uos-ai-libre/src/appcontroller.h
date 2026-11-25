@@ -1,0 +1,147 @@
+#pragma once
+
+#include <QObject>
+#include <QTimer>
+#include <QString>
+#include <QUrl>
+#include <QVariantList>
+#include <QVariantMap>
+
+#include "aishbridge.h"
+#include "chatmodel.h"
+
+/// Application service layer.
+///
+/// The QML pages only talk to this object. `AishBridge` owns the FFI/JSON
+/// boundary and `ChatModel` owns presentation rows; neither the Rust bridge nor
+/// aish's internal event schema is exposed to the UI. This keeps UI changes
+/// independent from the agent backend and makes the permission/approval flow a
+/// plain Qt signal/slot contract.
+class AppController final : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(ChatModel *chat READ chat CONSTANT)
+    Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
+    Q_PROPERTY(bool systemDark READ systemDark NOTIFY systemDarkChanged)
+    Q_PROPERTY(bool savingSession READ savingSession NOTIFY savingSessionChanged)
+    Q_PROPERTY(int themeMode READ themeMode WRITE setThemeMode NOTIFY themeModeChanged)
+    Q_PROPERTY(bool generating READ generating NOTIFY generatingChanged)
+    Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    Q_PROPERTY(QString sessionId READ sessionId NOTIFY sessionChanged)
+    Q_PROPERTY(QString sessionTitle READ sessionTitle NOTIFY sessionTitleChanged)
+    Q_PROPERTY(QString model READ model NOTIFY modelChanged)
+    Q_PROPERTY(QString apiBase READ apiBase NOTIFY configChanged)
+    Q_PROPERTY(bool hasApiKey READ hasApiKey NOTIFY configChanged)
+    Q_PROPERTY(QString configPath READ configPath NOTIFY configChanged)
+    Q_PROPERTY(QVariantMap config READ config NOTIFY configChanged)
+    Q_PROPERTY(QVariantMap pendingApproval READ pendingApproval NOTIFY pendingApprovalChanged)
+    Q_PROPERTY(int pendingApprovalCount READ pendingApprovalCount NOTIFY pendingApprovalChanged)
+    Q_PROPERTY(QVariantList sessions READ sessions NOTIFY sessionsChanged)
+    Q_PROPERTY(QString workspace READ workspace NOTIFY workspaceChanged)
+    Q_PROPERTY(QString defaultWorkspace READ defaultWorkspace CONSTANT)
+    Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
+    Q_PROPERTY(QString fontFamily READ fontFamily CONSTANT)
+
+public:
+    explicit AppController(QObject *parent = nullptr);
+
+    ChatModel *chat();
+    bool ready() const;
+    bool systemDark() const;
+    bool savingSession() const;
+    Q_INVOKABLE void markSavingSession();
+    int themeMode() const;
+    void setThemeMode(int mode);
+    bool generating() const;
+    QString lastError() const;
+    QString sessionId() const;
+    QString sessionTitle() const;
+    QString model() const;
+    QString apiBase() const;
+    bool hasApiKey() const;
+    QString configPath() const;
+    QVariantMap config() const;
+    QVariantMap pendingApproval() const;
+    int pendingApprovalCount() const;
+    QVariantList sessions() const;
+    QString workspace() const;
+    QString defaultWorkspace() const;
+    QString appVersion() const;
+    QString fontFamily() const;
+
+    Q_INVOKABLE void initialize();
+    Q_INVOKABLE bool sendMessage(const QString &text,
+                                 const QVariantList &imagePaths);
+    Q_INVOKABLE void stop();
+    Q_INVOKABLE void newConversation();
+    Q_INVOKABLE void loadSession(const QString &sessionId);
+    Q_INVOKABLE void deleteSession(const QString &sessionId);
+    Q_INVOKABLE void renameSession(const QString &sessionId,
+                                   const QString &title);
+    Q_INVOKABLE void refreshSessions();
+    Q_INVOKABLE void saveModelConfig(const QString &model,
+                                     const QString &apiBase,
+                                     const QString &apiKey);
+    Q_INVOKABLE void resolveApproval(int decision);
+    Q_INVOKABLE void setWorkspace(const QString &path);
+    Q_INVOKABLE void resetWorkspace();
+    Q_INVOKABLE void openConfigFile();
+    Q_INVOKABLE void openWorkspace();
+    Q_INVOKABLE void openExternal(const QString &url);
+    Q_INVOKABLE void copyText(const QString &text);
+    Q_INVOKABLE QString localFilePath(const QUrl &url) const;
+    Q_INVOKABLE QString localDirectory(const QUrl &url) const;
+    Q_INVOKABLE QString imageUrl(const QString &path) const;
+    Q_INVOKABLE QString takeScreenshot();
+    Q_INVOKABLE void showToast(const QString &message);
+
+signals:
+    void readyChanged();
+    void systemDarkChanged();
+    void savingSessionChanged();
+    void themeModeChanged();
+    void generatingChanged();
+    void lastErrorChanged();
+    void sessionChanged();
+    void sessionTitleChanged();
+    void modelChanged();
+    void configChanged();
+    void sessionsChanged();
+    void workspaceChanged();
+    void toastRequested(const QString &message);
+    void pendingApprovalChanged();
+    void sessionLoaded();
+    void sessionCleared();
+    void errorOccurred(const QString &message);
+
+private:
+    void wire();
+    void recomputeTitle();
+    void beginAssistantIfNeeded(const QString &model = {});
+    void onTurnStarted(const QVariantMap &info);
+    void onContentDelta(const QString &delta);
+    void onReasoningStart();
+    void onReasoningDelta(const QString &delta);
+    void onReasoningEnd();
+    void onToolStart(const QVariantMap &tool);
+    void onToolEnd(const QVariantMap &tool);
+    void onTurnDone(const QVariantMap &info);
+    void onTurnError(const QString &message);
+    void onTurnCancelled();
+    void onSessionLoaded(const QVariantList &messages, const QString &model);
+    void onSessionCleared();
+    void enqueueApproval(const QVariantMap &request);
+    void onConfigChanged();
+    void onSessionsChanged();
+
+    AishBridge m_bridge;
+    ChatModel m_chat;
+    QString m_model;
+    QString m_local_title;
+    QString m_title_cache;
+    QVariantMap m_pending_approval;
+    QList<QVariantMap> m_approval_queue;
+    QTimer m_approval_timeout;
+    int m_theme_mode = 2;
+    bool m_saving_session = false;
+    bool m_assistant_open = false;
+};

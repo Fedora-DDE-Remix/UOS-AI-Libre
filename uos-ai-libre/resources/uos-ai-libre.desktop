@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=UOS AI Libre
+Name[zh_CN]=UOS AI Libre
+Comment=Local-first AI assistant powered by aish
+Comment[zh_CN]=由 aish 驱动的本地优先 AI 助手
+Exec=uos-ai-libre
+Icon=uos-ai-libre
+Terminal=false
+Categories=Utility;Office;
+StartupNotify=true
+StartupWMClass=uos-ai-libre

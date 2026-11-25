@@ -1,0 +1,134 @@
+import QtQuick
+import UosAiLibre
+
+Item {
+    id: root
+    property string text: ""
+    property string reasoning: ""
+    property bool reasoningActive: false
+    property int reasoningElapsed: 0
+    property bool streaming: false
+    property var tools: []
+    property int elapsedMs: 0
+    property string model: ""
+    property string error: ""
+    property string notice: ""
+    width: parent ? parent.width : 0
+    implicitHeight: column.implicitHeight + 8
+
+    HoverHandler { id: messageHover }
+
+    Row {
+        id: row
+        width: parent.width
+        spacing: 12
+
+        Image {
+            id: avatar
+            y: 1
+            width: 28
+            height: 28
+            source: "qrc:/images/logo.png"
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+        }
+
+        Column {
+            id: column
+            width: root.width - avatar.width - row.spacing
+            spacing: 8
+
+            ReasoningCard {
+                visible: root.reasoning.length > 0 || root.reasoningActive
+                width: column.width
+                reasoning: root.reasoning
+                active: root.reasoningActive
+                elapsedMs: root.reasoningElapsed
+            }
+
+            ToolGroupCard {
+                visible: root.tools.length > 0
+                width: column.width
+                tools: root.tools
+                active: root.streaming
+                elapsedMs: root.elapsedMs
+            }
+
+            MarkdownView {
+                id: markdown
+                width: column.width
+                text: root.text
+                streaming: root.streaming
+            }
+
+            LoadingDots {
+                visible: root.streaming && root.text.length === 0
+                         && !root.reasoningActive && root.tools.length === 0
+                width: 22
+                height: 14
+            }
+
+            Text {
+                visible: root.error.length > 0
+                width: column.width
+                text: root.error
+                color: Theme.danger
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSizeSmall
+                lineHeight: 1.5
+                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+            }
+
+            Text {
+                visible: root.notice.length > 0
+                width: column.width
+                text: root.notice
+                color: Theme.textTertiary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSizeSmall
+            }
+
+            Item {
+                width: column.width
+                height: visible ? 24 : 0
+                visible: messageHover.hovered && !root.streaming
+                         && root.text.length > 0
+
+                Row {
+                    spacing: 4
+                    opacity: 1
+
+                    Item {
+                        width: 24
+                        height: 24
+                        HoverHandler { id: copyHover }
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: Theme.radiusSmall
+                            color: copyHover.hovered ? Theme.hover : "transparent"
+                        }
+                        AppIcon {
+                            anchors.centerIn: parent
+                            name: "copy"
+                            size: 14
+                            color: Theme.iconSecondary
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: app.copyText(root.text)
+                        }
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.model.length > 0 ? root.model : ""
+                        color: Theme.textTertiary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSizeTiny
+                    }
+                }
+            }
+        }
+    }
+}
