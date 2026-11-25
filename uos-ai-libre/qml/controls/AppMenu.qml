@@ -5,6 +5,7 @@ import UosAiLibre
 Item {
     id: root
     property Item anchorItem
+    property bool closingSubmenuForHover: false
 
     signal updatesRequested()
     signal settingsRequested()
@@ -26,7 +27,7 @@ Item {
     }
 
     function openThemeSubmenu() {
-        if (!mainMenu.opened)
+        if (!mainMenu.opened || themeMenu.opened)
             return
         // Keep the parent menu open while the pointer is over the submenu.
         // Dismissing the submenu dismisses the whole menu tree.
@@ -69,6 +70,14 @@ Item {
                 root.aboutRequested()
             }
         }
+        onItemHovered: (index) => {
+            if (index === 2) {
+                root.openThemeSubmenu()
+            } else if (themeMenu.opened) {
+                root.closingSubmenuForHover = true
+                themeMenu.close()
+            }
+        }
         onClosed: {
             if (themeMenu.opened)
                 themeMenu.close()
@@ -88,13 +97,16 @@ Item {
             { label: "跟随系统", checked: app.themeMode === 2 }
         ]
         onItemClicked: (index) => {
+            root.closingSubmenuForHover = false
             app.themeMode = index
             themeMenu.close()
         }
         onClosed: {
             mainMenu.closePolicy = Popup.CloseOnEscape | Popup.CloseOnPressOutside
             mainMenu.highlightedIndex = -1
-            if (mainMenu.opened)
+            const hoverClose = root.closingSubmenuForHover
+            root.closingSubmenuForHover = false
+            if (!hoverClose && mainMenu.opened)
                 mainMenu.close()
         }
     }

@@ -10,6 +10,7 @@ Popup {
     property bool checkLeft: false
     property int highlightedIndex: -1
     signal itemClicked(int index)
+    signal itemHovered(int index)
 
     width: menuWidth
     padding: 0
@@ -34,8 +35,6 @@ Popup {
             anchors.fill: parent
             radius: Theme.radiusLarge
             color: Theme.menuBackground
-            border.width: 1
-            border.color: Theme.menuBorder
         }
     }
 
@@ -73,6 +72,7 @@ Popup {
                     checkLeft: root.checkLeft
                     highlighted: root.highlightedIndex === index
                     suppressHover: root.highlightedIndex >= 0 && root.highlightedIndex !== index
+                    onHovered: root.itemHovered(index)
                     onClicked: root.itemClicked(index)
                 }
             }

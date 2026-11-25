@@ -14,6 +14,7 @@ Item {
     property bool checkLeft: false
     property bool suppressHover: false
     signal clicked()
+    signal hovered()
 
     width: parent ? parent.width : 0
     height: 34
@@ -23,7 +24,13 @@ Item {
     readonly property color activeColor: Theme.menuHighlightText
     readonly property color idleColor: danger ? Theme.danger : Theme.textPrimary
 
-    HoverHandler { id: hover }
+    HoverHandler {
+        id: hover
+        onHoveredChanged: {
+            if (hovered && root.enabled)
+                root.hovered()
+        }
+    }
 
     Rectangle {
         anchors.fill: parent
