@@ -174,7 +174,7 @@ Rectangle {
 
                 Column {
                     id: modelContent
-                    x: 64
+                    x: Math.max(24, (parent.width - width) / 2)
                     y: 10
                     width: Math.min(680, parent.width - 128)
                     spacing: 22
@@ -556,7 +556,7 @@ Rectangle {
 
                 Column {
                     id: copilotColumn
-                    x: 64
+                    x: Math.max(24, (parent.width - width) / 2)
                     y: 10
                     width: Math.min(680, parent.width - 128)
                     spacing: 18
@@ -815,7 +815,7 @@ Rectangle {
                 contentHeight: agreementColumn.implicitHeight + 60
                 Column {
                     id: agreementColumn
-                    x: 64
+                    x: Math.max(24, (parent.width - width) / 2)
                     y: 10
                     width: Math.min(680, parent.width - 128)
                     spacing: 14

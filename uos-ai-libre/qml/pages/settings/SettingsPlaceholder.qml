@@ -10,7 +10,7 @@ Item {
     property string bullet2
 
     Column {
-        x: 64
+        x: Math.max(24, (parent.width - width) / 2)
         y: 10
         width: Math.min(680, parent.width - 128)
         spacing: 18

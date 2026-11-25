@@ -48,6 +48,11 @@ QtObject {
     readonly property color pressed: isDark ? "#16FFFFFF" : "#10000000"
     readonly property color selected: isDark ? "#2D2D33" : "#E5E5E7"
 
+    // Sidebar rows need a stronger hover/pressed contrast than ordinary
+    // controls because they sit on a coloured aurora gradient.
+    readonly property color sidebarHover: isDark ? "#1AFFFFFF" : "#1A000000"
+    readonly property color sidebarPressed: isDark ? "#30FFFFFF" : "#30000000"
+
     readonly property color codeBg: isDark ? "#1A1A1E" : "#F7F7F8"
     readonly property color codeHeader: isDark ? "#242429" : "#F1F1F3"
     readonly property color tableHeader: isDark ? "#26262B" : "#F7F7F8"

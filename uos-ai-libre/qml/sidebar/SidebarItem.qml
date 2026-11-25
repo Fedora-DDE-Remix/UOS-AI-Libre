@@ -20,7 +20,9 @@ Item {
         radius: Theme.radiusSmall
         color: root.selected
                ? Theme.selected
-               : (hover.hovered ? Theme.hover : "transparent")
+               : (mouseArea.pressed
+                  ? Theme.sidebarPressed
+                  : (hover.hovered ? Theme.sidebarHover : "transparent"))
         Behavior on color { ColorAnimation { duration: Theme.durationFast } }
     }
 
@@ -45,17 +47,28 @@ Item {
         verticalAlignment: Text.AlignVCenter
     }
 
-    AppIcon {
+    Rectangle {
         visible: root.rightIcon.length > 0
+        width: 22
+        height: 22
+        radius: 11
         anchors.right: parent.right
-        anchors.rightMargin: 12
+        anchors.rightMargin: 8
         anchors.verticalCenter: parent.verticalCenter
-        name: root.rightIcon
-        size: 15
-        color: Theme.iconSecondary
+        color: "#0DFFFFFF"
+        border.width: 1
+        border.color: Theme.border
+
+        AppIcon {
+            anchors.centerIn: parent
+            name: root.rightIcon
+            size: 13
+            color: Theme.iconSecondary
+        }
     }
 
     MouseArea {
+        id: mouseArea
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         onClicked: root.clicked()
