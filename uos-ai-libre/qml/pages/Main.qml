@@ -162,6 +162,7 @@ ApplicationWindow {
                     height: parent.height
                     appWindow: window
                     collapsed: window.sidebarCollapsed
+                    chatActive: window.activePage === "chat"
                     cornerRadius: window.corner
                     opacity: window.sidebarCollapsed ? 0 : 1
                     Behavior on width {

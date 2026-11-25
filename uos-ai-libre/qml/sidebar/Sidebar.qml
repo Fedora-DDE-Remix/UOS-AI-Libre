@@ -6,6 +6,7 @@ Rectangle {
     id: sidebar
     property var appWindow
     property bool collapsed: false
+    property bool chatActive: true
     property int cornerRadius: Theme.windowRadius
     property string renamingSessionId: ""
     property string renamingOriginal: ""
@@ -186,7 +187,8 @@ Rectangle {
         delegate: HistoryRow {
             width: historyList.width
             title: modelData.summary
-            selected: modelData.session_id === app.sessionId
+            selected: sidebar.chatActive
+                      && modelData.session_id === app.sessionId
             renaming: sidebar.renamingSessionId === modelData.session_id
             onActivated: sidebar.sessionActivated(modelData.session_id)
             onMenuRequested: (sceneY) => sidebar.openContext(modelData, sceneY)
