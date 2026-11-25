@@ -5,7 +5,6 @@ import UosAiLibre
 Rectangle {
     id: sidebar
     property var appWindow
-    property string activeSection: "chat"
     property bool collapsed: false
     property int cornerRadius: Theme.windowRadius
     property string renamingSessionId: ""
@@ -128,7 +127,6 @@ Rectangle {
         width: sidebar.width - 16
         icon: "tasks"
         label: "自动任务"
-        selected: sidebar.activeSection === "tasks"
         onClicked: sidebar.tasksRequested()
     }
 
@@ -138,7 +136,6 @@ Rectangle {
         width: sidebar.width - 16
         icon: "knowledge"
         label: "AI知识库"
-        selected: sidebar.activeSection === "knowledge"
         onClicked: sidebar.knowledgeRequested()
     }
 
@@ -165,6 +162,8 @@ Rectangle {
             iconSize: 14
             bordered: false
             iconColor: Theme.iconSecondary
+            hoverBackground: Theme.sidebarHover
+            pressedBackground: Theme.sidebarPressed
             anchors.right: parent.right
             anchors.rightMargin: 4
             anchors.verticalCenter: parent.verticalCenter

@@ -16,9 +16,11 @@ Rectangle {
     width: parent ? parent.width : 0
     height: 30
     radius: Theme.radiusSmall
-    color: selected
-           ? Theme.selected
-           : (rowHover.hovered && !renaming ? Theme.hover : "transparent")
+    color: rowMouse.pressed
+           ? (selected ? Theme.selectedPressed : Theme.sidebarPressed)
+           : (selected
+              ? Theme.selected
+              : (rowHover.hovered && !renaming ? Theme.sidebarHover : "transparent"))
     Behavior on color { ColorAnimation { duration: Theme.durationFast } }
 
     readonly property bool actionsVisible: rowHover.hovered || selected
@@ -42,6 +44,7 @@ Rectangle {
     // Keep the row mouse area below the action button so the button receives
     // its own clicks instead of the row underneath.
     MouseArea {
+        id: rowMouse
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         enabled: !root.renaming
@@ -62,6 +65,8 @@ Rectangle {
         icon: "more"
         buttonSize: 22
         iconSize: 12
+        hoverBackground: Theme.sidebarHover
+        pressedBackground: Theme.sidebarPressed
         anchors.right: parent.right
         anchors.rightMargin: 5
         anchors.verticalCenter: parent.verticalCenter

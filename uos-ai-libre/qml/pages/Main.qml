@@ -161,7 +161,6 @@ ApplicationWindow {
                     width: window.sidebarCollapsed ? 0 : Theme.sidebarWidth
                     height: parent.height
                     appWindow: window
-                    activeSection: window.activePage === "settings" ? "" : window.activePage
                     collapsed: window.sidebarCollapsed
                     cornerRadius: window.corner
                     opacity: window.sidebarCollapsed ? 0 : 1

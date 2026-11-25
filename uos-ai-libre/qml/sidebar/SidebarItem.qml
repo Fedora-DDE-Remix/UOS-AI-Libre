@@ -6,7 +6,6 @@ Item {
     property string icon
     property string label
     property string rightIcon
-    property bool selected: false
     property bool compact: false
     signal clicked()
 
@@ -18,11 +17,9 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: Theme.radiusSmall
-        color: root.selected
-               ? Theme.selected
-               : (mouseArea.pressed
-                  ? Theme.sidebarPressed
-                  : (hover.hovered ? Theme.sidebarHover : "transparent"))
+        color: mouseArea.pressed
+               ? Theme.sidebarPressed
+               : (hover.hovered ? Theme.sidebarHover : "transparent")
         Behavior on color { ColorAnimation { duration: Theme.durationFast } }
     }
 
@@ -32,7 +29,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         name: root.icon
         size: 16
-        color: root.selected ? Theme.textPrimary : Theme.icon
+        color: Theme.icon
     }
 
     Text {
@@ -40,7 +37,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width - 38 - (root.rightIcon.length > 0 ? 34 : 12)
         text: root.label
-        color: root.selected ? Theme.textPrimary : Theme.textPrimary
+        color: Theme.textPrimary
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeBase
         elide: Text.ElideRight
