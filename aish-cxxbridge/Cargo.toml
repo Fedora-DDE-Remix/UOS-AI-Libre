@@ -1,0 +1,18 @@
+[package]
+name = "aish-cxxbridge"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "C++/Qt bridge for the vendored aish-chat engine"
+
+[lib]
+name = "aish_cxxbridge"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+aish-chat = { path = "../vendor/aish/crates/aish-chat" }
+cxx = "1"
+serde_json = "1"
+
+[build-dependencies]
+cxx-build = "1"
