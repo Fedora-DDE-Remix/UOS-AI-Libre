@@ -90,13 +90,15 @@ Item {
 
             Item {
                 width: column.width
-                height: visible ? 24 : 0
-                visible: messageHover.hovered && !root.streaming
-                         && root.text.length > 0
+                height: root.text.length > 0 ? 24 : 0
+                opacity: messageHover.hovered && !root.streaming
+                         && root.text.length > 0 ? 1 : 0
+                enabled: opacity > 0
+
+                Behavior on opacity { NumberAnimation { duration: Theme.durationFast } }
 
                 Row {
                     spacing: 4
-                    opacity: 1
 
                     Item {
                         width: 24
