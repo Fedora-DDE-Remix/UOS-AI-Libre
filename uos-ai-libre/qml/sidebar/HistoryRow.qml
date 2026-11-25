@@ -16,10 +16,17 @@ Rectangle {
     width: parent ? parent.width : 0
     height: 30
     radius: Theme.radiusSmall
-    color: selected
-           ? Theme.sidebarSelected
-           : (rowHover.hovered && !renaming ? Theme.sidebarHover : "transparent")
-    Behavior on color { ColorAnimation { duration: Theme.durationFast } }
+    color: rowMouse.pressed
+           ? Theme.sidebarPressed
+           : (selected
+              ? Theme.sidebarSelected
+              : (rowHover.hovered && !renaming ? Theme.sidebarHover : "transparent"))
+    Behavior on color {
+        ColorAnimation {
+            duration: rowMouse.pressed ? Theme.durationFast : Theme.durationNormal
+            easing.type: Easing.OutCubic
+        }
+    }
 
     readonly property bool actionsVisible: rowHover.hovered || selected
 
