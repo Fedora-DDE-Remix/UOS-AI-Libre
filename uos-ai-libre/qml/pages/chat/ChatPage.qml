@@ -7,6 +7,7 @@ Item {
     property string draft: ""
     readonly property string activeModel: app.model
     property bool previewOpen: false
+    property real previewProgress: previewOpen ? 1 : 0
     property bool atBottom: true
     property int activeCategory: 0
     property int leftRadius: 0
@@ -18,6 +19,9 @@ Item {
     readonly property var chatModel: app.chat
     readonly property bool hasConversation: chatModel.count > 0
     readonly property real previewWidth: Math.min(440, width * 0.38)
+    Behavior on previewProgress {
+        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+    }
     readonly property string workspaceLabel: {
         const current = app.workspace
         if (!current || current === app.defaultWorkspace)
@@ -158,7 +162,7 @@ Item {
 
     Item {
         id: contentArea
-        width: parent.width - (page.previewOpen ? page.previewWidth : 0)
+        width: parent.width - page.previewWidth * page.previewProgress
         height: parent.height
 
         Item {
@@ -566,10 +570,12 @@ Item {
     PreviewPanel {
         x: contentArea.width
         y: 44
-        width: page.previewOpen ? page.previewWidth : 0
+        width: page.previewWidth * page.previewProgress
         height: parent.height - 44
         rightRadius: page.rightRadius
-        visible: page.previewOpen
+        visible: page.previewOpen || page.previewProgress > 0
+        opacity: page.previewOpen ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 160 } }
         onCloseRequested: page.previewOpen = false
         onToastRequested: (message) => page.toastRequested(message)
     }

@@ -8,6 +8,7 @@ Rectangle {
     property int rightRadius: Theme.windowRadius
 
     color: Theme.card
+    clip: true
     border.width: 1
     border.color: Theme.border
     topRightRadius: rightRadius
