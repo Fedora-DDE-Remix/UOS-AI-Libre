@@ -45,6 +45,13 @@ auto sent = send_message(*service, session, text, images_json);
 while (auto event = wait_event(*service, 1000)) { ... }
 approve(*service, request_id, 0);                    // 0 once, 1 remember, 2 reply, 3 deny
 cancel_session(*service, session);
+auto sessions = list_sessions(*service, 100);        // {"ok":true,"sessions":[...]}
+auto resumed = resume_session(*service, session);    // model + serialized transcript
+rename_session(*service, session, "New title");
+delete_session(*service, session);
+auto info = config_info(*service);                   // safe summary; no API key
+save_model_config(*service, model, api_base, key);   // writes aish config, reloads service
+set_workspace("/path/to/project");                   // process-global, same as aish tools
 shutdown(*service);
 ```
 
@@ -72,3 +79,12 @@ Important event kinds:
   signal.
 - `aish-chat` shares `~/.config/aish` and the configured `sessions.db`; the
   `session_db_path` field is optional for isolated tests.
+- `save_model_config` writes only `model`, `api_base` and `api_key` into the
+  raw YAML document (unknown keys survive), then recreates the Rust service so
+  the next session uses the new credentials. Active sessions are dropped.
+- `set_workspace` changes the process cwd because aish's built-in file/shell
+  tools currently use a process-global cwd. Multi-workspace concurrency needs
+  per-session cwd support upstream.
+- `list_sessions` falls back to the first user message when
+  `sessions.state.summary_preview` is empty, so CLI-created sessions appear in
+  the GUI history too.
