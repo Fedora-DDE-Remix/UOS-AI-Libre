@@ -2,6 +2,7 @@
 #include "singleinstance.h"
 #include "windowhost.h"
 #include "iconprovider.h"
+#include "rhibackend-selector.h"
 
 #include <QFont>
 #include <QFontDatabase>
@@ -50,6 +51,13 @@ int main(int argc, char *argv[]) {
     SingleInstance instance;
     if (!instance.isPrimary())
         return 0;
+
+    // Pick the scene-graph backend once, before any QQuickWindow exists.
+    QString rhiDetail;
+    const QSGRendererInterface::GraphicsApi rhi = RhiBackendSelector::select(&rhiDetail);
+    if (rhi != QSGRendererInterface::Unknown)
+        QQuickWindow::setGraphicsApi(rhi);
+    qInfo().noquote() << "RHI backend:" << rhiDetail;
 
     AppController app;
 

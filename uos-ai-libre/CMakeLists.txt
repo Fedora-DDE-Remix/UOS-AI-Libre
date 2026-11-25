@@ -58,6 +58,8 @@ qt_add_executable(uos-ai-libre
     src/iconprovider.h
     src/markdownmodel.cpp
     src/markdownmodel.h
+    src/rhibackend-selector.cpp
+    src/rhibackend-selector.h
     src/singleinstance.cpp
     src/singleinstance.h
     src/windowhost.cpp
@@ -68,6 +70,7 @@ target_include_directories(uos-ai-libre PRIVATE src)
 target_compile_options(uos-ai-libre PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(uos-ai-libre PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network
+    ${CMAKE_DL_LIBS}
     aish_cxxbridge)
 
 qt_add_resources(uos-ai-libre "app_assets"

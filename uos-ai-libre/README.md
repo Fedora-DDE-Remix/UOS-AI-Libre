@@ -135,6 +135,32 @@ which is allowed during logout/shutdown.
 
 ## Wayland, treeland and RHI
 
+The scene-graph backend is selected once at startup, before the first
+`QQuickWindow` is created:
+
+1. If `QSG_RHI_BACKEND`, `QT_QUICK_BACKEND` or `QT_OPENGL` is set, the
+   application leaves the choice to Qt.
+2. A real Vulkan physical device is preferred. The probe loads the Vulkan
+   loader in-process, enables the same platform surface extension QRhi uses,
+   and ignores CPU/llvmpipe/lavapipe/SwiftShader devices as well as devices
+   without a graphics queue.
+3. The desktop GPU is identified from the primary screen's DRM connector,
+   then an internal eDP/LVDS panel, the only card with connected outputs, or
+   the boot VGA card. Its index is passed to QRhi through
+   `QT_VK_PHYSICAL_DEVICE_INDEX`, so a hybrid system uses the GPU that drives
+   the desktop rather than always picking the discrete GPU.
+4. If the desktop GPU has no usable Vulkan device, the application falls back
+   to OpenGL instead of silently switching to another discrete Vulkan GPU.
+5. Otherwise a temporary offscreen OpenGL context is tried.
+6. Offscreen/minimal platforms, or systems without either API, use the Qt Quick
+   software renderer.
+
+`UOS_AI_LIBRE_RHI=vulkan|opengl|software|auto` can override the backend.
+`UOS_AI_LIBRE_RHI_GPU=vendor:device` (hex, for example `1002:1900`) overrides
+the detected desktop GPU; `QT_VK_PHYSICAL_DEVICE_INDEX` is respected if set.
+The selected backend and device are printed as `RHI backend: ...` on startup. No `vulkaninfo` or other external process is
+launched.
+
 The window uses standard `xdg-shell`/Wayland APIs (`startSystemMove`,
 `startSystemResize`, frameless client-side decoration), so it does not depend on
 X11 or on a treeland-private protocol. It was exercised on a headless wlroots
@@ -189,6 +215,7 @@ src/windowhost.*       disposable QML window; backend survives window close
 src/singleinstance.*   per-user local socket, reopen existing instance
 src/chatmodel.*        message rows, streaming text/reasoning/tools
 src/markdownmodel.*    incremental block parser and diffed list model
+src/rhibackend-selector.*  startup Vulkan/OpenGL/software RHI selection
 src/iconprovider.*     tinted SVG icon provider (whitelisted local resources)
 qml/Theme.qml          light/dark palette and metrics (singleton)
 qml/controls/          AppButton, IconButton, AppIcon, text fields, menus,
