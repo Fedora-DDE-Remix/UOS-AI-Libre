@@ -21,13 +21,15 @@ use aish_core::{
 };
 use aish_llm::{
     ApiAccount, ApprovalChoice, ApprovalMemory, ChatMessage, LlmSession, MessageContent,
-    PreflightSecurityContext, RetryPolicy, RotationState, ToolCall,
+    PreflightSecurityContext, RetryPolicy, RotationState, Tool, ToolCall,
 };
 use aish_mcp::McpManager;
 use aish_memory::{MemoryManager, MemorySource};
 use aish_prompts::ProjectInstructionsLimits;
 use aish_security::secret::SecretScanner;
-use aish_session::{AuditStore, SessionContextMessage, SessionStateSnapshot, SessionStore};
+use aish_session::{
+    AuditQuery, AuditStore, SessionContextMessage, SessionStateSnapshot, SessionStore,
+};
 use aish_skills::SkillManager;
 use aish_tools::ask_user::AskUserResponse;
 use aish_tools::bash::BashTool;
@@ -471,6 +473,10 @@ impl ChatService {
                     "risk": risk,
                     "allow": allow,
                     "require_confirmation": require_confirmation,
+                    "cwd": std::env::current_dir()
+                        .ok()
+                        .map(|path| path.to_string_lossy().to_string()),
+                    "analysis": ctx.decision.as_ref().map(|decision| &decision.analysis),
                 }),
             ));
             match receiver.recv_timeout(Duration::from_secs(300)) {
@@ -708,6 +714,263 @@ impl ChatService {
             .into_iter()
             .map(|spec| spec.function.name)
             .collect())
+    }
+
+    /// Effective aish security policy for the settings UI. The policy file is
+    /// the source of truth; this is a read-only projection of it.
+    pub fn policy_info(&self) -> Value {
+        let policy = aish_security::load_policy(None);
+        let path = aish_security::resolve_security_policy_path(None)
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_default();
+        json!({
+            "ok": true,
+            "path": path,
+            "default_risk_level": policy.default_risk_level.as_str().to_ascii_lowercase(),
+            "enable_sandbox": policy.enable_sandbox,
+            "sandbox_off_action": policy.sandbox_off_action.as_str().to_ascii_lowercase(),
+            "sandbox_timeout_seconds": policy.sandbox_timeout_seconds,
+            "sandbox_socket_available": Path::new("/run/aish/sandbox.sock").exists(),
+            "input_guard_enabled": policy.input_guard.enabled,
+            "audit_enabled": policy.audit_enabled,
+            "rules": policy.rules,
+            "validation_issues": policy.validation_issues,
+        })
+    }
+
+    /// Update the aish security globals through the same YAML-preserving
+    /// writer the CLI settings panel uses. Rules remain YAML-edited.
+    pub fn save_policy(&self, fields: &Value) -> Result<Value, String> {
+        let path = aish_security::resolve_security_policy_path(None)
+            .ok_or_else(|| "aish security policy path is unavailable".to_string())?;
+        let mut updates: Vec<(&str, String)> = Vec::new();
+        if let Some(level) = fields
+            .get("default_risk_level")
+            .and_then(Value::as_str)
+            .map(|value| value.trim().to_ascii_lowercase())
+        {
+            if !matches!(level.as_str(), "low" | "medium" | "high") {
+                return Err("invalid default_risk_level".to_string());
+            }
+            updates.push(("default_risk_level", level));
+        }
+        if let Some(action) = fields
+            .get("sandbox_off_action")
+            .and_then(Value::as_str)
+            .map(|value| value.trim().to_ascii_lowercase())
+        {
+            if !matches!(action.as_str(), "allow" | "confirm" | "block") {
+                return Err("invalid sandbox_off_action".to_string());
+            }
+            updates.push(("sandbox_off_action", action));
+        }
+        if let Some(timeout) = fields
+            .get("sandbox_timeout_seconds")
+            .and_then(Value::as_f64)
+        {
+            if !(0.0..=3600.0).contains(&timeout) {
+                return Err("invalid sandbox_timeout_seconds".to_string());
+            }
+            updates.push(("sandbox_timeout_seconds", timeout.to_string()));
+        }
+        if let Some(enabled) = fields.get("enable_sandbox").and_then(Value::as_bool) {
+            updates.push(("enable_sandbox", enabled.to_string()));
+        }
+        let input_guard = fields.get("input_guard_enabled").and_then(Value::as_bool);
+        let update_refs: Vec<(&str, &str)> = updates
+            .iter()
+            .map(|(field, value)| (*field, value.as_str()))
+            .collect();
+        aish_security::save_policy_ui_fields(&path, &update_refs, input_guard)
+            .map_err(|error| format!("failed to save security policy: {error}"))?;
+        // Re-read so malformed values cannot silently fall back to defaults
+        // without the UI noticing.
+        let _ = aish_security::load_policy(Some(&path));
+        Ok(self.policy_info())
+    }
+
+    /// Tool descriptions for the read-only tools page. This builds a
+    /// non-persisted aish session so the settings page works before the first
+    /// user conversation exists.
+    pub fn tool_catalog(&self) -> Value {
+        let mut llm = LlmSession::new(
+            &self.config.api_base,
+            &self.config.api_key,
+            &self.config.model,
+            self.config.temperature,
+            self.config.max_tokens,
+        );
+        if self.config.enable_tools {
+            register_session_tools(
+                &mut llm,
+                &self.config,
+                &self.config.model,
+                "tool-catalog",
+                self.events.clone(),
+                self.interactions.clone(),
+                self.mcp_manager.as_ref(),
+            );
+        }
+        let mut specs = llm.tool_specs();
+        specs.sort_by(|left, right| left.function.name.cmp(&right.function.name));
+        let tools: Vec<Value> = specs
+            .into_iter()
+            .map(|spec| {
+                let name = spec.function.name;
+                let source = if name.starts_with("mcp__") {
+                    "mcp"
+                } else if name == "Agent" {
+                    "subagent"
+                } else if name == "skill" || name.starts_with("skill_") {
+                    "skill"
+                } else {
+                    "aish"
+                };
+                json!({
+                    "name": name,
+                    "description": spec.function.description,
+                    "source": source,
+                })
+            })
+            .collect();
+        json!({"ok": true, "tools": tools})
+    }
+
+    /// Installed aish skills, including quarantine/context metadata.
+    pub fn skill_catalog(&self) -> Value {
+        let mut manager = SkillManager::new();
+        let _ = manager.load_all_skills();
+        let mut skills = manager.list_skills();
+        skills.sort_by(|left, right| left.metadata.name.cmp(&right.metadata.name));
+        let skills: Vec<Value> = skills
+            .into_iter()
+            .map(|skill| {
+                json!({
+                    "name": skill.metadata.name,
+                    "description": skill.metadata.description,
+                    "source": skill.source,
+                    "file_path": skill.file_path,
+                    "base_dir": skill.base_dir,
+                    "context": skill.metadata.context,
+                    "agent": skill.metadata.agent,
+                    "allowed_tools": skill.metadata.allowed_tools,
+                    "quarantined": skill.quarantined,
+                })
+            })
+            .collect();
+        let roots: Vec<String> = manager
+            .get_skill_dirs()
+            .into_iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect();
+        json!({"ok": true, "skills": skills, "roots": roots})
+    }
+
+    /// Trust one quarantined skill through the same aish marker logic as the
+    /// `skill_trust` tool.
+    pub fn trust_skill(&self, name: &str) -> Result<Value, String> {
+        let tool = SkillTrustTool;
+        let result = tool.execute(json!({"skill_name": name}));
+        if result.ok {
+            Ok(json!({"ok": true, "message": result.output}))
+        } else {
+            Err(result.output)
+        }
+    }
+
+    /// MCP server/tool status for the connectors page.
+    pub fn mcp_status(&self) -> Value {
+        let Some(manager) = &self.mcp_manager else {
+            return json!({"ok": true, "enabled": false, "servers": []});
+        };
+        let servers: Vec<Value> = manager
+            .snapshots()
+            .into_iter()
+            .map(|snapshot| {
+                let tools: Vec<Value> = snapshot
+                    .tools
+                    .iter()
+                    .map(|tool| {
+                        json!({
+                            "name": tool.name,
+                            "description": tool.description,
+                            "side_effects": tool.side_effects,
+                            "required": tool.required,
+                        })
+                    })
+                    .collect();
+                json!({
+                    "name": snapshot.name,
+                    "transport": snapshot.transport,
+                    "endpoint": snapshot.endpoint,
+                    "status": snapshot.status.label(),
+                    "status_detail": match &snapshot.status {
+                        aish_mcp::ServerStatus::Connected { protocol_version, tool_count } => {
+                            json!({"protocol_version": protocol_version, "tool_count": tool_count})
+                        }
+                        aish_mcp::ServerStatus::Failed { reason } => json!({"reason": reason}),
+                        _ => Value::Null,
+                    },
+                    "trust": snapshot.trust,
+                    "declared_side_effects": snapshot.declared_side_effects,
+                    "tools": tools,
+                })
+            })
+            .collect();
+        json!({"ok": true, "enabled": manager.is_active(), "servers": servers})
+    }
+
+    /// Reconnect all configured MCP servers and return refreshed status.
+    pub fn mcp_reload(&self) -> Value {
+        if let Some(manager) = &self.mcp_manager {
+            let _ = self.runtime.block_on(async {
+                manager.reload().await;
+            });
+        }
+        self.mcp_status()
+    }
+
+    /// Read the shared aish long-term memory store.
+    pub fn memory_list(&self, limit: usize) -> Value {
+        let manager = match MemoryManager::new(MemoryManager::default_path()) {
+            Ok(manager) => manager,
+            Err(error) => {
+                return json!({"ok": false, "error": error.to_string(), "entries": []});
+            }
+        };
+        let entries: Vec<Value> = manager
+            .list()
+            .iter()
+            .rev()
+            .take(limit.clamp(1, 500))
+            .map(|entry| {
+                json!({
+                    "id": entry.id,
+                    "content": entry.content,
+                    "category": format!("{:?}", entry.category).to_lowercase(),
+                    "scope": format!("{:?}", entry.scope).to_lowercase(),
+                    "source": entry.source,
+                    "created_at": entry.created_at,
+                    "expires_at": entry.expires_at,
+                    "expired": MemoryManager::is_expired(entry),
+                })
+            })
+            .collect();
+        json!({"ok": true, "entries": entries})
+    }
+
+    /// Recent audit events from the shared aish audit table.
+    pub fn audit_tail(&self, limit: usize) -> Result<Value, String> {
+        let Some(store) = &self.audit_store else {
+            return Ok(json!({"ok": true, "events": []}));
+        };
+        let events = store
+            .query(&AuditQuery {
+                limit: limit.clamp(1, 500),
+                ..AuditQuery::default()
+            })
+            .map_err(|error| format!("failed to query audit events: {error}"))?;
+        Ok(json!({"ok": true, "events": events}))
     }
 
     /// Resume a persisted session and return its model plus transcript.
