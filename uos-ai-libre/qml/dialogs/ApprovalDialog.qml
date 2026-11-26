@@ -21,6 +21,25 @@ Popup {
     readonly property var analysis: request.analysis || ({})
     readonly property var matchedRule: analysis.matched_rule || ({})
     readonly property var sandbox: analysis.sandbox || ({})
+    readonly property var reasons: {
+        const seen = {}
+        const result = []
+        const source = analysis.reasons || []
+        for (let i = 0; i < source.length; ++i) {
+            const value = String(source[i] || "").trim()
+            if (value.length > 0 && !seen[value]) {
+                seen[value] = true
+                result.push(value)
+            }
+        }
+        return result
+    }
+    readonly property bool showMessage: {
+        const message = String(request.message || "").trim()
+        if (message.length === 0)
+            return false
+        return reasons.indexOf(message) < 0
+    }
     readonly property color riskColor: {
         if (risk === "HIGH" || risk === "DANGER")
             return Theme.danger
@@ -194,10 +213,9 @@ Popup {
         }
 
         Text {
-            visible: root.analysis.reasons !== undefined
-                     && root.analysis.reasons.length > 0
+            visible: root.reasons.length > 0
             width: parent.width - 48
-            text: (root.analysis.reasons || []).join("；")
+            text: root.reasons.join("；")
             color: Theme.textTertiary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeTiny
@@ -229,8 +247,7 @@ Popup {
         }
 
         Text {
-            visible: root.request.message !== undefined
-                     && String(root.request.message).length > 0
+            visible: root.showMessage
             width: parent.width - 48
             text: root.request.message !== undefined ? String(root.request.message) : ""
             color: Theme.textSecondary

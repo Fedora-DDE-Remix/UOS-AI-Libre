@@ -38,9 +38,17 @@ class AppController final : public QObject {
     Q_PROPERTY(QVariantMap pendingInteraction READ pendingInteraction NOTIFY pendingInteractionChanged)
     Q_PROPERTY(int pendingInteractionCount READ pendingInteractionCount NOTIFY pendingInteractionChanged)
     Q_PROPERTY(QVariantMap policyInfo READ policyInfo NOTIFY policyInfoChanged)
+    Q_PROPERTY(QVariantList sessionApprovals READ sessionApprovals NOTIFY sessionApprovalsChanged)
     Q_PROPERTY(QVariantList toolCatalog READ toolCatalog NOTIFY toolCatalogChanged)
     Q_PROPERTY(QVariantMap skillCatalog READ skillCatalog NOTIFY skillCatalogChanged)
+    Q_PROPERTY(bool skillSearchBusy READ skillSearchBusy NOTIFY skillSearchBusyChanged)
+    Q_PROPERTY(bool skillInstallBusy READ skillInstallBusy NOTIFY skillInstallBusyChanged)
+    Q_PROPERTY(QVariantMap skillSearchResult READ skillSearchResult NOTIFY skillSearchResultChanged)
+    Q_PROPERTY(QVariantMap skillInstallResult READ skillInstallResult NOTIFY skillInstallResultChanged)
+    Q_PROPERTY(QVariantMap skillReview READ skillReview NOTIFY skillReviewChanged)
     Q_PROPERTY(QVariantMap mcpStatus READ mcpStatus NOTIFY mcpStatusChanged)
+    Q_PROPERTY(bool mcpBusy READ mcpBusy NOTIFY mcpBusyChanged)
+    Q_PROPERTY(QVariantMap mcpTestResult READ mcpTestResult NOTIFY mcpTestResultChanged)
     Q_PROPERTY(QVariantList memoryEntries READ memoryEntries NOTIFY memoryEntriesChanged)
     Q_PROPERTY(QVariantList auditEvents READ auditEvents NOTIFY auditEventsChanged)
     Q_PROPERTY(QVariantList sessions READ sessions NOTIFY sessionsChanged)
@@ -73,9 +81,17 @@ public:
     QVariantMap pendingInteraction() const;
     int pendingInteractionCount() const;
     QVariantMap policyInfo() const;
+    QVariantList sessionApprovals() const;
     QVariantList toolCatalog() const;
     QVariantMap skillCatalog() const;
+    bool skillSearchBusy() const;
+    bool skillInstallBusy() const;
+    QVariantMap skillSearchResult() const;
+    QVariantMap skillInstallResult() const;
+    QVariantMap skillReview() const;
     QVariantMap mcpStatus() const;
+    bool mcpBusy() const;
+    QVariantMap mcpTestResult() const;
     QVariantList memoryEntries() const;
     QVariantList auditEvents() const;
     QVariantList sessions() const;
@@ -101,11 +117,34 @@ public:
     Q_INVOKABLE void resolveInteraction(const QVariantMap &response);
     Q_INVOKABLE void refreshPolicy();
     Q_INVOKABLE QVariantMap savePolicy(const QVariantMap &fields);
+    Q_INVOKABLE QVariantMap savePolicyRules(const QVariantList &rules);
+    Q_INVOKABLE QVariantMap previewPolicy(const QString &command,
+                                          const QVariantList &draftRules);
+    Q_INVOKABLE void refreshSessionApprovals();
+    Q_INVOKABLE void revokeSessionApproval(const QString &kind,
+                                           const QString &first,
+                                           const QString &second);
+    Q_INVOKABLE void clearSessionApprovals();
     Q_INVOKABLE void refreshToolCatalog();
     Q_INVOKABLE void refreshSkillCatalog();
+    Q_INVOKABLE void searchSkills(const QString &query);
+    Q_INVOKABLE void installSkill(const QString &skillId);
+    Q_INVOKABLE void reviewSkill(const QString &name);
     Q_INVOKABLE void trustSkill(const QString &name);
+    Q_INVOKABLE void removeSkill(const QString &name);
     Q_INVOKABLE void refreshMcpStatus();
     Q_INVOKABLE void reloadMcp();
+    Q_INVOKABLE void addMcpServer(const QVariantMap &args);
+    Q_INVOKABLE void updateMcpServer(const QString &name,
+                                     const QVariantMap &args);
+    Q_INVOKABLE void removeMcpServer(const QString &name);
+    Q_INVOKABLE void setMcpMasterEnabled(bool enabled);
+    Q_INVOKABLE void setMcpEnabled(const QString &name, bool enabled);
+    Q_INVOKABLE void setMcpTrust(const QString &name,
+                                 const QString &tool,
+                                 const QString &level);
+    Q_INVOKABLE void testMcpServer(const QString &name);
+    Q_INVOKABLE void testMcpDraft(const QVariantMap &args);
     Q_INVOKABLE void refreshMemory();
     Q_INVOKABLE void refreshAudit();
     Q_INVOKABLE void openPath(const QString &path);
@@ -138,9 +177,21 @@ signals:
     void pendingApprovalChanged();
     void pendingInteractionChanged();
     void policyInfoChanged();
+    void sessionApprovalsChanged();
     void toolCatalogChanged();
     void skillCatalogChanged();
+    void skillSearchBusyChanged();
+    void skillInstallBusyChanged();
+    void skillSearchResultChanged();
+    void skillInstallResultChanged();
+    void skillReviewChanged();
     void mcpStatusChanged();
+    void mcpBusyChanged();
+    void mcpTestResultChanged();
+    void skillSearchFinished(const QVariantMap &result);
+    void skillInstallFinished(const QVariantMap &result);
+    void skillReviewFinished(const QVariantMap &result);
+    void mcpTestFinished(const QVariantMap &result);
     void memoryEntriesChanged();
     void auditEventsChanged();
     void sessionLoaded();
@@ -167,6 +218,7 @@ private:
     void enqueueInteraction(const QVariantMap &request);
     void onConfigChanged();
     void onSessionsChanged();
+    void onSettingsJobFinished(const QVariantMap &result);
 
     AishBridge m_bridge;
     ChatModel m_chat;
@@ -180,9 +232,17 @@ private:
     QList<QVariantMap> m_interaction_queue;
     QTimer m_interaction_timeout;
     QVariantMap m_policy_info;
+    QVariantList m_session_approvals;
     QVariantList m_tool_catalog;
     QVariantMap m_skill_catalog;
+    QVariantMap m_skill_search_result;
+    QVariantMap m_skill_install_result;
+    QVariantMap m_skill_review;
     QVariantMap m_mcp_status;
+    QVariantMap m_mcp_test_result;
+    bool m_skill_search_busy = false;
+    bool m_skill_install_busy = false;
+    bool m_mcp_busy = false;
     QVariantList m_memory_entries;
     QVariantList m_audit_events;
     int m_theme_mode = 2;

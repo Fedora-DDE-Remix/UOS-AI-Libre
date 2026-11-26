@@ -59,11 +59,39 @@ public:
                                         const QVariantMap &response);
     Q_INVOKABLE QVariantMap policyInfo();
     Q_INVOKABLE QVariantMap savePolicy(const QVariantMap &fields);
+    Q_INVOKABLE QVariantMap savePolicyRules(const QVariantList &rules,
+                                            const QString &fingerprint);
+    Q_INVOKABLE QVariantMap previewPolicyCommand(const QString &command,
+                                                 const QVariantList &draftRules);
+    Q_INVOKABLE QVariantList sessionApprovals(const QString &sessionId);
+    Q_INVOKABLE QVariantMap revokeSessionApproval(const QString &sessionId,
+                                                  const QString &kind,
+                                                  const QString &first,
+                                                  const QString &second);
+    Q_INVOKABLE QVariantMap clearSessionApprovals(const QString &sessionId);
     Q_INVOKABLE QVariantList toolCatalog();
     Q_INVOKABLE QVariantMap skillCatalog();
+    Q_INVOKABLE QVariantMap refreshSkillsLive();
     Q_INVOKABLE QVariantMap trustSkill(const QString &name);
+    Q_INVOKABLE QVariantMap readSkill(const QString &name, int maxBytes);
+    Q_INVOKABLE QVariantMap verifySkill(const QString &name);
+    Q_INVOKABLE QVariantMap removeSkill(const QString &name);
+    Q_INVOKABLE QVariantMap startSkillSearch(const QString &query, int limit);
+    Q_INVOKABLE QVariantMap startSkillInstall(const QString &skillId);
     Q_INVOKABLE QVariantMap mcpStatus();
+    Q_INVOKABLE QVariantMap refreshMcpTools();
     Q_INVOKABLE QVariantMap reloadMcp();
+    Q_INVOKABLE QVariantMap addMcpServer(const QVariantMap &args);
+    Q_INVOKABLE QVariantMap updateMcpServer(const QString &name,
+                                            const QVariantMap &args);
+    Q_INVOKABLE QVariantMap removeMcpServer(const QString &name);
+    Q_INVOKABLE QVariantMap setMcpMasterEnabled(bool enabled);
+    Q_INVOKABLE QVariantMap setMcpEnabled(const QString &name, bool enabled);
+    Q_INVOKABLE QVariantMap setMcpTrust(const QString &name,
+                                        const QString &tool,
+                                        const QString &level);
+    Q_INVOKABLE QVariantMap testMcpServer(const QString &name);
+    Q_INVOKABLE QVariantMap testMcpDraft(const QVariantMap &args);
     Q_INVOKABLE QVariantList memoryList();
     Q_INVOKABLE QVariantList auditTail();
     Q_INVOKABLE void refreshSessions();
@@ -114,6 +142,7 @@ signals:
     void sessionDeleted(const QString &sessionId);
     void toastRequested(const QString &message);
     void errorOccurred(const QString &message);
+    void settingsJobFinished(const QVariantMap &result);
 
 private:
     BridgeService *service() const;

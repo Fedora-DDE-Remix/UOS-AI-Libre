@@ -24,6 +24,7 @@ impl PromptAssembly {
 
         let tool_specs: Vec<ToolSpec> = session
             .registered_tools()
+            .into_iter()
             .filter(|tool| visible_set.contains(tool.name()))
             .map(|tool| tool.to_spec())
             .collect();
@@ -47,8 +48,9 @@ fn merge_system_with_appendix(base_system: &str, appendix: Option<String>) -> St
 
 fn tool_appendix(session: &LlmSession, visible_names: &[String]) -> Option<String> {
     let visible_set: HashSet<&str> = visible_names.iter().map(|s| s.as_str()).collect();
-    let mut prompts: Vec<(&str, &str)> = session
-        .registered_tools()
+    let tools = session.registered_tools();
+    let mut prompts: Vec<(String, String)> = tools
+        .iter()
         .filter(|tool| visible_set.contains(tool.name()))
         .filter(|tool| match tool.prompt_visibility() {
             PromptVisibility::NeverInAppendix => false,
@@ -59,7 +61,7 @@ fn tool_appendix(session: &LlmSession, visible_names: &[String]) -> Option<Strin
             if prompt.is_empty() {
                 None
             } else {
-                Some((tool.name(), prompt))
+                Some((tool.name().to_string(), prompt.to_string()))
             }
         })
         .collect();
@@ -68,14 +70,14 @@ fn tool_appendix(session: &LlmSession, visible_names: &[String]) -> Option<Strin
         return None;
     }
 
-    prompts.sort_by(|a, b| a.0.cmp(b.0));
+    prompts.sort_by(|a, b| a.0.cmp(&b.0));
 
     let mut section = String::from("## Tool Instructions\n");
     for (name, prompt) in prompts {
         section.push_str("\n### ");
-        section.push_str(name);
+        section.push_str(&name);
         section.push('\n');
-        section.push_str(prompt);
+        section.push_str(&prompt);
         section.push('\n');
     }
     Some(section)

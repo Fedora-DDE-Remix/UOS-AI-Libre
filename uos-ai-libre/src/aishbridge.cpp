@@ -43,6 +43,13 @@ bool parseResponse(const QString &raw, QJsonObject *object, QString *error) {
     return true;
 }
 
+QVariantMap parseObject(const QString &raw, QString *error) {
+    QJsonObject object;
+    if (!parseResponse(raw, &object, error))
+        return {};
+    return object.toVariantMap();
+}
+
 bool isAllowedImage(const QString &path) {
     static const QStringList extensions = {
         QStringLiteral("png"),  QStringLiteral("jpg"),
@@ -355,6 +362,95 @@ QVariantMap AishBridge::savePolicy(const QVariantMap &fields) {
     return object.toVariantMap();
 }
 
+QVariantMap AishBridge::savePolicyRules(const QVariantList &rules,
+                                        const QString &fingerprint) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    const QByteArray json =
+        QJsonDocument(QJsonArray::fromVariantList(rules))
+            .toJson(QJsonDocument::Compact);
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(save_policy_rules(**m_service, json.toStdString(),
+                                    fingerprint.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::previewPolicyCommand(const QString &command,
+                                             const QVariantList &draftRules) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    const QByteArray json =
+        QJsonDocument(QJsonArray::fromVariantList(draftRules))
+            .toJson(QJsonDocument::Compact);
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(preview_policy_command(**m_service, command.toStdString(),
+                                         json.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantList AishBridge::sessionApprovals(const QString &sessionId) {
+    if (!ensureService() || sessionId.isEmpty())
+        return {};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(session_approvals(**m_service, sessionId.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {};
+    }
+    return result.value(QStringLiteral("items")).toList();
+}
+
+QVariantMap AishBridge::revokeSessionApproval(const QString &sessionId,
+                                              const QString &kind,
+                                              const QString &first,
+                                              const QString &second) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(revoke_session_approval(**m_service, sessionId.toStdString(),
+                                          kind.toStdString(), first.toStdString(),
+                                          second.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::clearSessionApprovals(const QString &sessionId) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(clear_session_approvals(**m_service, sessionId.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
 QVariantList AishBridge::toolCatalog() {
     if (!ensureService())
         return {};
@@ -398,6 +494,97 @@ QVariantMap AishBridge::trustSkill(const QString &name) {
     return object.toVariantMap();
 }
 
+QVariantMap AishBridge::refreshSkillsLive() {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(refresh_skills_live(**m_service)), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::readSkill(const QString &name, int maxBytes) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(skill_read(**m_service, name.toStdString(),
+                             static_cast<uint32_t>(qMax(1, maxBytes)))),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::verifySkill(const QString &name) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(skill_verify(**m_service, name.toStdString())),
+                    &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::removeSkill(const QString &name) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(skill_remove(**m_service, name.toStdString())),
+                    &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::startSkillSearch(const QString &query, int limit) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(skill_search_start(**m_service, query.toStdString(),
+                                     static_cast<uint32_t>(qBound(1, limit, 50)))),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::startSkillInstall(const QString &skillId) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(skill_install_start(**m_service, skillId.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
 QVariantMap AishBridge::mcpStatus() {
     if (!ensureService())
         return {{QStringLiteral("ok"), false},
@@ -426,6 +613,148 @@ QVariantMap AishBridge::reloadMcp() {
                 {QStringLiteral("error"), error}};
     }
     return object.toVariantMap();
+}
+
+QVariantMap AishBridge::refreshMcpTools() {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(refresh_mcp_tools(**m_service)), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::addMcpServer(const QVariantMap &args) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    const QByteArray json =
+        QJsonDocument(QJsonObject::fromVariantMap(args))
+            .toJson(QJsonDocument::Compact);
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(mcp_add(**m_service, json.toStdString())), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::updateMcpServer(const QString &name,
+                                        const QVariantMap &args) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    const QByteArray json =
+        QJsonDocument(QJsonObject::fromVariantMap(args))
+            .toJson(QJsonDocument::Compact);
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(mcp_update(**m_service, name.toStdString(), json.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::removeMcpServer(const QString &name) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(mcp_remove(**m_service, name.toStdString())), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::setMcpMasterEnabled(bool enabled) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(mcp_set_master_enabled(**m_service, enabled)), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::setMcpEnabled(const QString &name, bool enabled) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(mcp_set_enabled(**m_service, name.toStdString(), enabled)),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::setMcpTrust(const QString &name,
+                                    const QString &tool,
+                                    const QString &level) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(mcp_set_trust(**m_service, name.toStdString(),
+                                tool.toStdString(), level.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::testMcpServer(const QString &name) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(mcp_test(**m_service, name.toStdString())), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::testMcpDraft(const QVariantMap &args) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    const QByteArray json =
+        QJsonDocument(QJsonObject::fromVariantMap(args))
+            .toJson(QJsonDocument::Compact);
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(mcp_test_draft(**m_service, json.toStdString())), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
 }
 
 QVariantList AishBridge::memoryList() {
@@ -798,6 +1127,12 @@ void AishBridge::handleEvent(const QJsonObject &event) {
         event.value(QStringLiteral("session_id")).toString();
     if (kind.isEmpty())
         return;
+
+    if (kind == QStringLiteral("settings_job")) {
+        emit settingsJobFinished(
+            event.value(QStringLiteral("data")).toObject().toVariantMap());
+        return;
+    }
 
     if (event_session.isEmpty() || m_session_id.isEmpty() ||
         event_session != m_session_id) {

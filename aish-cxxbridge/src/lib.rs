@@ -36,10 +36,49 @@ mod ffi {
         fn tool_catalog(service: &mut BridgeService) -> String;
         fn policy_info(service: &mut BridgeService) -> String;
         fn save_policy(service: &mut BridgeService, fields_json: &str) -> String;
+        fn save_policy_rules(
+            service: &mut BridgeService,
+            rules_json: &str,
+            expected_fingerprint: &str,
+        ) -> String;
+        fn preview_policy_command(
+            service: &mut BridgeService,
+            command: &str,
+            draft_rules_json: &str,
+        ) -> String;
+        fn session_approvals(service: &mut BridgeService, session_id: &str) -> String;
+        fn revoke_session_approval(
+            service: &mut BridgeService,
+            session_id: &str,
+            kind: &str,
+            first: &str,
+            second: &str,
+        ) -> String;
+        fn clear_session_approvals(service: &mut BridgeService, session_id: &str) -> String;
         fn skill_catalog(service: &mut BridgeService) -> String;
+        fn refresh_skills_live(service: &mut BridgeService) -> String;
         fn trust_skill(service: &mut BridgeService, name: &str) -> String;
+        fn skill_read(service: &mut BridgeService, name: &str, max_bytes: u32) -> String;
+        fn skill_verify(service: &mut BridgeService, name: &str) -> String;
+        fn skill_remove(service: &mut BridgeService, name: &str) -> String;
+        fn skill_search_start(service: &mut BridgeService, query: &str, limit: u32) -> String;
+        fn skill_install_start(service: &mut BridgeService, skill_id: &str) -> String;
         fn mcp_status(service: &mut BridgeService) -> String;
+        fn refresh_mcp_tools(service: &mut BridgeService) -> String;
         fn mcp_reload(service: &mut BridgeService) -> String;
+        fn mcp_add(service: &mut BridgeService, args_json: &str) -> String;
+        fn mcp_update(service: &mut BridgeService, name: &str, args_json: &str) -> String;
+        fn mcp_remove(service: &mut BridgeService, name: &str) -> String;
+        fn mcp_set_master_enabled(service: &mut BridgeService, enabled: bool) -> String;
+        fn mcp_set_enabled(service: &mut BridgeService, name: &str, enabled: bool) -> String;
+        fn mcp_set_trust(
+            service: &mut BridgeService,
+            name: &str,
+            tool: &str,
+            level: &str,
+        ) -> String;
+        fn mcp_test(service: &mut BridgeService, name: &str) -> String;
+        fn mcp_test_draft(service: &mut BridgeService, args_json: &str) -> String;
         fn memory_list(service: &mut BridgeService, limit: u32) -> String;
         fn audit_tail(service: &mut BridgeService, limit: u32) -> String;
         fn list_sessions(service: &mut BridgeService, limit: u32) -> String;
@@ -251,6 +290,113 @@ pub fn save_policy(service: &mut BridgeService, fields_json: &str) -> String {
     }
 }
 
+pub fn save_policy_rules(
+    service: &mut BridgeService,
+    rules_json: &str,
+    expected_fingerprint: &str,
+) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    let rules: serde_json::Value = match serde_json::from_str(rules_json) {
+        Ok(value) => value,
+        Err(error) => return err(format!("invalid rules JSON: {error}")),
+    };
+    let expected = (!expected_fingerprint.trim().is_empty()).then_some(expected_fingerprint);
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.save_policy_rules(&rules, expected)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while saving policy rules"),
+    }
+}
+
+pub fn preview_policy_command(
+    service: &mut BridgeService,
+    command: &str,
+    draft_rules_json: &str,
+) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    let draft = if draft_rules_json.trim().is_empty() {
+        None
+    } else {
+        match serde_json::from_str::<serde_json::Value>(draft_rules_json) {
+            Ok(value) => Some(value),
+            Err(error) => return err(format!("invalid rules JSON: {error}")),
+        }
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.preview_policy_command(command, draft.as_ref())
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while previewing policy"),
+    }
+}
+
+pub fn session_approvals(service: &mut BridgeService, session_id: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.session_approvals(session_id)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while reading session approvals"),
+    }
+}
+
+pub fn revoke_session_approval(
+    service: &mut BridgeService,
+    session_id: &str,
+    kind: &str,
+    first: &str,
+    second: &str,
+) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.revoke_session_approval(session_id, kind, first, second)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while revoking session approval"),
+    }
+}
+
+pub fn clear_session_approvals(service: &mut BridgeService, session_id: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.clear_session_approvals(session_id)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while clearing session approvals"),
+    }
+}
+
 pub fn skill_catalog(service: &mut BridgeService) -> String {
     let Some(inner) = service.inner.as_ref() else {
         return err(service
@@ -278,6 +424,89 @@ pub fn trust_skill(service: &mut BridgeService, name: &str) -> String {
     }
 }
 
+pub fn refresh_skills_live(service: &mut BridgeService) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.refresh_skills_live().to_string()
+    }))
+    .unwrap_or_else(|_| err("panic while refreshing live skills"))
+}
+
+pub fn skill_read(service: &mut BridgeService, name: &str, max_bytes: u32) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.skill_read(name, max_bytes as usize)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while reading skill"),
+    }
+}
+
+pub fn skill_verify(service: &mut BridgeService, name: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inner.skill_verify(name))) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while verifying skill"),
+    }
+}
+
+pub fn skill_remove(service: &mut BridgeService, name: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inner.skill_remove(name))) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while removing skill"),
+    }
+}
+
+pub fn skill_search_start(service: &mut BridgeService, query: &str, limit: u32) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.start_skill_search(query, limit as usize).to_string()
+    }))
+    .unwrap_or_else(|_| err("panic while starting skill search"))
+}
+
+pub fn skill_install_start(service: &mut BridgeService, skill_id: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.start_skill_install(skill_id).to_string()
+    }))
+    .unwrap_or_else(|_| err("panic while starting skill install"))
+}
+
 pub fn mcp_status(service: &mut BridgeService) -> String {
     let Some(inner) = service.inner.as_ref() else {
         return err(service
@@ -302,6 +531,157 @@ pub fn mcp_reload(service: &mut BridgeService) -> String {
         inner.mcp_reload().to_string()
     }))
     .unwrap_or_else(|_| err("panic while reloading MCP"))
+}
+
+pub fn refresh_mcp_tools(service: &mut BridgeService) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.refresh_mcp_tools().to_string()
+    }))
+    .unwrap_or_else(|_| err("panic while refreshing MCP tools"))
+}
+
+fn mcp_args(value: &str) -> Result<serde_json::Value, String> {
+    serde_json::from_str(value).map_err(|error| format!("invalid MCP JSON: {error}"))
+}
+
+pub fn mcp_add(service: &mut BridgeService, args_json: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    let args = match mcp_args(args_json) {
+        Ok(args) => args,
+        Err(error) => return err(error),
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inner.mcp_add(&args))) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while adding MCP server"),
+    }
+}
+
+pub fn mcp_update(service: &mut BridgeService, name: &str, args_json: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    let args = match mcp_args(args_json) {
+        Ok(args) => args,
+        Err(error) => return err(error),
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.mcp_update(name, &args)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while updating MCP server"),
+    }
+}
+
+pub fn mcp_remove(service: &mut BridgeService, name: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inner.mcp_remove(name))) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while removing MCP server"),
+    }
+}
+
+pub fn mcp_set_master_enabled(service: &mut BridgeService, enabled: bool) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.mcp_set_master_enabled(enabled)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while changing MCP master switch"),
+    }
+}
+
+pub fn mcp_set_enabled(service: &mut BridgeService, name: &str, enabled: bool) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.mcp_set_enabled(name, enabled)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while enabling MCP server"),
+    }
+}
+
+pub fn mcp_set_trust(service: &mut BridgeService, name: &str, tool: &str, level: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.mcp_set_trust(name, tool, level)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while changing MCP trust"),
+    }
+}
+
+pub fn mcp_test(service: &mut BridgeService, name: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inner.start_mcp_test(name))) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while testing MCP server"),
+    }
+}
+
+pub fn mcp_test_draft(service: &mut BridgeService, args_json: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    let args = match mcp_args(args_json) {
+        Ok(args) => args,
+        Err(error) => return err(error),
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.start_mcp_test_draft(&args)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while testing MCP draft"),
+    }
 }
 
 pub fn memory_list(service: &mut BridgeService, limit: u32) -> String {

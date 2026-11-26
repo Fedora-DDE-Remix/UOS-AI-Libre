@@ -328,7 +328,10 @@ const COMPACT_SUMMARY_SYSTEM_PROMPT: &str = "You summarize old AI Shell context 
 pub struct LlmSession {
     stream_ctx: StreamContext,
     api_dialect: ApiDialect,
-    tools: HashMap<String, Arc<dyn Tool>>,
+    /// Registered tools. A frontend can add or remove tools after the session
+    /// has started (for example when MCP servers or skills change), so the map
+    /// is behind an RwLock and the live methods take `&self`.
+    tools: parking_lot::RwLock<HashMap<String, Arc<dyn Tool>>>,
     cancellation_token: Arc<CancellationToken>,
     event_callback: Option<Arc<dyn Fn(LlmEvent) -> Option<LlmCallbackResult> + Send + Sync>>,
     confirmation_callback:
@@ -426,7 +429,7 @@ impl LlmSession {
         Self {
             stream_ctx,
             api_dialect,
-            tools: HashMap::with_capacity(16),
+            tools: parking_lot::RwLock::new(HashMap::with_capacity(16)),
             cancellation_token: Arc::new(CancellationToken::new()),
             event_callback: None,
             confirmation_callback: None,
@@ -492,19 +495,41 @@ impl LlmSession {
     }
 
     pub fn register_tool(&mut self, tool: Box<dyn Tool>) {
-        self.register_shared_tool(Arc::from(tool));
+        self.register_tool_live(tool);
     }
 
     /// Register a shared tool handle (used when inheriting parent tools into a sub-session).
     pub fn register_shared_tool(&mut self, tool: Arc<dyn Tool>) {
-        self.tools.insert(tool.name().to_string(), tool);
+        self.register_shared_tool_live(tool);
+    }
+
+    /// Register a tool on a live session. Re-registering the same name replaces
+    /// the previous handle, which is how a frontend refreshes the skill tool
+    /// after an install.
+    pub fn register_tool_live(&self, tool: Box<dyn Tool>) {
+        self.register_shared_tool_live(Arc::from(tool));
+    }
+
+    /// Register a shared tool handle on a live session.
+    pub fn register_shared_tool_live(&self, tool: Arc<dyn Tool>) {
+        self.tools.write().insert(tool.name().to_string(), tool);
     }
 
     /// Remove a registered tool and return its handle, or `None` when the name is
     /// not registered. Used by the shell to drop a tool whose backing resource
     /// (an MCP server) went away or was disabled, so the model stops seeing it.
     pub fn unregister_tool(&mut self, name: &str) -> Option<Arc<dyn Tool>> {
-        self.tools.remove(name)
+        self.unregister_tool_live(name)
+    }
+
+    /// Live variant of [`LlmSession::unregister_tool`].
+    pub fn unregister_tool_live(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.tools.write().remove(name)
+    }
+
+    /// Names of every registered tool, in the map's iteration order.
+    pub fn registered_tool_names(&self) -> Vec<String> {
+        self.tools.read().keys().cloned().collect()
     }
 
     /// Return shared handles for tools whose names appear in `names` (order preserved).
@@ -512,9 +537,10 @@ impl LlmSession {
     where
         I: IntoIterator<Item = &'a str>,
     {
+        let tools = self.tools.read();
         names
             .into_iter()
-            .filter_map(|name| self.tools.get(name).cloned())
+            .filter_map(|name| tools.get(name).cloned())
             .collect()
     }
 
@@ -578,6 +604,40 @@ impl LlmSession {
         self.approval_memory
             .as_ref()
             .is_some_and(|memory| memory.lock().is_target_allowed(tool_name, target))
+    }
+
+    /// Snapshot the session-scoped approval memory for the settings UI.
+    ///
+    /// Applies the same policy-epoch invalidation the tool preflight runs, so
+    /// the UI never shows approvals that a policy edit has already revoked.
+    pub fn approval_entries(&self) -> (Vec<(String, String)>, Vec<(String, String)>) {
+        Self::maybe_invalidate_approvals_on_policy_change(&self.approval_memory);
+        let Some(memory) = &self.approval_memory else {
+            return (Vec::new(), Vec::new());
+        };
+        let guard = memory.lock();
+        (guard.command_entries(), guard.target_entries())
+    }
+
+    /// Revoke one remembered approval. `kind` is `command` or `target`.
+    /// Returns whether an entry was removed.
+    pub fn revoke_approval(&self, kind: &str, first: &str, second: &str) -> bool {
+        let Some(memory) = &self.approval_memory else {
+            return false;
+        };
+        let mut guard = memory.lock();
+        match kind {
+            "command" => guard.revoke_command(first, second),
+            "target" => guard.revoke_target(first, second),
+            _ => false,
+        }
+    }
+
+    /// Clear every remembered approval for this session.
+    pub fn clear_approvals(&self) {
+        if let Some(memory) = &self.approval_memory {
+            memory.lock().clear();
+        }
     }
 
     /// Set the callback invoked when a tool's preflight returns a display-only security notice.
@@ -700,12 +760,15 @@ impl LlmSession {
 
     /// Return tool specs for all registered tools.
     pub fn tool_specs(&self) -> Vec<ToolSpec> {
-        self.tools.values().map(|t| t.to_spec()).collect()
+        self.tools.read().values().map(|t| t.to_spec()).collect()
     }
 
-    /// Iterate registered tools (for prompt assembly appendix).
-    pub(crate) fn registered_tools(&self) -> impl Iterator<Item = &dyn Tool> {
-        self.tools.values().map(|tool| tool.as_ref())
+    /// Snapshot of the registered tools (for prompt assembly appendix).
+    ///
+    /// Returns owned handles instead of references because the tool map is
+    /// mutable at runtime and a read guard must not escape this method.
+    pub(crate) fn registered_tools(&self) -> Vec<Arc<dyn Tool>> {
+        self.tools.read().values().cloned().collect()
     }
 
     /// Get a reference to the plan state (for external coordination).
@@ -950,7 +1013,9 @@ impl LlmSession {
     ) -> Result<ToolResult, String> {
         let tool = self
             .tools
+            .read()
             .get(name)
+            .cloned()
             .ok_or_else(|| format!("Unknown tool: {}", name))?;
         if let Some(result) = self.run_tool_preflight(name, tool.as_ref(), &args) {
             return Ok(result);
@@ -1760,7 +1825,8 @@ impl LlmSession {
         let args: serde_json::Value =
             serde_json::from_str(&tool_call.arguments).unwrap_or(serde_json::Value::Null);
 
-        if let Some(tool) = self.tools.get(&tool_call.name) {
+        let tool = self.tools.read().get(&tool_call.name).cloned();
+        if let Some(tool) = tool {
             if let Some(result) = self.run_tool_preflight(&tool_call.name, tool.as_ref(), &args) {
                 return result;
             }
@@ -2170,7 +2236,7 @@ impl LlmSession {
         Self {
             stream_ctx: self.stream_ctx.clone(),
             api_dialect: self.api_dialect,
-            tools: HashMap::with_capacity(16),
+            tools: parking_lot::RwLock::new(HashMap::with_capacity(16)),
             cancellation_token: Arc::new(CancellationToken::new()),
             event_callback: self.event_callback.clone(),
             confirmation_callback: self.confirmation_callback.clone(),

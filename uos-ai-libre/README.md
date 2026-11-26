@@ -52,7 +52,18 @@ Rules that keep the UI maintainable:
   same session cwd.
 - Settings pages are views over aish state: security policy, registered tool
   catalog, installed skills, MCP manager status, long-term memory and audit
-  events. Destructive/advanced configuration stays in aish's YAML files or CLI.
+  events. The security page can edit global policy fields and the ordered raw
+  `rules:` entries (with a fallback-engine preview); built-in rules are shown
+  read-only. The skills page can search registries, install into quarantine,
+  review/verify and trust/remove; the MCP page can enable/disable/trust/test,
+  add/update/remove servers and edit server options. Connection-level MCP YAML
+  and registry file settings remain aish-native.
+- Session-scoped "本会话允许" approvals are listed on the security page and can
+  be revoked or cleared. They are never persisted; a policy change invalidates
+  them through aish's policy fingerprint.
+- Skill/MCP changes refresh the live `skill`/`mcp__*` tools without restarting
+  the app. Settings jobs (registry search/install, MCP apply/probe/reload) run
+  in the background and report through `settings_job` events.
 - QML is grouped by domain. `controls/` holds reusable base controls such as
   `AppButton` and `IconButton`; each page directory owns its skeleton and
   page-private pieces. Variants are expressed as properties (for example

@@ -47,6 +47,10 @@ void AppController::wire() {
             &AppController::onConfigChanged);
     connect(&m_bridge, &AishBridge::sessionsChanged, this,
             &AppController::onSessionsChanged);
+    connect(&m_bridge, &AishBridge::settingsJobFinished, this,
+            &AppController::onSettingsJobFinished);
+    connect(&m_bridge, &AishBridge::sessionChanged, this,
+            [this]() { refreshSessionApprovals(); });
     connect(&m_bridge, &AishBridge::workspaceChanged, this,
             &AppController::workspaceChanged);
     connect(&m_bridge, &AishBridge::toastRequested, this,
@@ -135,9 +139,17 @@ int AppController::pendingInteractionCount() const {
 }
 
 QVariantMap AppController::policyInfo() const { return m_policy_info; }
+QVariantList AppController::sessionApprovals() const { return m_session_approvals; }
 QVariantList AppController::toolCatalog() const { return m_tool_catalog; }
 QVariantMap AppController::skillCatalog() const { return m_skill_catalog; }
+bool AppController::skillSearchBusy() const { return m_skill_search_busy; }
+bool AppController::skillInstallBusy() const { return m_skill_install_busy; }
+QVariantMap AppController::skillSearchResult() const { return m_skill_search_result; }
+QVariantMap AppController::skillInstallResult() const { return m_skill_install_result; }
+QVariantMap AppController::skillReview() const { return m_skill_review; }
 QVariantMap AppController::mcpStatus() const { return m_mcp_status; }
+bool AppController::mcpBusy() const { return m_mcp_busy; }
+QVariantMap AppController::mcpTestResult() const { return m_mcp_test_result; }
 QVariantList AppController::memoryEntries() const { return m_memory_entries; }
 QVariantList AppController::auditEvents() const { return m_audit_events; }
 
@@ -282,6 +294,7 @@ void AppController::resolveApproval(int decision) {
     else
         m_approval_timeout.start();
     emit pendingApprovalChanged();
+    refreshSessionApprovals();
 }
 
 void AppController::resolveInteraction(const QVariantMap &response) {
@@ -307,6 +320,7 @@ void AppController::refreshPolicy() {
         return;
     m_policy_info = info;
     emit policyInfoChanged();
+    refreshSessionApprovals();
 }
 
 QVariantMap AppController::savePolicy(const QVariantMap &fields) {
@@ -314,6 +328,7 @@ QVariantMap AppController::savePolicy(const QVariantMap &fields) {
     if (result.value(QStringLiteral("ok"), false).toBool()) {
         m_policy_info = result;
         emit policyInfoChanged();
+        refreshSessionApprovals();
         emit toastRequested(QStringLiteral("aish 安全策略已保存"));
     } else {
         const QString error = result.value(QStringLiteral("error")).toString();
@@ -321,6 +336,64 @@ QVariantMap AppController::savePolicy(const QVariantMap &fields) {
                                             : error);
     }
     return result;
+}
+
+QVariantMap AppController::savePolicyRules(const QVariantList &rules) {
+    const QString fingerprint =
+        m_policy_info.value(QStringLiteral("rule_file_fingerprint")).toString();
+    const QVariantMap result = m_bridge.savePolicyRules(rules, fingerprint);
+    if (result.value(QStringLiteral("ok"), false).toBool()) {
+        m_policy_info = result;
+        emit policyInfoChanged();
+        refreshSessionApprovals();
+        emit toastRequested(QStringLiteral("aish 安全规则已保存"));
+    } else {
+        const QString error = result.value(QStringLiteral("error")).toString();
+        emit toastRequested(error.isEmpty() ? QStringLiteral("安全规则保存失败")
+                                            : error);
+    }
+    return result;
+}
+
+QVariantMap AppController::previewPolicy(const QString &command,
+                                         const QVariantList &draftRules) {
+    return m_bridge.previewPolicyCommand(command, draftRules);
+}
+
+void AppController::refreshSessionApprovals() {
+    if (sessionId().isEmpty()) {
+        if (!m_session_approvals.isEmpty()) {
+            m_session_approvals.clear();
+            emit sessionApprovalsChanged();
+        }
+        return;
+    }
+    const QVariantList items = m_bridge.sessionApprovals(sessionId());
+    if (items == m_session_approvals)
+        return;
+    m_session_approvals = items;
+    emit sessionApprovalsChanged();
+}
+
+void AppController::revokeSessionApproval(const QString &kind,
+                                          const QString &first,
+                                          const QString &second) {
+    if (sessionId().isEmpty())
+        return;
+    const QVariantMap result =
+        m_bridge.revokeSessionApproval(sessionId(), kind, first, second);
+    if (!result.value(QStringLiteral("ok"), false).toBool())
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+    refreshSessionApprovals();
+}
+
+void AppController::clearSessionApprovals() {
+    if (sessionId().isEmpty())
+        return;
+    const QVariantMap result = m_bridge.clearSessionApprovals(sessionId());
+    if (!result.value(QStringLiteral("ok"), false).toBool())
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+    refreshSessionApprovals();
 }
 
 void AppController::refreshToolCatalog() {
@@ -339,11 +412,65 @@ void AppController::refreshSkillCatalog() {
     emit skillCatalogChanged();
 }
 
+void AppController::searchSkills(const QString &query) {
+    if (m_skill_search_busy)
+        return;
+    const QVariantMap result = m_bridge.startSkillSearch(query, 20);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_skill_search_busy = true;
+    m_skill_search_result = {{QStringLiteral("query"), query}};
+    emit skillSearchBusyChanged();
+    emit skillSearchResultChanged();
+}
+
+void AppController::installSkill(const QString &skillId) {
+    if (m_skill_install_busy)
+        return;
+    const QVariantMap result = m_bridge.startSkillInstall(skillId);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_skill_install_busy = true;
+    emit skillInstallBusyChanged();
+    emit toastRequested(QStringLiteral("正在安装技能，完成后会进入隔离审查"));
+}
+
+void AppController::reviewSkill(const QString &name) {
+    QVariantMap review = m_bridge.readSkill(name, 256 * 1024);
+    const QVariantMap verify = m_bridge.verifySkill(name);
+    review.insert(QStringLiteral("verify"), verify);
+    m_skill_review = review;
+    emit skillReviewChanged();
+    emit skillReviewFinished(review);
+}
+
 void AppController::trustSkill(const QString &name) {
     const QVariantMap result = m_bridge.trustSkill(name);
     if (result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("message")).toString());
         refreshSkillCatalog();
+        m_bridge.refreshSkillsLive();
+        refreshToolCatalog();
+        reviewSkill(name);
+    } else {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+    }
+}
+
+void AppController::removeSkill(const QString &name) {
+    const QVariantMap result = m_bridge.removeSkill(name);
+    if (result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(QStringLiteral("技能已删除"));
+        refreshSkillCatalog();
+        refreshToolCatalog();
+        if (m_skill_review.value(QStringLiteral("name")).toString() == name) {
+            m_skill_review.clear();
+            emit skillReviewChanged();
+        }
     } else {
         emit toastRequested(result.value(QStringLiteral("error")).toString());
     }
@@ -358,12 +485,180 @@ void AppController::refreshMcpStatus() {
 }
 
 void AppController::reloadMcp() {
-    const QVariantMap status = m_bridge.reloadMcp();
-    if (status.isEmpty())
+    const QVariantMap result = m_bridge.reloadMcp();
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
         return;
-    m_mcp_status = status;
-    emit mcpStatusChanged();
-    emit toastRequested(QStringLiteral("MCP 连接已重载"));
+    }
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    emit toastRequested(QStringLiteral("正在重载 MCP 连接"));
+}
+
+void AppController::addMcpServer(const QVariantMap &args) {
+    const QVariantMap result = m_bridge.addMcpServer(args);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    refreshMcpStatus();
+    emit toastRequested(QStringLiteral("MCP server 已添加，正在连接"));
+}
+
+void AppController::updateMcpServer(const QString &name,
+                                    const QVariantMap &args) {
+    const QVariantMap result = m_bridge.updateMcpServer(name, args);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    refreshMcpStatus();
+}
+
+void AppController::removeMcpServer(const QString &name) {
+    const QVariantMap result = m_bridge.removeMcpServer(name);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    emit toastRequested(QStringLiteral("MCP server 已移除"));
+}
+
+void AppController::setMcpMasterEnabled(bool enabled) {
+    const QVariantMap result = m_bridge.setMcpMasterEnabled(enabled);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    refreshMcpStatus();
+}
+
+void AppController::setMcpEnabled(const QString &name, bool enabled) {
+    const QVariantMap result = m_bridge.setMcpEnabled(name, enabled);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    refreshMcpStatus();
+}
+
+void AppController::setMcpTrust(const QString &name,
+                                const QString &tool,
+                                const QString &level) {
+    const QVariantMap result = m_bridge.setMcpTrust(name, tool, level);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    refreshMcpStatus();
+}
+
+void AppController::testMcpServer(const QString &name) {
+    const QVariantMap result = m_bridge.testMcpServer(name);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_mcp_test_result = {{QStringLiteral("job"), QStringLiteral("mcp_test")},
+                         {QStringLiteral("pending"), true}};
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    emit mcpTestResultChanged();
+}
+
+void AppController::testMcpDraft(const QVariantMap &args) {
+    const QVariantMap result = m_bridge.testMcpDraft(args);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    m_mcp_test_result = {{QStringLiteral("job"), QStringLiteral("mcp_test")},
+                         {QStringLiteral("pending"), true}};
+    m_mcp_busy = true;
+    emit mcpBusyChanged();
+    emit mcpTestResultChanged();
+}
+
+void AppController::onSettingsJobFinished(const QVariantMap &result) {
+    const QString job = result.value(QStringLiteral("job")).toString();
+    const bool ok = result.value(QStringLiteral("ok"), false).toBool();
+    if (job == QStringLiteral("skill_search")) {
+        m_skill_search_busy = false;
+        emit skillSearchBusyChanged();
+        m_skill_search_result = result.value(QStringLiteral("data")).toMap();
+        m_skill_search_result.insert(QStringLiteral("ok"), ok);
+        m_skill_search_result.insert(QStringLiteral("error"),
+                                     result.value(QStringLiteral("error")));
+        emit skillSearchResultChanged();
+        emit skillSearchFinished(m_skill_search_result);
+    } else if (job == QStringLiteral("skill_install")) {
+        m_skill_install_busy = false;
+        emit skillInstallBusyChanged();
+        QVariantMap adjusted = result;
+        if (ok) {
+            m_bridge.refreshSkillsLive();
+            refreshSkillCatalog();
+            refreshToolCatalog();
+            // The install job identifies the skill by its directory slug (the
+            // registry slug), but SKILL.md can declare a different name.
+            // Resolve the loaded catalog name so read/verify/trust all target
+            // the same record.
+            QVariantMap data = adjusted.value(QStringLiteral("data")).toMap();
+            QVariantMap meta = data.value(QStringLiteral("meta")).toMap();
+            const QString installedPath = meta.value(QStringLiteral("path")).toString();
+            QString displayName;
+            const QVariantList skills =
+                m_skill_catalog.value(QStringLiteral("skills")).toList();
+            for (const QVariant &entry : skills) {
+                const QVariantMap skill = entry.toMap();
+                if (skill.value(QStringLiteral("base_dir")).toString() == installedPath) {
+                    displayName = skill.value(QStringLiteral("name")).toString();
+                    break;
+                }
+            }
+            if (!displayName.isEmpty())
+                meta.insert(QStringLiteral("display_name"), displayName);
+            data.insert(QStringLiteral("meta"), meta);
+            adjusted.insert(QStringLiteral("data"), data);
+            emit toastRequested(
+                QStringLiteral("技能已安装并处于隔离状态，请审查后信任"));
+        } else {
+            emit toastRequested(result.value(QStringLiteral("error")).toString());
+        }
+        m_skill_install_result = adjusted;
+        emit skillInstallResultChanged();
+        emit skillInstallFinished(m_skill_install_result);
+    } else if (job == QStringLiteral("mcp_apply")
+               || job == QStringLiteral("mcp_reload")) {
+        m_mcp_busy = false;
+        emit mcpBusyChanged();
+        m_bridge.refreshMcpTools();
+        refreshMcpStatus();
+        refreshToolCatalog();
+        emit toastRequested(job == QStringLiteral("mcp_reload")
+                                ? QStringLiteral("MCP 连接已重载")
+                                : QStringLiteral("MCP 配置已应用"));
+    } else if (job == QStringLiteral("mcp_test")) {
+        m_mcp_busy = false;
+        emit mcpBusyChanged();
+        m_mcp_test_result = result;
+        emit mcpTestResultChanged();
+        emit mcpTestFinished(result);
+        if (!ok)
+            emit toastRequested(result.value(QStringLiteral("error")).toString());
+    }
 }
 
 void AppController::refreshMemory() {
@@ -517,6 +812,7 @@ void AppController::onSessionLoaded(const QVariantList &messages,
     emit modelChanged();
     m_local_title.clear();
     recomputeTitle();
+    refreshSessionApprovals();
     emit sessionLoaded();
 }
 
@@ -561,6 +857,7 @@ void AppController::onSessionCleared() {
     emit modelChanged();
     m_local_title.clear();
     recomputeTitle();
+    refreshSessionApprovals();
     emit sessionCleared();
 }
 

@@ -9,7 +9,7 @@
 //! [`ChatService::poll_event`] or block in [`ChatService::wait_event`] on a
 //! worker thread and marshal the result to its UI thread.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -261,7 +261,16 @@ pub struct ChatService {
     /// single active shell). The guard also keeps the process cwd stable for
     /// relative tool paths during a turn.
     turn_lock: Arc<tokio::sync::Mutex<()>>,
-    mcp_manager: Option<Arc<McpManager>>,
+    /// The MCP runtime is replaceable at runtime: the settings page can add,
+    /// remove, enable or disable servers without restarting the process.
+    mcp_manager: Mutex<Option<Arc<McpManager>>>,
+    /// Serializes MCP config read/modify/write sequences from this frontend.
+    mcp_config_lock: Mutex<()>,
+    /// Gateway tool names registered into live sessions, so a configuration
+    /// change can unregister exactly what it previously added.
+    mcp_tool_names: Mutex<HashSet<String>>,
+    /// Monotonic id for background settings jobs (skill registry, MCP probe).
+    job_seq: AtomicU64,
 }
 
 impl ChatService {
@@ -314,7 +323,10 @@ impl ChatService {
             store,
             audit_store,
             turn_lock: Arc::new(tokio::sync::Mutex::new(())),
-            mcp_manager,
+            mcp_manager: Mutex::new(mcp_manager),
+            mcp_config_lock: Mutex::new(()),
+            mcp_tool_names: Mutex::new(HashSet::new()),
+            job_seq: AtomicU64::new(1),
         })
     }
 
@@ -420,7 +432,7 @@ impl ChatService {
                 &session_id,
                 self.events.clone(),
                 self.interactions.clone(),
-                self.mcp_manager.as_ref(),
+                self.mcp_manager().as_ref(),
             );
         }
 
@@ -718,14 +730,33 @@ impl ChatService {
 
     /// Effective aish security policy for the settings UI. The policy file is
     /// the source of truth; this is a read-only projection of it.
+    ///
+    /// `rule_groups` is the raw `rules:` sequence exactly as the YAML file
+    /// stores it. The rule editor must edit this shape, not the flattened
+    /// `rules` projection: a typed [`aish_security::PolicyRule`] serializes its
+    /// glob as `pattern`, while the loader only accepts `path`.
     pub fn policy_info(&self) -> Value {
         let policy = aish_security::load_policy(None);
-        let path = aish_security::resolve_security_policy_path(None)
+        let path = aish_security::resolve_security_policy_path(None);
+        let path_string = path
+            .as_ref()
             .map(|path| path.to_string_lossy().to_string())
             .unwrap_or_default();
+        let (rule_groups, rules_error) = match path.as_deref() {
+            Some(path) => match read_raw_policy_rules(path) {
+                Ok(rules) => (rules, Value::Null),
+                Err(error) => (Vec::new(), Value::String(error)),
+            },
+            None => (
+                Vec::new(),
+                Value::String("policy path unavailable".to_string()),
+            ),
+        };
         json!({
             "ok": true,
-            "path": path,
+            "path": path_string,
+            "text_path": path_string,
+            "rule_file_fingerprint": aish_security::policy_epoch_fingerprint(),
             "default_risk_level": policy.default_risk_level.as_str().to_ascii_lowercase(),
             "enable_sandbox": policy.enable_sandbox,
             "sandbox_off_action": policy.sandbox_off_action.as_str().to_ascii_lowercase(),
@@ -733,9 +764,165 @@ impl ChatService {
             "sandbox_socket_available": Path::new("/run/aish/sandbox.sock").exists(),
             "input_guard_enabled": policy.input_guard.enabled,
             "audit_enabled": policy.audit_enabled,
+            "audit_include_commands": policy.audit_include_commands,
             "rules": policy.rules,
+            "builtin_rules": aish_security::policy::default_rules(),
+            "rule_groups": rule_groups,
+            "rules_error": rules_error,
+            "invalid_fallback_rules": policy.invalid_fallback_rules,
             "validation_issues": policy.validation_issues,
         })
+    }
+
+    /// Replace the raw `rules:` sequence in `security_policy.yaml`.
+    ///
+    /// The write is atomic and validated before it reaches disk. `expected`
+    /// is the policy fingerprint the page loaded; when the file changed
+    /// underneath the editor, the save is refused instead of clobbering an
+    /// external edit (for example one made by the aish CLI).
+    pub fn save_policy_rules(
+        &self,
+        rules: &Value,
+        expected_fingerprint: Option<&str>,
+    ) -> Result<Value, String> {
+        let path = aish_security::writable_security_policy_path()
+            .ok_or_else(|| "aish security policy path is unavailable".to_string())?;
+        if let Some(expected) = expected_fingerprint.filter(|value| !value.trim().is_empty()) {
+            let actual = aish_security::policy_epoch_fingerprint();
+            if actual != expected {
+                return Err("安全策略文件已被外部修改，请先刷新后再保存。".to_string());
+            }
+        }
+        let array = rules
+            .as_array()
+            .ok_or_else(|| "rules must be a JSON array".to_string())?;
+        validate_raw_policy_rules(array)?;
+        let rules_yaml = serde_yaml::to_value(rules)
+            .map_err(|error| format!("failed to encode rules: {error}"))?;
+        aish_config::ConfigLoader::update_raw(&path, |document| {
+            let root = document
+                .as_mapping_mut()
+                .ok_or_else(|| AishError::Config("policy document is not a mapping".into()))?;
+            root.insert(
+                serde_yaml::Value::String("rules".to_string()),
+                rules_yaml.clone(),
+            );
+            let text = serde_yaml::to_string(document).map_err(|error| {
+                AishError::Config(format!("failed to serialize policy: {error}"))
+            })?;
+            aish_security::policy_from_yaml_str(&text).map_err(AishError::Config)?;
+            Ok(())
+        })
+        .map_err(|error| format!("failed to save security policy: {error}"))?;
+        Ok(self.policy_info())
+    }
+
+    /// Explain how a shell command would be classified by the fallback policy
+    /// engine. `draft_rules` lets the rule editor preview unsaved edits.
+    ///
+    /// This is a fallback-engine preview only: it does not execute the command
+    /// and does not run the sandbox. When `enable_sandbox` is true, the live
+    /// decision may instead come from the sandbox assessment.
+    pub fn preview_policy_command(
+        &self,
+        command: &str,
+        draft_rules: Option<&Value>,
+    ) -> Result<Value, String> {
+        let policy = if let Some(rules) = draft_rules {
+            let path = aish_security::resolve_security_policy_path(None)
+                .ok_or_else(|| "aish security policy path is unavailable".to_string())?;
+            let text = fs::read_to_string(&path)
+                .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+            let mut document: serde_yaml::Value = serde_yaml::from_str(&text)
+                .map_err(|error| format!("invalid policy YAML: {error}"))?;
+            let root = document
+                .as_mapping_mut()
+                .ok_or_else(|| "policy document is not a mapping".to_string())?;
+            root.insert(
+                serde_yaml::Value::String("rules".to_string()),
+                serde_yaml::to_value(rules)
+                    .map_err(|error| format!("failed to encode rules: {error}"))?,
+            );
+            let text = serde_yaml::to_string(&document)
+                .map_err(|error| format!("failed to serialize policy: {error}"))?;
+            aish_security::policy_from_yaml_str(&text)?
+        } else {
+            aish_security::load_policy(None)
+        };
+        let default_risk = policy.default_risk_level.as_str().to_ascii_lowercase();
+        let sandbox_enabled = policy.enable_sandbox;
+        let engine = aish_security::FallbackRuleEngine::new(policy);
+        let assessment = engine.assess_disabled_command(command);
+        let result = match assessment {
+            None => json!({
+                "matched": false,
+                "risk": default_risk,
+                "default_risk": default_risk,
+                "reasons": ["no fallback rule matched; the default risk level applies"],
+                "matched_paths": [],
+                "rule": Value::Null,
+            }),
+            Some(assessment) => json!({
+                "matched": true,
+                "risk": assessment.level.as_str().to_ascii_lowercase(),
+                "default_risk": default_risk,
+                "reasons": assessment.reasons,
+                "matched_paths": assessment.matched_paths,
+                "rule": {
+                    "id": assessment.primary_rule.rule_id,
+                    "name": assessment.primary_rule.name,
+                    "pattern": assessment.primary_rule.pattern,
+                    "risk": assessment.primary_rule.risk.as_str().to_ascii_lowercase(),
+                    "reason": assessment.primary_rule.reason,
+                    "suggestion": assessment.primary_rule.suggestion,
+                    "command_list": assessment.primary_rule.command_list,
+                },
+            }),
+        };
+        Ok(json!({
+            "ok": true,
+            "command": command,
+            "sandbox_enabled": sandbox_enabled,
+            "fallback_only": true,
+            "preview": result,
+        }))
+    }
+
+    /// Session-scoped approvals ("本会话允许"), as shown by the security page.
+    pub fn session_approvals(&self, session_id: &str) -> Result<Value, String> {
+        let session = self.session(session_id)?;
+        let (commands, targets) = session.llm.approval_entries();
+        let items: Vec<Value> = commands
+            .into_iter()
+            .map(|(host, command)| json!({"kind": "command", "host": host, "value": command}))
+            .chain(
+                targets
+                    .into_iter()
+                    .map(|(tool, target)| json!({"kind": "target", "tool": tool, "value": target})),
+            )
+            .collect();
+        Ok(json!({"ok": true, "items": items}))
+    }
+
+    /// Revoke one remembered approval. `kind` is `command` or `target`.
+    pub fn revoke_session_approval(
+        &self,
+        session_id: &str,
+        kind: &str,
+        first: &str,
+        second: &str,
+    ) -> Result<Value, String> {
+        let session = self.session(session_id)?;
+        let removed = session.llm.revoke_approval(kind, first, second);
+        Ok(json!({"ok": true, "removed": removed}))
+    }
+
+    /// Clear every remembered approval for one session (the GUI equivalent of
+    /// `/forget-approvals`).
+    pub fn clear_session_approvals(&self, session_id: &str) -> Result<Value, String> {
+        let session = self.session(session_id)?;
+        session.llm.clear_approvals();
+        Ok(json!({"ok": true}))
     }
 
     /// Update the aish security globals through the same YAML-preserving
@@ -808,7 +995,7 @@ impl ChatService {
                 "tool-catalog",
                 self.events.clone(),
                 self.interactions.clone(),
-                self.mcp_manager.as_ref(),
+                self.mcp_manager().as_ref(),
             );
         }
         let mut specs = llm.tool_specs();
@@ -863,71 +1050,624 @@ impl ChatService {
             .into_iter()
             .map(|path| path.to_string_lossy().to_string())
             .collect();
-        json!({"ok": true, "skills": skills, "roots": roots})
-    }
-
-    /// Trust one quarantined skill through the same aish marker logic as the
-    /// `skill_trust` tool.
-    pub fn trust_skill(&self, name: &str) -> Result<Value, String> {
-        let tool = SkillTrustTool;
-        let result = tool.execute(json!({"skill_name": name}));
-        if result.ok {
-            Ok(json!({"ok": true, "message": result.output}))
-        } else {
-            Err(result.output)
-        }
-    }
-
-    /// MCP server/tool status for the connectors page.
-    pub fn mcp_status(&self) -> Value {
-        let Some(manager) = &self.mcp_manager else {
-            return json!({"ok": true, "enabled": false, "servers": []});
-        };
-        let servers: Vec<Value> = manager
-            .snapshots()
-            .into_iter()
-            .map(|snapshot| {
-                let tools: Vec<Value> = snapshot
-                    .tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "name": tool.name,
-                            "description": tool.description,
-                            "side_effects": tool.side_effects,
-                            "required": tool.required,
-                        })
-                    })
-                    .collect();
+        let install_root = SkillManager::user_skills_root()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let skills_config = aish_config::ConfigLoader::load(None)
+            .map(|config| config.skills)
+            .unwrap_or_else(|_| self.config.skills.clone());
+        let registries: Vec<Value> = skills_config
+            .registries
+            .iter()
+            .map(|registry| {
                 json!({
-                    "name": snapshot.name,
-                    "transport": snapshot.transport,
-                    "endpoint": snapshot.endpoint,
-                    "status": snapshot.status.label(),
-                    "status_detail": match &snapshot.status {
-                        aish_mcp::ServerStatus::Connected { protocol_version, tool_count } => {
-                            json!({"protocol_version": protocol_version, "tool_count": tool_count})
-                        }
-                        aish_mcp::ServerStatus::Failed { reason } => json!({"reason": reason}),
-                        _ => Value::Null,
-                    },
-                    "trust": snapshot.trust,
-                    "declared_side_effects": snapshot.declared_side_effects,
-                    "tools": tools,
+                    "name": registry.name,
+                    "type": registry.registry_type,
+                    "enabled": registry.enabled,
+                    "url": registry.url,
+                    "default": registry.name == skills_config.default_registry,
                 })
             })
             .collect();
-        json!({"ok": true, "enabled": manager.is_active(), "servers": servers})
+        json!({
+            "ok": true,
+            "skills": skills,
+            "roots": roots,
+            "install_root": install_root,
+            "registries": registries,
+            "auto_search": skills_config.auto_search,
+            "default_registry": skills_config.default_registry,
+        })
     }
 
-    /// Reconnect all configured MCP servers and return refreshed status.
-    pub fn mcp_reload(&self) -> Value {
-        if let Some(manager) = &self.mcp_manager {
-            let _ = self.runtime.block_on(async {
-                manager.reload().await;
-            });
+    /// Trust one quarantined skill by resolving the skill's actual directory.
+    ///
+    /// Resolving the loaded skill instead of joining the name onto the skills
+    /// root matters for registry installs whose slug differs from the
+    /// `name:` in SKILL.md.
+    pub fn trust_skill(&self, name: &str) -> Result<Value, String> {
+        let skill = load_skill_by_name(name)?;
+        if !skill.quarantined {
+            return Ok(json!({"ok": true, "message": format!("技能「{name}」已经是信任状态。")}));
         }
-        self.mcp_status()
+        let base = PathBuf::from(&skill.base_dir);
+        let root = SkillManager::user_skills_root()
+            .ok_or_else(|| "aish skills directory is unavailable".to_string())?;
+        if !base.starts_with(&root) {
+            return Err(format!(
+                "refusing to trust a skill outside the user skills directory: {}",
+                base.display()
+            ));
+        }
+        aish_skills::set_skill_trusted(&base, true)
+            .map_err(|error| format!("failed to trust skill: {error}"))?;
+        self.refresh_skill_tools();
+        Ok(json!({
+            "ok": true,
+            "message": format!("技能「{name}」已信任。"),
+        }))
+    }
+
+    /// Refresh the `skill` tool of every live session after an install,
+    /// trust, removal or hot reload. Re-registering by name replaces the old
+    /// snapshot, so no session restart is needed.
+    pub fn refresh_skills_live(&self) -> Value {
+        self.refresh_skill_tools();
+        self.skill_catalog()
+    }
+
+    fn refresh_skill_tools(&self) {
+        let snapshot = Arc::new(load_skill_snapshot());
+        let names: Vec<String> = snapshot.keys().cloned().collect();
+        let Ok(sessions) = self.sessions.lock() else {
+            return;
+        };
+        for session in sessions.values() {
+            let lookup_snapshot = snapshot.clone();
+            let lookup = Box::new(move |name: &str| lookup_snapshot.get(name).cloned());
+            let list_names = names.clone();
+            let list = Box::new(move || list_names.clone());
+            session
+                .llm
+                .register_tool_live(Box::new(SkillTool::new(lookup, list)));
+        }
+    }
+
+    /// Read one installed skill's `SKILL.md` for the review dialog.
+    pub fn skill_read(&self, name: &str, max_bytes: usize) -> Result<Value, String> {
+        let skill = load_skill_by_name(name)?;
+        let path = PathBuf::from(&skill.file_path);
+        let bytes =
+            fs::read(&path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        let cap = max_bytes.clamp(1, 512 * 1024);
+        let truncated = bytes.len() > cap;
+        let slice = &bytes[..bytes.len().min(cap)];
+        let content = String::from_utf8_lossy(slice).to_string();
+        Ok(json!({
+            "ok": true,
+            "name": skill.metadata.name,
+            "path": skill.file_path,
+            "base_dir": skill.base_dir,
+            "description": skill.metadata.description,
+            "quarantined": skill.quarantined,
+            "content": content,
+            "truncated": truncated,
+        }))
+    }
+
+    /// Verify one installed skill with aish's shared verifier (the same checks
+    /// as `/skill verify`).
+    pub fn skill_verify(&self, name: &str) -> Result<Value, String> {
+        let skill = load_skill_by_name(name)?;
+        let report = aish_skills::registry::RegistryManager::verify(Path::new(&skill.base_dir));
+        let checks: Vec<Value> = report
+            .checks
+            .iter()
+            .map(|check| {
+                json!({
+                    "label": check.label,
+                    "passed": check.passed,
+                    "detail": check.detail,
+                })
+            })
+            .collect();
+        Ok(json!({
+            "ok": true,
+            "name": report.skill_name,
+            "valid": report.valid,
+            "checks": checks,
+        }))
+    }
+
+    /// Remove a skill from the user skills directory. Built-in and Claude
+    /// skills are read-only; the name is rejected if it could escape the root.
+    pub fn skill_remove(&self, name: &str) -> Result<Value, String> {
+        if aish_skills::registry::is_unsafe_skill_name(name) {
+            return Err(format!("unsafe skill name: {name:?}"));
+        }
+        let root = SkillManager::user_skills_root()
+            .ok_or_else(|| "aish skills directory is unavailable".to_string())?;
+        let dir = match load_skill_by_name(name) {
+            Ok(skill) => PathBuf::from(skill.base_dir),
+            // A broken skill (invalid frontmatter) is not in the catalog; fall
+            // back to the directory name so it can still be removed.
+            Err(_) => root.join(name),
+        };
+        if !dir.starts_with(&root) {
+            return Err(format!(
+                "refusing to remove a skill outside the user skills directory: {}",
+                dir.display()
+            ));
+        }
+        let metadata =
+            fs::symlink_metadata(&dir).map_err(|error| format!("skill not installed: {error}"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err("refusing to remove a non-directory or symlinked skill".to_string());
+        }
+        fs::remove_dir_all(&dir)
+            .map_err(|error| format!("failed to remove {}: {error}", dir.display()))?;
+        self.refresh_skill_tools();
+        Ok(json!({"ok": true, "removed": name, "path": dir.to_string_lossy()}))
+    }
+
+    /// Start a registry search in the background. The result arrives as a
+    /// `settings_job` event, so a slow/unreachable registry never blocks the
+    /// Qt event loop.
+    pub fn start_skill_search(&self, query: &str, limit: usize) -> Value {
+        let job_id = self.next_job_id();
+        let registries = registry_configs_from_config();
+        let events = self.events.clone();
+        let job = job_id.clone();
+        let query = query.to_string();
+        let limit = limit.clamp(1, 50);
+        self.runtime.spawn_blocking(move || {
+            let manager = aish_skills::registry::RegistryManager::from_config(&registries);
+            let outcome = manager.search_all_with_errors(&query, limit);
+            let results = serde_json::to_value(&outcome.results).unwrap_or(Value::Null);
+            let errors: Vec<Value> = outcome
+                .errors
+                .iter()
+                .map(|error| json!({"registry": error.registry, "error": error.error}))
+                .collect();
+            events.push(ChatEvent::new(
+                "settings",
+                "settings_job",
+                json!({
+                    "job_id": job,
+                    "job": "skill_search",
+                    "ok": true,
+                    "data": {
+                        "query": query,
+                        "results": results,
+                        "errors": errors,
+                        "succeeded": outcome.succeeded,
+                    },
+                }),
+            ));
+        });
+        json!({"ok": true, "job_id": job_id})
+    }
+
+    /// Start a registry install in the background. The skill is installed into
+    /// aish's user skills directory and left quarantined; the frontend must
+    /// review it and call `trust_skill` explicitly.
+    pub fn start_skill_install(&self, skill_id: &str) -> Value {
+        let job_id = self.next_job_id();
+        let registries = registry_configs_from_config();
+        let events = self.events.clone();
+        let job = job_id.clone();
+        let skill_id = skill_id.to_string();
+        self.runtime.spawn(async move {
+            // The install tool already enforces a 180s deadline and runs its
+            // blocking download on a worker thread. Serialize installs so two
+            // jobs cannot write the same target directory.
+            static INSTALL_LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> =
+                std::sync::OnceLock::new();
+            let _guard = INSTALL_LOCK
+                .get_or_init(|| tokio::sync::Mutex::new(()))
+                .lock()
+                .await;
+            let tool = SkillInstallTool::new(registries);
+            let result = tool.execute_async(json!({"skill_id": skill_id})).await;
+            let data = json!({
+                "skill_id": skill_id,
+                "ok": result.ok,
+                "output": result.output,
+                "meta": result.meta,
+            });
+            events.push(ChatEvent::new(
+                "settings",
+                "settings_job",
+                if result.ok {
+                    json!({"job_id": job, "job": "skill_install", "ok": true, "data": data})
+                } else {
+                    json!({
+                        "job_id": job,
+                        "job": "skill_install",
+                        "ok": false,
+                        "error": data["output"].as_str().unwrap_or("skill install failed"),
+                        "data": data,
+                    })
+                },
+            ));
+        });
+        json!({"ok": true, "job_id": job_id})
+    }
+
+    /// MCP server/tool status for the connectors page.
+    ///
+    /// The configured list comes from `config.yaml`; runtime status, live
+    /// tools and per-tool trust are merged from the running manager. A server
+    /// that is configured but disabled (or whose runtime has not started yet)
+    /// still appears, so the page can enable it.
+    pub fn mcp_status(&self) -> Value {
+        let config = match aish_config::ConfigLoader::load(None) {
+            Ok(config) => config,
+            Err(error) => {
+                return json!({
+                    "ok": false,
+                    "error": format!("failed to load aish config: {error}"),
+                    "servers": [],
+                });
+            }
+        };
+        let (settings, warnings) = aish_mcp::resolve_settings(&config.mcp);
+        let manager = self.mcp_manager();
+        let mut snapshots: HashMap<String, aish_mcp::ServerSnapshot> = manager
+            .as_ref()
+            .map(|manager| {
+                manager
+                    .snapshots()
+                    .into_iter()
+                    .map(|snapshot| (snapshot.name.clone(), snapshot))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let active = manager.as_ref().is_some_and(|manager| manager.is_active());
+        let config_path = aish_config::ConfigLoader::default_config_path()
+            .to_string_lossy()
+            .to_string();
+
+        let servers: Vec<Value> = config
+            .mcp
+            .servers
+            .iter()
+            .map(|server| {
+                let resolved = settings.server(&server.name);
+                let snapshot = snapshots.remove(&server.name);
+                let (status, status_detail) = if !config.mcp.enabled || !server.enabled {
+                    ("disabled".to_string(), Value::Null)
+                } else if let Some(snapshot) = &snapshot {
+                    (
+                        snapshot.status.label().to_string(),
+                        match &snapshot.status {
+                            aish_mcp::ServerStatus::Connected {
+                                protocol_version,
+                                tool_count,
+                            } => json!({
+                                "protocol_version": protocol_version,
+                                "tool_count": tool_count
+                            }),
+                            aish_mcp::ServerStatus::Failed { reason } => {
+                                json!({"reason": reason})
+                            }
+                            _ => Value::Null,
+                        },
+                    )
+                } else {
+                    ("not_started".to_string(), Value::Null)
+                };
+                let tools: Vec<Value> = snapshot
+                    .as_ref()
+                    .map(|snapshot| {
+                        snapshot
+                            .tools
+                            .iter()
+                            .map(|tool| {
+                                let effective = resolved
+                                    .map(|resolved| resolved.effective_trust(&tool.name))
+                                    .map(|trust| trust.as_str())
+                                    .unwrap_or("ask");
+                                let override_level = resolved
+                                    .and_then(|resolved| resolved.tool_trust.get(&tool.name))
+                                    .map(|trust| trust.as_str());
+                                json!({
+                                    "name": tool.name,
+                                    "description": tool.description,
+                                    "side_effects": tool.side_effects,
+                                    "required": tool.required,
+                                    "trust": effective,
+                                    "trust_override": override_level,
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let env_keys: Vec<&String> = server.env.keys().collect();
+                let header_keys: Vec<&String> = server.headers.keys().collect();
+                let has_authorization = server
+                    .headers
+                    .keys()
+                    .any(|key| key.eq_ignore_ascii_case("authorization"));
+                json!({
+                    "name": server.name,
+                    "transport": server.transport,
+                    "endpoint": resolved
+                        .map(|resolved| resolved.endpoint_label())
+                        .unwrap_or_default(),
+                    "enabled": server.enabled,
+                    "configured": true,
+                    "status": status,
+                    "status_detail": status_detail,
+                    "trust": resolved
+                        .map(|resolved| resolved.trust.as_str())
+                        .unwrap_or_else(|| if server.trust.trim().is_empty() { "ask" } else { server.trust.as_str() }),
+                    "declared_side_effects": resolved
+                        .map(|resolved| resolved.side_effects.as_str())
+                        .unwrap_or_else(|| if server.side_effects.trim().is_empty() { "unknown" } else { server.side_effects.as_str() }),
+                    "tools": tools,
+                    "command": server.command,
+                    "args": server.args,
+                    "url": server.url.as_deref().map(aish_mcp::redact::redact_url_for_log),
+                    "cwd": server.cwd,
+                    "expose": server.expose,
+                    "request_timeout_ms": server.request_timeout_ms,
+                    "max_output_bytes": server.max_output_bytes,
+                    "env_keys": env_keys,
+                    "header_keys": header_keys,
+                    "has_authorization": has_authorization,
+                })
+            })
+            .collect();
+
+        json!({
+            "ok": true,
+            "master_enabled": config.mcp.enabled,
+            "active": active,
+            "config_path": config_path,
+            "warnings": warnings,
+            "servers": servers,
+        })
+    }
+
+    /// Reconnect all configured MCP servers through a background job.
+    pub fn mcp_reload(&self) -> Value {
+        let job_id = self.next_job_id();
+        let Some(manager) = self.mcp_manager() else {
+            self.emit_settings_job(&job_id, "mcp_reload", Ok(json!({"servers": []})));
+            return json!({"ok": true, "job_id": job_id, "done": true});
+        };
+        let events = self.events.clone();
+        let job = job_id.clone();
+        self.runtime.spawn(async move {
+            manager.reload().await;
+            events.push(ChatEvent::new(
+                "settings",
+                "settings_job",
+                json!({"job_id": job, "job": "mcp_reload", "ok": true, "data": {}}),
+            ));
+        });
+        json!({"ok": true, "job_id": job_id})
+    }
+
+    /// Refresh the `mcp__*` gateway tools of every live session from the
+    /// current manager. Called after an apply-settings job finishes.
+    pub fn refresh_mcp_tools(&self) -> Value {
+        let manager = self.mcp_manager();
+        let new_names: HashSet<String> = manager
+            .as_ref()
+            .filter(|manager| manager.settings().enabled)
+            .map(|manager| {
+                manager
+                    .settings()
+                    .servers
+                    .iter()
+                    .filter(|server| server.enabled)
+                    .map(|server| aish_mcp::gateway_tool_name(&server.name))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let old_names = self
+            .mcp_tool_names
+            .lock()
+            .map(|mut names| std::mem::replace(&mut *names, new_names))
+            .unwrap_or_default();
+        let Ok(sessions) = self.sessions.lock() else {
+            return json!({"ok": false, "error": "session map lock poisoned"});
+        };
+        for session in sessions.values() {
+            for name in &old_names {
+                session.llm.unregister_tool_live(name);
+            }
+            if let Some(manager) = manager
+                .as_ref()
+                .filter(|manager| manager.settings().enabled)
+            {
+                for tool in aish_mcp::gateway_tools(manager) {
+                    session.llm.register_tool_live(tool);
+                }
+            }
+        }
+        json!({"ok": true, "sessions": sessions.len()})
+    }
+
+    /// Add one MCP server from the settings form. Validation and server
+    /// construction use aish's own `/mcp add` helpers, then the config is
+    /// written through the raw-document merger so unknown keys survive.
+    pub fn mcp_add(&self, args: &Value) -> Result<Value, String> {
+        let _guard = self
+            .mcp_config_lock
+            .lock()
+            .map_err(|_| "MCP config lock poisoned".to_string())?;
+
+        let add_args = add_args_from_json(args)?;
+        let mut config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        let entry = aish_mcp::add_to_config(&mut config.mcp, &add_args)?;
+        self.persist_mcp_config(&config.mcp)?;
+        let (settings, warnings) = aish_mcp::resolve_settings(&config.mcp);
+        let job_id = self.spawn_mcp_apply(settings);
+        Ok(json!({
+            "ok": true,
+            "job_id": job_id,
+            "server": entry.name,
+            "warnings": warnings,
+        }))
+    }
+
+    /// Update one existing MCP server in place. Fields absent from `args` are
+    /// preserved, which matters for credentials the UI never receives back.
+    pub fn mcp_update(&self, name: &str, args: &Value) -> Result<Value, String> {
+        let _guard = self
+            .mcp_config_lock
+            .lock()
+            .map_err(|_| "MCP config lock poisoned".to_string())?;
+
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("server name must not be empty".to_string());
+        }
+        let mut config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        let index = config
+            .mcp
+            .servers
+            .iter()
+            .position(|server| server.name == name)
+            .ok_or_else(|| format!("no MCP server named `{name}` is configured"))?;
+        let existing = config.mcp.servers[index].clone();
+        let updated = update_server_from_json(existing, args)?;
+        config.mcp.servers[index] = updated;
+        self.persist_mcp_config(&config.mcp)?;
+        let (settings, warnings) = aish_mcp::resolve_settings(&config.mcp);
+        let job_id = self.spawn_mcp_apply(settings);
+        Ok(json!({
+            "ok": true,
+            "job_id": job_id,
+            "server": name,
+            "warnings": warnings,
+        }))
+    }
+
+    /// Remove one MCP server and disconnect it.
+    pub fn mcp_remove(&self, name: &str) -> Result<Value, String> {
+        let _guard = self
+            .mcp_config_lock
+            .lock()
+            .map_err(|_| "MCP config lock poisoned".to_string())?;
+
+        let mut config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        aish_mcp::remove_from_config(&mut config.mcp, name)?;
+        self.persist_mcp_config(&config.mcp)?;
+        let (settings, warnings) = aish_mcp::resolve_settings(&config.mcp);
+        let job_id = self.spawn_mcp_apply(settings);
+        Ok(json!({
+            "ok": true,
+            "job_id": job_id,
+            "server": name,
+            "warnings": warnings,
+        }))
+    }
+
+    /// Enable or disable the MCP master switch.
+    pub fn mcp_set_master_enabled(&self, enabled: bool) -> Result<Value, String> {
+        let _guard = self
+            .mcp_config_lock
+            .lock()
+            .map_err(|_| "MCP config lock poisoned".to_string())?;
+
+        let mut config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        config.mcp.enabled = enabled;
+        self.persist_mcp_config(&config.mcp)?;
+        let (settings, warnings) = aish_mcp::resolve_settings(&config.mcp);
+        let job_id = self.spawn_mcp_apply(settings);
+        Ok(json!({
+            "ok": true,
+            "job_id": job_id,
+            "master_enabled": enabled,
+            "warnings": warnings,
+        }))
+    }
+
+    /// Enable or disable one MCP server.
+    pub fn mcp_set_enabled(&self, name: &str, enabled: bool) -> Result<Value, String> {
+        let _guard = self
+            .mcp_config_lock
+            .lock()
+            .map_err(|_| "MCP config lock poisoned".to_string())?;
+
+        let mut config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        aish_mcp::set_enabled_in_config(&mut config.mcp, name, enabled)?;
+        self.persist_mcp_config(&config.mcp)?;
+        let (settings, warnings) = aish_mcp::resolve_settings(&config.mcp);
+        let job_id = self.spawn_mcp_apply(settings);
+        Ok(json!({
+            "ok": true,
+            "job_id": job_id,
+            "server": name,
+            "enabled": enabled,
+            "warnings": warnings,
+        }))
+    }
+
+    /// Set the server-level trust (`tool` = `*`) or one tool's trust.
+    pub fn mcp_set_trust(&self, name: &str, tool: &str, level: &str) -> Result<Value, String> {
+        let _guard = self
+            .mcp_config_lock
+            .lock()
+            .map_err(|_| "MCP config lock poisoned".to_string())?;
+
+        let level = aish_mcp::TrustLevel::parse(level)
+            .ok_or_else(|| format!("unknown trust level `{level}`"))?;
+        let mut config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        aish_mcp::set_trust_in_config(&mut config.mcp, name, tool, level)?;
+        self.persist_mcp_config(&config.mcp)?;
+        let (settings, warnings) = aish_mcp::resolve_settings(&config.mcp);
+        let job_id = self.spawn_mcp_apply(settings);
+        Ok(json!({
+            "ok": true,
+            "job_id": job_id,
+            "server": name,
+            "tool": tool,
+            "trust": level.as_str(),
+            "warnings": warnings,
+        }))
+    }
+
+    /// Probe one configured server without changing the config.
+    pub fn start_mcp_test(&self, name: &str) -> Result<Value, String> {
+        let config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        let (settings, _) = aish_mcp::resolve_settings(&config.mcp);
+        let server = settings
+            .server(name)
+            .cloned()
+            .ok_or_else(|| format!("no enabled MCP server named `{name}` is configured"))?;
+        Ok(self.spawn_mcp_probe(format!("server:{name}"), server))
+    }
+
+    /// Probe a server definition from the add/edit form before it is saved.
+    pub fn start_mcp_test_draft(&self, args: &Value) -> Result<Value, String> {
+        let add_args = add_args_from_json(args)?;
+        let config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        let mut staging = config.mcp.clone();
+        let entry = aish_mcp::add_to_config(&mut staging, &add_args)?;
+        let (settings, warnings) = aish_mcp::resolve_settings(&staging);
+        let server = settings
+            .server(&entry.name)
+            .cloned()
+            .ok_or_else(|| "draft server was not resolved".to_string())?;
+        let mut result = self.spawn_mcp_probe(format!("draft:{}", entry.name), server);
+        if let Some(object) = result.as_object_mut() {
+            object.insert("warnings".to_string(), json!(warnings));
+            object.insert("server".to_string(), json!(entry.name));
+        }
+        Ok(result)
     }
 
     /// Read the shared aish long-term memory store.
@@ -1231,11 +1971,190 @@ impl ChatService {
                 session.cancel();
             }
         }
-        if let Some(manager) = &self.mcp_manager {
+        if let Some(manager) = self.mcp_manager() {
             let _ = self.runtime.block_on(async {
                 manager.shutdown().await;
             });
         }
+    }
+
+    /// Write only the `mcp:` section back to `config.yaml`, preserving keys the
+    /// typed model does not own.
+    fn persist_mcp_config(&self, mcp: &aish_config::McpConfig) -> Result<(), String> {
+        let path = aish_config::ConfigLoader::default_config_path();
+        aish_config::ConfigLoader::update_raw(&path, |document| {
+            aish_mcp::commands::merge_into_document(document, mcp).map_err(AishError::Config)
+        })
+        .map_err(|error| format!("failed to save MCP configuration: {error}"))
+    }
+
+    /// Start (or reuse) the MCP runtime, then apply settings in the background.
+    fn spawn_mcp_apply(&self, settings: aish_mcp::McpSettings) -> String {
+        let job_id = self.next_job_id();
+        let mut guard = match self.mcp_manager.lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                self.emit_settings_job(
+                    &job_id,
+                    "mcp_apply",
+                    Err("MCP manager lock poisoned".to_string()),
+                );
+                return job_id;
+            }
+        };
+        if guard.is_none() && !settings.is_inactive() {
+            let manager = McpManager::new(settings.clone());
+            manager.start(self.runtime.handle());
+            *guard = Some(manager);
+        }
+        let manager = guard.clone();
+        drop(guard);
+        let Some(manager) = manager else {
+            self.emit_settings_job(&job_id, "mcp_apply", Ok(json!({"inactive": true})));
+            return job_id;
+        };
+        let events = self.events.clone();
+        let job = job_id.clone();
+        self.runtime.spawn(async move {
+            let outcome = manager.apply_settings(settings).await;
+            events.push(ChatEvent::new(
+                "settings",
+                "settings_job",
+                json!({
+                    "job_id": job,
+                    "job": "mcp_apply",
+                    "ok": true,
+                    "data": {
+                        "added": outcome.added,
+                        "removed": outcome.removed,
+                        "updated": outcome.updated,
+                    },
+                }),
+            ));
+        });
+        job_id
+    }
+
+    /// Probe one server definition with a bounded connect/list/close cycle.
+    fn spawn_mcp_probe(&self, label: String, server: aish_mcp::ServerSettings) -> Value {
+        let job_id = self.next_job_id();
+        let events = self.events.clone();
+        let job = job_id.clone();
+        self.runtime.spawn(async move {
+            let token = Arc::new(aish_llm::CancellationToken::new());
+            let cancel = aish_mcp::CancelListener::new(token.clone());
+            let (event_tx, _event_rx) = tokio::sync::mpsc::unbounded_channel();
+            let options = aish_mcp::ConnectOptions {
+                roots: std::env::current_dir()
+                    .ok()
+                    .map(|path| vec![path.to_string_lossy().to_string()])
+                    .unwrap_or_default(),
+                cancel: Some(cancel.clone()),
+                events: event_tx,
+            };
+            let probe = tokio::time::timeout(Duration::from_secs(12), async {
+                let connection = match aish_mcp::client::connect(&server, options).await {
+                    Ok(connection) => connection,
+                    Err(error) => return Err(error.describe()),
+                };
+                let version = connection.server_info().version.clone();
+                let tools = match connection.list_tools(Some(cancel)).await {
+                    Ok(tools) => tools,
+                    Err(error) => {
+                        connection.close().await;
+                        return Err(error.describe());
+                    }
+                };
+                connection.close().await;
+                Ok((version, tools))
+            })
+            .await;
+            match probe {
+                Ok(Ok((version, tools))) => {
+                    let tools: Vec<Value> = tools
+                        .iter()
+                        .map(|tool| {
+                            json!({
+                                "name": tool.name,
+                                "description": tool.description,
+                            })
+                        })
+                        .collect();
+                    events.push(ChatEvent::new(
+                        "settings",
+                        "settings_job",
+                        json!({
+                            "job_id": job,
+                            "job": "mcp_test",
+                            "ok": true,
+                            "data": {
+                                "label": label,
+                                "version": version,
+                                "tools": tools,
+                            },
+                        }),
+                    ));
+                }
+                Ok(Err(error)) => {
+                    events.push(ChatEvent::new(
+                        "settings",
+                        "settings_job",
+                        json!({
+                            "job_id": job,
+                            "job": "mcp_test",
+                            "ok": false,
+                            "error": error,
+                            "data": {"label": label},
+                        }),
+                    ));
+                }
+                Err(_) => {
+                    token.cancel();
+                    events.push(ChatEvent::new(
+                        "settings",
+                        "settings_job",
+                        json!({
+                            "job_id": job,
+                            "job": "mcp_test",
+                            "ok": false,
+                            "error": "连接超时（12 秒）",
+                            "data": {"label": label},
+                        }),
+                    ));
+                }
+            }
+        });
+        json!({"ok": true, "job_id": job_id})
+    }
+
+    /// Clone the current MCP runtime handle, if one exists.
+    fn mcp_manager(&self) -> Option<Arc<McpManager>> {
+        self.mcp_manager
+            .lock()
+            .ok()
+            .and_then(|manager| manager.clone())
+    }
+
+    /// Next id for a background settings job.
+    fn next_job_id(&self) -> String {
+        format!(
+            "settings-job-{}",
+            self.job_seq.fetch_add(1, Ordering::Relaxed)
+        )
+    }
+
+    /// Emit one background job result. The frontend routes `settings_job`
+    /// events before its normal session filter because they are not tied to a
+    /// chat session.
+    fn emit_settings_job(&self, job_id: &str, job: &str, result: Result<Value, String>) {
+        let data = match result {
+            Ok(data) => json!({"job_id": job_id, "job": job, "ok": true, "data": data}),
+            Err(error) => {
+                json!({"job_id": job_id, "job": job, "ok": false, "error": error})
+            }
+        };
+        self.events
+            .push(ChatEvent::new("settings", "settings_job", data));
     }
 
     fn session(&self, session_id: &str) -> Result<Arc<ChatSession>, String> {
@@ -1481,6 +2400,430 @@ impl ChatSession {
 /// Register the same core tool pool as the aish CLI. The GUI is a frontend;
 /// it must not invent a reduced "permission" set of tools. aish's security
 /// policy and approval callback govern how those tools may act.
+fn json_string_array(value: &Value, field: &str) -> Result<Vec<String>, String> {
+    let array = value
+        .as_array()
+        .ok_or_else(|| format!("`{field}` must be an array of strings"))?;
+    array
+        .iter()
+        .map(|entry| {
+            entry
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| format!("`{field}` must contain only strings"))
+        })
+        .collect()
+}
+
+fn json_pair_map(
+    value: &Value,
+    field: &str,
+) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let Some(array) = value.as_array() else {
+        return Err(format!(
+            "`{field}` must be an array of {{key, value}} objects"
+        ));
+    };
+    let mut map = std::collections::BTreeMap::new();
+    for entry in array {
+        let key = entry
+            .get("key")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+            .ok_or_else(|| format!("`{field}` entries need a non-empty key"))?;
+        let value = entry
+            .get("value")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("`{field}` entries need a string value"))?;
+        map.insert(key.to_string(), value.to_string());
+    }
+    Ok(map)
+}
+
+fn normalize_mcp_url(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.contains("://") {
+        Some(trimmed.to_string())
+    } else {
+        Some(format!("https://{trimmed}"))
+    }
+}
+
+fn parse_transport(value: &str) -> Result<aish_mcp::TransportKind, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "stdio" | "" => Ok(aish_mcp::TransportKind::Stdio),
+        "http" => Ok(aish_mcp::TransportKind::Http),
+        other => Err(format!(
+            "unknown transport `{other}` (expected stdio or http)"
+        )),
+    }
+}
+
+/// Build `/mcp add` arguments from the QML form JSON.
+fn add_args_from_json(value: &Value) -> Result<aish_mcp::AddArgs, String> {
+    let name = value
+        .get("name")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "MCP server name must not be empty".to_string())?;
+    let transport = value
+        .get("transport")
+        .and_then(Value::as_str)
+        .map(parse_transport)
+        .transpose()?;
+    let command = match value.get("command") {
+        Some(Value::Array(_)) => json_string_array(value.get("command").unwrap(), "command")?,
+        Some(Value::String(command)) if !command.trim().is_empty() => {
+            vec![command.trim().to_string()]
+        }
+        Some(_) => return Err("`command` must be a string or string array".to_string()),
+        None => Vec::new(),
+    };
+    let extra_args = match value.get("args") {
+        Some(Value::Array(_)) => json_string_array(value.get("args").unwrap(), "args")?,
+        Some(_) => return Err("`args` must be a string array".to_string()),
+        None => Vec::new(),
+    };
+    let mut argv = command;
+    argv.extend(extra_args);
+    let url = value
+        .get("url")
+        .and_then(Value::as_str)
+        .and_then(normalize_mcp_url);
+    let trust = value
+        .get("trust")
+        .and_then(Value::as_str)
+        .map(|level| {
+            aish_mcp::TrustLevel::parse(level)
+                .ok_or_else(|| format!("unknown trust level `{level}`"))
+        })
+        .transpose()?;
+    let side_effects = value
+        .get("side_effects")
+        .and_then(Value::as_str)
+        .map(|effects| {
+            aish_mcp::SideEffects::parse(effects)
+                .ok_or_else(|| format!("unknown side effects `{effects}`"))
+        })
+        .transpose()?;
+    let expose = value
+        .get("expose")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(|mode| {
+            aish_mcp::ExposeMode::parse(mode).ok_or_else(|| format!("invalid expose mode `{mode}`"))
+        })
+        .transpose()?;
+    let env = match value.get("env") {
+        Some(env) => json_pair_map(env, "env")?,
+        None => Default::default(),
+    };
+    let headers = match value.get("headers") {
+        Some(headers) => json_pair_map(headers, "headers")?,
+        None => Default::default(),
+    };
+    Ok(aish_mcp::AddArgs {
+        name: Some(name.to_string()),
+        transport,
+        command: argv,
+        url,
+        token: value
+            .get("token")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+            .map(str::to_string),
+        trust,
+        side_effects,
+        timeout_ms: value.get("request_timeout_ms").and_then(Value::as_u64),
+        max_output_bytes: value
+            .get("max_output_bytes")
+            .and_then(Value::as_u64)
+            .map(|value| value as usize),
+        expose,
+        env: env.into_iter().collect(),
+        headers: headers.into_iter().collect(),
+    })
+}
+
+/// Apply only the fields present in `args` to an existing server entry.
+///
+/// The name is immutable: renaming would change the `mcp__<name>` tool prefix
+/// and lose unknown YAML keys, so callers remove and re-add instead.
+fn update_server_from_json(
+    mut server: aish_config::McpServerConfig,
+    args: &Value,
+) -> Result<aish_config::McpServerConfig, String> {
+    if let Some(requested) = args.get("name").and_then(Value::as_str) {
+        if requested.trim() != server.name {
+            return Err("MCP server rename is not supported; remove and add it again".to_string());
+        }
+    }
+    if let Some(enabled) = args.get("enabled").and_then(Value::as_bool) {
+        server.enabled = enabled;
+    }
+    if let Some(transport) = args.get("transport").and_then(Value::as_str) {
+        server.transport = parse_transport(transport)?.as_str().to_string();
+    }
+    if args.get("command").is_some() || args.get("args").is_some() {
+        let mut argv = match args.get("command") {
+            Some(Value::Array(_)) => json_string_array(args.get("command").unwrap(), "command")?,
+            Some(Value::String(command)) if !command.trim().is_empty() => {
+                vec![command.trim().to_string()]
+            }
+            Some(_) => return Err("`command` must be a string or string array".to_string()),
+            None => Vec::new(),
+        };
+        if let Some(extra) = args.get("args") {
+            argv.extend(json_string_array(extra, "args")?);
+        }
+        if argv.is_empty() {
+            return Err("stdio transport needs a command".to_string());
+        }
+        server.command = Some(argv.remove(0));
+        server.args = argv;
+    }
+    if let Some(url) = args.get("url") {
+        server.url = url.as_str().and_then(normalize_mcp_url);
+    }
+    if let Some(env) = args.get("env") {
+        server.env = json_pair_map(env, "env")?;
+    }
+    if let Some(headers) = args.get("headers") {
+        server.headers = json_pair_map(headers, "headers")?;
+    }
+    if let Some(token) = args
+        .get("token")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+    {
+        if !server
+            .headers
+            .keys()
+            .any(|key| key.eq_ignore_ascii_case("authorization"))
+        {
+            server
+                .headers
+                .insert("Authorization".to_string(), format!("Bearer {token}"));
+        }
+    }
+    if let Some(cwd) = args.get("cwd") {
+        server.cwd = cwd
+            .as_str()
+            .map(str::trim)
+            .filter(|cwd| !cwd.is_empty())
+            .map(str::to_string);
+    }
+    if let Some(trust) = args.get("trust").and_then(Value::as_str) {
+        let level = aish_mcp::TrustLevel::parse(trust)
+            .ok_or_else(|| format!("unknown trust level `{trust}`"))?;
+        server.trust = level.as_str().to_string();
+    }
+    if let Some(effects) = args.get("side_effects").and_then(Value::as_str) {
+        let effects = aish_mcp::SideEffects::parse(effects)
+            .ok_or_else(|| format!("unknown side effects `{effects}`"))?;
+        server.side_effects = effects.as_str().to_string();
+    }
+    if let Some(expose) = args.get("expose").and_then(Value::as_str) {
+        if !expose.trim().is_empty() {
+            let mode = aish_mcp::ExposeMode::parse(expose)
+                .ok_or_else(|| format!("invalid expose mode `{expose}`"))?;
+            server.expose = match mode {
+                aish_mcp::ExposeMode::Gateway => "gateway",
+                aish_mcp::ExposeMode::Tools => "tools",
+            }
+            .to_string();
+        }
+    }
+    if let Some(timeout) = args.get("request_timeout_ms") {
+        server.request_timeout_ms = timeout.as_u64();
+    }
+    if let Some(max_output) = args.get("max_output_bytes") {
+        server.max_output_bytes = max_output.as_u64().map(|value| value as usize);
+    }
+    let transport = parse_transport(&server.transport)?;
+    match transport {
+        aish_mcp::TransportKind::Stdio => {
+            if server
+                .command
+                .as_deref()
+                .unwrap_or_default()
+                .trim()
+                .is_empty()
+            {
+                return Err("stdio transport needs a command".to_string());
+            }
+            if server.url.is_some() {
+                return Err("stdio transport cannot use a URL".to_string());
+            }
+        }
+        aish_mcp::TransportKind::Http => {
+            if server.url.as_deref().unwrap_or_default().trim().is_empty() {
+                return Err("http transport needs a URL".to_string());
+            }
+            if server.command.is_some() || !server.args.is_empty() {
+                return Err("http transport cannot use a command".to_string());
+            }
+        }
+    }
+    Ok(server)
+}
+
+/// Load the full skill record for one installed name (quarantined included).
+fn load_skill_by_name(name: &str) -> Result<aish_skills::Skill, String> {
+    let mut manager = SkillManager::new();
+    manager
+        .load_all_skills()
+        .map_err(|error| format!("failed to load skills: {error}"))?;
+    manager
+        .get_skill(name)
+        .cloned()
+        .ok_or_else(|| format!("skill not found: {name}"))
+}
+
+/// Registry adapters from the shared aish config, read fresh so CLI edits are
+/// picked up without restarting the frontend.
+fn registry_configs_from_config() -> Vec<aish_skills::registry::RegistryConfig> {
+    let config = aish_config::ConfigLoader::load(None).unwrap_or_default();
+    config
+        .skills
+        .registries
+        .iter()
+        .map(|registry| aish_skills::registry::RegistryConfig {
+            name: registry.name.clone(),
+            registry_type: registry.registry_type.clone(),
+            enabled: registry.enabled,
+            url: registry.url.clone(),
+        })
+        .collect()
+}
+
+/// Snapshot every trusted skill into the shape `SkillTool` consumes.
+///
+/// Quarantined skills are deliberately not advertised: the tool cannot find
+/// them, so the model cannot activate unreviewed content.
+fn load_skill_snapshot() -> HashMap<String, SkillInfo> {
+    let mut manager = SkillManager::new();
+    let _ = manager.load_all_skills();
+    manager
+        .list_skills()
+        .iter()
+        .filter(|skill| !skill.quarantined)
+        .map(|skill| {
+            (
+                skill.metadata.name.clone(),
+                SkillInfo {
+                    name: skill.metadata.name.clone(),
+                    content: skill.content.clone(),
+                    description: skill.metadata.description.clone(),
+                    base_dir: skill.base_dir.clone(),
+                    context: skill.metadata.context,
+                    agent: skill.metadata.agent.clone(),
+                    allowed_tools: skill.metadata.allowed_tools.clone(),
+                    quarantined: skill.quarantined,
+                },
+            )
+        })
+        .collect()
+}
+
+/// Read the raw `rules:` sequence from a policy document.
+///
+/// The editor needs the YAML entry shape (`path`, not the flattened typed
+/// `pattern`) so a save cannot silently drop every rule.
+fn read_raw_policy_rules(path: &Path) -> Result<Vec<Value>, String> {
+    let text = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    let document: serde_yaml::Value =
+        serde_yaml::from_str(&text).map_err(|error| format!("invalid policy YAML: {error}"))?;
+    let Some(mapping) = document.as_mapping() else {
+        return Err("policy document is not a mapping".to_string());
+    };
+    let Some(rules) = mapping.get(serde_yaml::Value::String("rules".to_string())) else {
+        return Ok(Vec::new());
+    };
+    let Some(sequence) = rules.as_sequence() else {
+        return Err("policy `rules` is not a sequence".to_string());
+    };
+    sequence
+        .iter()
+        .map(|rule| {
+            serde_json::to_value(rule)
+                .map_err(|error| format!("failed to encode policy rule: {error}"))
+        })
+        .collect()
+}
+
+/// Validate the shape the YAML loader actually understands.
+///
+/// The loader silently ignores a rule without `path` or with an invalid
+/// `risk`, which is unacceptable for an editor: a typo would remove
+/// protection without an error. Reject those shapes before writing.
+fn validate_raw_policy_rules(rules: &[Value]) -> Result<(), String> {
+    for (index, rule) in rules.iter().enumerate() {
+        let position = index + 1;
+        let Some(object) = rule.as_object() else {
+            return Err(format!("第 {position} 条规则不是对象"));
+        };
+        let path_ok = match object.get("path") {
+            Some(Value::String(value)) => !value.trim().is_empty(),
+            Some(Value::Array(values)) => {
+                !values.is_empty()
+                    && values
+                        .iter()
+                        .all(|value| value.as_str().is_some_and(|text| !text.trim().is_empty()))
+            }
+            _ => false,
+        };
+        if !path_ok {
+            return Err(format!(
+                "第 {position} 条规则缺少 path（必须是字符串或非空字符串数组）；注意 aish 不接受 pattern 字段"
+            ));
+        }
+        let risk = object
+            .get("risk")
+            .and_then(Value::as_str)
+            .map(|value| value.trim().to_ascii_uppercase())
+            .unwrap_or_default();
+        if !matches!(risk.as_str(), "LOW" | "MEDIUM" | "HIGH") {
+            return Err(format!(
+                "第 {position} 条规则的 risk 必须是 LOW、MEDIUM 或 HIGH"
+            ));
+        }
+        for field in ["command_list", "operations", "exclude"] {
+            if let Some(value) = object.get(field) {
+                let Some(values) = value.as_array() else {
+                    return Err(format!("第 {position} 条规则的 {field} 必须是字符串数组"));
+                };
+                if values.iter().any(|value| value.as_str().is_none()) {
+                    return Err(format!("第 {position} 条规则的 {field} 只能包含字符串"));
+                }
+            }
+        }
+        for field in [
+            "id",
+            "name",
+            "description",
+            "reason",
+            "confirm_message",
+            "suggestion",
+        ] {
+            if let Some(value) = object.get(field) {
+                if !value.is_null() && value.as_str().is_none() {
+                    return Err(format!("第 {position} 条规则的 {field} 必须是字符串"));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn register_session_tools(
     llm: &mut LlmSession,
     config: &ChatConfig,
@@ -1671,30 +3014,9 @@ fn register_session_tools(
     // Skills are passive SKILL.md content, discovered from the same aish
     // directories. Loading is per session so newly installed skills appear
     // in the next conversation without a GUI-specific registry.
-    let mut skill_manager = SkillManager::new();
-    let _ = skill_manager.load_all_skills();
-    let snapshot: HashMap<String, SkillInfo> = skill_manager
-        .list_skills()
-        .iter()
-        .filter(|skill| !skill.quarantined)
-        .map(|skill| {
-            (
-                skill.metadata.name.clone(),
-                SkillInfo {
-                    name: skill.metadata.name.clone(),
-                    content: skill.content.clone(),
-                    description: skill.metadata.description.clone(),
-                    base_dir: skill.base_dir.clone(),
-                    context: skill.metadata.context,
-                    agent: skill.metadata.agent.clone(),
-                    allowed_tools: skill.metadata.allowed_tools.clone(),
-                    quarantined: skill.quarantined,
-                },
-            )
-        })
-        .collect();
+    let snapshot = load_skill_snapshot();
     let names: Vec<String> = snapshot.keys().cloned().collect();
-    let lookup_snapshot = snapshot.clone();
+    let lookup_snapshot = Arc::new(snapshot);
     let lookup = Box::new(move |name: &str| lookup_snapshot.get(name).cloned());
     let list = Box::new(move || names.clone());
     llm.register_tool(Box::new(SkillTool::new(lookup, list)));

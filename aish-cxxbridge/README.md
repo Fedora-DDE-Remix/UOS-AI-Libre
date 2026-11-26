@@ -52,11 +52,31 @@ delete_session(*service, session);
 auto info = config_info(*service);                   // safe summary; no API key
 auto tools = tool_names(*service, session);          // aish's registered tool pool
 auto catalog = tool_catalog(*service);               // names/descriptions/sources
-auto policy = policy_info(*service);                 // effective aish security policy
+auto policy = policy_info(*service);                 // policy + raw rule_groups + builtin_rules
 save_policy(*service, "{\"default_risk_level\":\"medium\"}");
+save_policy_rules(*service, rules_json, fingerprint); // atomic + validated raw YAML edit
+auto preview = preview_policy_command(*service, "rm -rf /etc/x", draft_rules_json);
+auto approvals = session_approvals(*service, session);
+revoke_session_approval(*service, session, "command", "localhost", "pwd");
+clear_session_approvals(*service, session);
 auto skills = skill_catalog(*service);               // installed aish skills
 trust_skill(*service, "some-skill");
-auto mcp = mcp_status(*service);                     // live MCP manager status
+skill_read(*service, "some-skill", 262144);
+skill_verify(*service, "some-skill");
+skill_remove(*service, "some-skill");
+skill_search_start(*service, "pdf", 20);             // settings_job result
+skill_install_start(*service, "registry/slug");      // quarantined settings_job result
+refresh_skills_live(*service);                       // re-register `skill` on live sessions
+auto mcp = mcp_status(*service);                     // configured + live MCP status
+mcp_add(*service, mcp_args_json);
+mcp_update(*service, "server", mcp_args_json);
+mcp_remove(*service, "server");
+mcp_set_master_enabled(*service, true);
+mcp_set_enabled(*service, "server", false);
+mcp_set_trust(*service, "server", "*", "ask");
+mcp_test(*service, "server");                        // settings_job result
+mcp_test_draft(*service, mcp_args_json);
+refresh_mcp_tools(*service);                         // live gateway tools
 mcp_reload(*service);
 auto memory = memory_list(*service, 200);
 auto audit = audit_tail(*service, 200);
@@ -110,7 +130,23 @@ Important event kinds:
 - `list_sessions` falls back to the first user message or session cwd when
   `sessions.state.summary_preview` is empty, so CLI-created sessions appear in
   the GUI history too.
-- `policy_info`/`save_policy` expose the effective `security_policy.yaml`
-  globals; rules remain YAML-edited. `tool_catalog`, `skill_catalog`,
-  `mcp_status`, `memory_list` and `audit_tail` feed the read-only AISH
-  settings pages without duplicating aish state in QML.
+- `policy_info` returns both the flattened effective rules and `rule_groups`
+  (the raw YAML `rules:` sequence) plus `builtin_rules`. `save_policy_rules`
+  edits the raw `path:` shape, validates the whole document and writes
+  atomically; a stale fingerprint is rejected. `preview_policy_command` uses
+  the same fallback engine as aish and never executes the command.
+- `session_approvals`/`revoke_session_approval`/`clear_session_approvals`
+  expose the in-memory "本会话允许" memory. It is per session, never persisted,
+  and invalidated when `security_policy.yaml` changes.
+- `skill_search_start`/`skill_install_start` emit `settings_job` events on the
+  same event queue. Installs reuse aish's registry install path and remain
+  quarantined (`.untrusted`) until `trust_skill`. `skill_read`,
+  `skill_verify`, `skill_remove` and `refresh_skills_live` support review and
+  live tool refresh.
+- `mcp_*` mutations reuse `aish_mcp::add_to_config`/`merge_into_document`, so
+  unknown YAML keys survive. `mcp_status` merges the configured servers from
+  `config.yaml` with the running manager (configured-but-disabled servers stay
+  visible, per-tool trust is included). `refresh_mcp_tools` re-registers the
+  gateway tools on live sessions.
+- `settings_job` events are not tied to a chat session:
+  `{"kind":"settings_job","data":{"job_id","job","ok","data"|"error"}}`.

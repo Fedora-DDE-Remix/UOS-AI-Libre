@@ -101,6 +101,31 @@ impl ApprovalMemory {
         self.allowed_targets.clear();
     }
 
+    /// Remembered command approvals as `(host_key, normalized_command)`.
+    ///
+    /// The frontend uses this to show what "本会话允许" currently covers; the
+    /// values are the exact keys [`ApprovalMemory::is_allowed`] compares.
+    pub fn command_entries(&self) -> Vec<(String, String)> {
+        self.allowed.iter().cloned().collect()
+    }
+
+    /// Remembered tool-target approvals as `(tool_name, target)`.
+    pub fn target_entries(&self) -> Vec<(String, String)> {
+        self.allowed_targets.iter().cloned().collect()
+    }
+
+    /// Revoke one remembered command approval. Returns whether it existed.
+    pub fn revoke_command(&mut self, host: &str, command: &str) -> bool {
+        self.allowed
+            .remove(&(host.to_string(), command.to_string()))
+    }
+
+    /// Revoke one remembered tool-target approval. Returns whether it existed.
+    pub fn revoke_target(&mut self, tool: &str, target: &str) -> bool {
+        self.allowed_targets
+            .remove(&(tool.to_string(), target.to_string()))
+    }
+
     /// Number of remembered approvals (mainly for diagnostics/tests).
     pub fn len(&self) -> usize {
         self.allowed.len() + self.allowed_targets.len()

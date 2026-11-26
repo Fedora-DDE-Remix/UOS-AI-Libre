@@ -10,6 +10,7 @@ Item {
     property int inputMethodHints: Qt.ImhNone
     property bool password: false
     signal accepted()
+    signal textEdited(string value)
 
     function forceInputFocus() { input.forceActiveFocus() }
     function selectAll() { input.selectAll() }
@@ -41,6 +42,7 @@ Item {
         readOnly: root.readOnly
         inputMethodHints: root.inputMethodHints
         onAccepted: root.accepted()
+        onTextChanged: root.textEdited(input.text)
 
         Text {
             anchors.fill: parent
