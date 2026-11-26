@@ -241,46 +241,55 @@ Rectangle {
                     }
                 }
 
-                Rectangle {
+                Item {
+                    // Match the 30px icon targets so the permission pill sits on
+                    // the same visual baseline as the plus/globe buttons.
                     visible: root.compact
-                    width: visible ? permissionRow.width + 18 : 0
-                    height: 26
-                    radius: Theme.radiusSmall
-                    color: permissionHover.hovered ? Theme.hover : "transparent"
-                    border.width: 1
-                    border.color: Theme.border
+                    width: visible ? permissionPill.width : 0
+                    height: 30
 
-                    HoverHandler { id: permissionHover }
+                    Rectangle {
+                        id: permissionPill
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: permissionRow.width + 18
+                        height: 26
+                        radius: Theme.radiusSmall
+                        color: permissionHover.hovered ? Theme.hover : "transparent"
+                        border.width: 1
+                        border.color: Theme.border
 
-                    Row {
-                        id: permissionRow
-                        anchors.centerIn: parent
-                        spacing: 5
-                        AppIcon {
-                            anchors.verticalCenter: parent.verticalCenter
-                            name: "shield"
-                            size: 13
-                            color: Theme.iconSecondary
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "默认权限"
-                            color: Theme.textSecondary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeSmall
-                        }
-                        AppIcon {
-                            anchors.verticalCenter: parent.verticalCenter
-                            name: "chevron-down"
-                            size: 10
-                            color: Theme.iconSecondary
-                        }
-                    }
+                        HoverHandler { id: permissionHover }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.openPermissionMenu()
+                        Row {
+                            id: permissionRow
+                            anchors.centerIn: parent
+                            spacing: 5
+                            AppIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "shield"
+                                size: 13
+                                color: Theme.iconSecondary
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "默认权限"
+                                color: Theme.textSecondary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+                            AppIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "chevron-down"
+                                size: 10
+                                color: Theme.iconSecondary
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.openPermissionMenu()
+                        }
                     }
                 }
             }
@@ -291,55 +300,65 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 3
 
-                Rectangle {
-                    id: modelButton
-                    width: modelRow.width + 16
-                    height: 28
-                    radius: Theme.radiusSmall
-                    color: modelHover.hovered ? Theme.hover : "transparent"
+                Item {
+                    // The send button is 32px; center the shorter model and mic
+                    // controls instead of letting Row top-align them.
+                    width: modelButton.width
+                    height: 32
 
-                    HoverHandler { id: modelHover }
+                    Rectangle {
+                        id: modelButton
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: modelRow.width + 16
+                        height: 28
+                        radius: Theme.radiusSmall
+                        color: modelHover.hovered ? Theme.hover : "transparent"
 
-                    Row {
-                        id: modelRow
-                        anchors.centerIn: parent
-                        spacing: 5
-                        AppIcon {
-                            anchors.verticalCenter: parent.verticalCenter
-                            name: "cloud"
-                            size: 15
-                            color: Theme.iconSecondary
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: root.modelName.length > 0 ? root.modelName : "选择模型"
-                            color: Theme.textSecondary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeSmall
-                            elide: Text.ElideRight
-                            width: Math.min(150, implicitWidth)
-                        }
-                        AppIcon {
-                            anchors.verticalCenter: parent.verticalCenter
-                            name: "chevron-down"
-                            size: 10
-                            color: Theme.iconSecondary
-                        }
-                    }
+                        HoverHandler { id: modelHover }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.openModelMenu()
+                        Row {
+                            id: modelRow
+                            anchors.centerIn: parent
+                            spacing: 5
+                            AppIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "cloud"
+                                size: 15
+                                color: Theme.iconSecondary
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: root.modelName.length > 0 ? root.modelName : "选择模型"
+                                color: Theme.textSecondary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeSmall
+                                elide: Text.ElideRight
+                                width: Math.min(150, implicitWidth)
+                            }
+                            AppIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "chevron-down"
+                                size: 10
+                                color: Theme.iconSecondary
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.openModelMenu()
+                        }
                     }
                 }
 
                 Item {
                     width: 30
-                    height: 30
+                    height: 32
                     HoverHandler { id: micHover }
                     Rectangle {
-                        anchors.fill: parent
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 30
+                        height: 30
                         radius: Theme.radiusSmall
                         color: micHover.hovered ? Theme.hover : "transparent"
                     }
@@ -478,6 +497,28 @@ Rectangle {
         plusMenu.open()
     }
 
+    function openAttachSubmenu() {
+        if (!plusMenu.opened || attachMenu.opened)
+            return
+        // Keep the parent menu open while the pointer is over the submenu.
+        plusMenu.closePolicy = Popup.CloseOnEscape
+        attachMenu.closingForHover = false
+        let x = plusMenu.x + plusMenu.width - 2
+        if (x + attachMenu.width > Overlay.overlay.width - 8)
+            x = Math.max(8, plusMenu.x - attachMenu.width + 2)
+        attachMenu.x = x
+        attachMenu.y = Math.max(8, plusMenu.y + 8)
+        attachMenu.open()
+    }
+
+    function closeAttachSubmenuForHover() {
+        if (!attachMenu.opened || attachMenu.closingForHover)
+            return
+        // Hovering another row retracts the submenu but keeps the parent open.
+        attachMenu.closingForHover = true
+        attachMenu.close()
+    }
+
     function plusButtonPoint() {
         const point = controls.mapToItem(Overlay.overlay, 8, 0)
         return point.x
@@ -534,17 +575,14 @@ Rectangle {
                 label: "添加附件"
                 showChevron: true
                 highlighted: attachMenu.opened
-                onClicked: {
-                    plusMenu.closePolicy = Popup.CloseOnEscape
-                    attachMenu.x = plusMenu.x + plusMenu.width - 2
-                    attachMenu.y = plusMenu.y + 8
-                    attachMenu.open()
-                }
+                onHovered: root.openAttachSubmenu()
+                onClicked: root.openAttachSubmenu()
             }
             MenuRow {
                 width: parent.width
                 icon: "skill"
                 label: "技能"
+                onHovered: root.closeAttachSubmenuForHover()
                 onClicked: {
                     plusMenu.close()
                     root.toastRequested("aish 技能会按任务自动加载")
@@ -554,6 +592,7 @@ Rectangle {
                 width: parent.width
                 icon: "connector"
                 label: "连接器"
+                onHovered: root.closeAttachSubmenuForHover()
                 onClicked: {
                     plusMenu.close()
                     root.toastRequested("MCP 连接器由 aish 配置统一管理")
@@ -565,6 +604,7 @@ Rectangle {
     Popup {
         id: attachMenu
         parent: Overlay.overlay
+        property bool closingForHover: false
         width: 150
         padding: 0
         modal: false
@@ -572,6 +612,10 @@ Rectangle {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         onClosed: {
             plusMenu.closePolicy = Popup.CloseOnEscape | Popup.CloseOnPressOutside
+            if (closingForHover) {
+                closingForHover = false
+                return
+            }
             if (plusMenu.opened)
                 plusMenu.close()
         }

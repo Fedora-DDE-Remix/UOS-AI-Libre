@@ -183,6 +183,7 @@ Rectangle {
                         width: parent.width
                         height: 24
                         Text {
+                            anchors.verticalCenter: parent.verticalCenter
                             text: "在线模型"
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
@@ -196,6 +197,7 @@ Rectangle {
                             color: Theme.accent
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSizeSmall
+                            verticalAlignment: Text.AlignVCenter
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
@@ -240,6 +242,7 @@ Rectangle {
                                             font.weight: Font.Medium
                                         }
                                         Rectangle {
+                                            anchors.verticalCenter: parent.verticalCenter
                                             width: 38
                                             height: 18
                                             radius: 3
@@ -456,10 +459,12 @@ Rectangle {
                         }
                         Item { width: parent.width - 210; height: 1 }
                         Text {
+                            anchors.verticalCenter: parent.verticalCenter
                             text: "添加模型"
                             color: Theme.accent
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSizeSmall
+                            verticalAlignment: Text.AlignVCenter
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
@@ -582,10 +587,17 @@ Rectangle {
                                 Row {
                                     anchors.centerIn: parent
                                     spacing: 10
-                                    Image { width: 20; height: 20; source: "qrc:/images/logo.png"; fillMode: Image.PreserveAspectFit }
+                                    Image {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 20
+                                        height: 20
+                                        source: "qrc:/images/logo.png"
+                                        fillMode: Image.PreserveAspectFit
+                                    }
                                     Repeater {
                                         model: ["搜索", "解释", "总结", "翻译"]
                                         delegate: Row {
+                                            anchors.verticalCenter: parent.verticalCenter
                                             spacing: 3
                                             AppIcon {
                                                 anchors.verticalCenter: parent.verticalCenter
@@ -603,6 +615,7 @@ Rectangle {
                                         }
                                     }
                                     Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
                                         width: 52
                                         height: 24
                                         radius: 6
@@ -640,6 +653,7 @@ Rectangle {
                         }
                         Item { width: parent.width - 460; height: 1 }
                         Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
                             width: 38
                             height: 22
                             radius: 11
@@ -663,28 +677,32 @@ Rectangle {
                         border.width: 1
                         border.color: Theme.cardBorder
 
-                        Text {
+                        Item {
                             x: 16
-                            y: 14
-                            text: "技能管理"
-                            color: Theme.textPrimary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeBody
-                            font.weight: Font.Medium
-                        }
-                        Text {
-                            anchors.right: parent.right
-                            anchors.rightMargin: 16
-                            anchors.top: parent.top
-                            anchors.topMargin: 14
-                            text: "添加技能"
-                            color: Theme.accent
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeSmall
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: settings.toastRequested("技能由 aish 配置统一管理")
+                            y: 10
+                            width: parent.width - 32
+                            height: 28
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "技能管理"
+                                color: Theme.textPrimary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeBody
+                                font.weight: Font.Medium
+                            }
+                            Text {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "添加技能"
+                                color: Theme.accent
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeSmall
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: settings.toastRequested("技能由 aish 配置统一管理")
+                                }
                             }
                         }
                         Row {
