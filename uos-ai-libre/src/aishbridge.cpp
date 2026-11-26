@@ -356,12 +356,20 @@ void AishBridge::loadSession(const QString &sessionId) {
     const QString model = object.value(QStringLiteral("model")).toString();
     const QVariantList messages =
         object.value(QStringLiteral("messages")).toArray().toVariantList();
+    const QString cwd = object.value(QStringLiteral("cwd")).toString();
+    const QString warning = object.value(QStringLiteral("warning")).toString();
     m_session_id = sessionId;
     m_turn_started_at = 0;
     setGenerating(false);
     setLastError(QString());
+    if (!cwd.isEmpty() && m_workspace != cwd) {
+        m_workspace = cwd;
+        emit workspaceChanged();
+    }
     emit sessionChanged();
     emit sessionLoaded(messages, model);
+    if (!warning.isEmpty())
+        emit toastRequested(warning);
 }
 
 void AishBridge::deleteSession(const QString &sessionId) {
@@ -429,7 +437,12 @@ void AishBridge::newConversation() {
 }
 
 void AishBridge::setWorkspace(const QString &path) {
-    QString raw = toQString(set_workspace(path.toStdString()));
+    if (!ensureService()) {
+        setLastError(QStringLiteral("AI 服务尚未就绪"));
+        return;
+    }
+    QString raw = toQString(set_workspace(
+        **m_service, m_session_id.toStdString(), path.toStdString()));
     QJsonObject object;
     QString error;
     if (!parseResponse(raw, &object, &error)) {
@@ -697,6 +710,18 @@ void AishBridge::handleEvent(const QJsonObject &event) {
         emit toolEnd(data);
     } else if (kind == QStringLiteral("approval_request")) {
         emit approvalRequested(data);
+    } else if (kind == QStringLiteral("interaction_required")) {
+        // The aish runtime exposes ask_user as an interaction event. A QML
+        // question card is deliberately out of scope for this pass; cancel it
+        // immediately instead of leaving the tool blocked for five minutes.
+        const QString request_id =
+            data.value(QStringLiteral("request_id")).toString();
+        if (!request_id.isEmpty() && m_service) {
+            ::respond_interaction(**m_service, request_id.toStdString(),
+                                  R"({"cancelled":true})");
+        }
+        emit toastRequested(
+            QStringLiteral("AI 需要补充信息；当前版本请直接在对话中输入"));
     } else if (kind == QStringLiteral("turn_done")) {
         setGenerating(false);
         emit turnDone(data);

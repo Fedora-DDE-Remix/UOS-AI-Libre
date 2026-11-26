@@ -46,12 +46,14 @@ while (auto event = wait_event(*service, 1000)) { ... }
 approve(*service, request_id, 0);                    // 0 once, 1 remember, 2 reply, 3 deny
 cancel_session(*service, session);
 auto sessions = list_sessions(*service, 100);        // {"ok":true,"sessions":[...]}
-auto resumed = resume_session(*service, session);    // model + serialized transcript
+auto resumed = resume_session(*service, session);    // model, transcript, cwd, warning
 rename_session(*service, session, "New title");
 delete_session(*service, session);
 auto info = config_info(*service);                   // safe summary; no API key
+auto tools = tool_names(*service, session);          // aish's registered tool pool
+respond_interaction(*service, request_id, "{\"cancelled\":true}");
 save_model_config(*service, model, api_base, key);   // writes aish config, reloads service
-set_workspace("/path/to/project");                   // process-global, same as aish tools
+set_workspace(*service, session, "/path/to/project");// session cwd, persisted in sessions.state
 shutdown(*service);
 ```
 
@@ -68,6 +70,7 @@ Important event kinds:
 - `content_delta`, `reasoning_start`, `reasoning_delta`, `reasoning_end`
 - `tool_start`, `tool_end` (includes `duration_ms` and tool `meta`)
 - `approval_request` (respond with `approve`)
+- `interaction_required` (ask_user; respond with `respond_interaction`)
 - `turn_done`, `error`, `cancelled`
 
 ## Notes
@@ -77,14 +80,24 @@ Important event kinds:
 - The Rust runtime is multi-threaded; `wait_event` may be called from a worker
   thread. A Qt wrapper should marshal events to the UI thread with a queued
   signal.
+- `aish-chat` is a headless frontend for aish, not a second agent runtime. It
+  registers the same tool pool as `aish-shell` (bash, file read/write/edit/undo,
+  python, glob/grep, web fetch/search, ask_user, plan mode, memory, skills,
+  Agent/subagents, skill registry and MCP gateways), loads the same
+  `security_policy.yaml`, writes the same audit table and uses the same
+  SQLite sessions.
 - `aish-chat` shares `~/.config/aish` and the configured `sessions.db`; the
   `session_db_path` field is optional for isolated tests.
 - `save_model_config` writes only `model`, `api_base` and `api_key` into the
   raw YAML document (unknown keys survive), then recreates the Rust service so
   the next session uses the new credentials. Active sessions are dropped.
-- `set_workspace` changes the process cwd because aish's built-in file/shell
-  tools currently use a process-global cwd. Multi-workspace concurrency needs
-  per-session cwd support upstream.
-- `list_sessions` falls back to the first user message when
+- `set_workspace` updates the session's `sessions.state.cwd` and persists the
+  snapshot, matching aish CLI's resume behavior. It is not a separate GUI
+  workspace setting.
+- `resume_session` restores the saved cwd (with a warning when the directory is
+  gone) and falls back to `sessions.state.context_messages_snapshot` when the
+  `ai_messages` transcript is empty, so CLI-created sessions are visible in the
+  GUI.
+- `list_sessions` falls back to the first user message or session cwd when
   `sessions.state.summary_preview` is empty, so CLI-created sessions appear in
   the GUI history too.

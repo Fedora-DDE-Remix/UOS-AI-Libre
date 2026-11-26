@@ -37,7 +37,12 @@ dependencies = [
  "aish-config",
  "aish-core",
  "aish-llm",
+ "aish-mcp",
+ "aish-memory",
+ "aish-prompts",
+ "aish-security",
  "aish-session",
+ "aish-skills",
  "aish-tools",
  "base64 0.22.1",
  "chrono",
@@ -143,6 +148,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "aish-mcp"
+version = "1.1.0"
+dependencies = [
+ "aish-config",
+ "aish-core",
+ "aish-i18n",
+ "aish-llm",
+ "aish-security",
+ "futures",
+ "libc",
+ "nix",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aish-memory"
 version = "1.1.0"
 dependencies = [
@@ -150,6 +178,14 @@ dependencies = [
  "chrono",
  "dirs 5.0.1",
  "serde",
+]
+
+[[package]]
+name = "aish-prompts"
+version = "1.1.0"
+dependencies = [
+ "dirs 5.0.1",
+ "tracing",
 ]
 
 [[package]]

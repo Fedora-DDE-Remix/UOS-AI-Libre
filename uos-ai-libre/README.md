@@ -27,6 +27,15 @@ AishBridge (JSON/cxx boundary)             src/aishbridge.cpp
 aish-cxxbridge → aish-chat → aish crates  ../../aish-cxxbridge, ../../vendor/aish
 ```
 
+The backend is deliberately **aish's frontend, not a second agent**. It
+registers aish's full tool pool (bash, file read/write/edit/undo, Python,
+glob/grep, web fetch/search, ask_user, plan mode, memory, skills,
+Agent/subagents, skill registry and MCP gateways), loads the same
+`security_policy.yaml`, writes aish's audit table, and restores the same
+`sessions.state.cwd` and context snapshot. The only GUI-owned state is
+presentation state (theme, window geometry); permissions, tools, model,
+skills, MCP, sessions and workspace/cwd are all aish state.
+
 Rules that keep the UI maintainable:
 
 - QML never includes Rust headers, never calls `cxx` functions, and never sees
@@ -88,9 +97,13 @@ Run:
 ```
 
 The app reads the same `$AISH_CONFIG_DIR/config.yaml` (or
-`~/.config/aish/config.yaml`) and `sessions.db` as the aish CLI. Model changes
-made in Settings are written atomically to `config.yaml`; the API key stays in
-the aish config and is never exposed to QML for display.
+`~/.config/aish/config.yaml`), `security_policy.yaml`, skills directories,
+MCP configuration and `sessions.db` as the aish CLI. Model changes made in
+Settings are written atomically to `config.yaml`; the API key stays in the
+aish config and is never exposed to QML for display. Switching a conversation
+restores that session's model and `sessions.state.cwd`, and CLI-created
+sessions are loaded from their context snapshot when they predate the GUI
+transcript table.
 
 ## Tests
 

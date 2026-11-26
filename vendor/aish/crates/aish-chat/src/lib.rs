@@ -1,27 +1,44 @@
-//! Headless chat/agent session API.
+//! Headless frontend adapter for aish.
 //!
-//! This crate is deliberately UI-agnostic: it reuses `aish-llm`, `aish-tools`,
-//! `aish-session` and the provider configuration, and produces serializable
-//! events that a native frontend (QML, AppKit, GTK, ...) can render.
+//! This crate is deliberately UI-agnostic: it reuses aish's LLM loop, tools,
+//! security policy, skills, MCP client, memory, audit store, session database
+//! and cwd semantics, and produces serializable events that a native frontend
+//! (QML, AppKit, GTK, ...) can render. It is not a second agent runtime.
 //!
-//! The API is intentionally small and queue based. A frontend can either poll
+//! The API is intentionally queue based. A frontend can either poll
 //! [`ChatService::poll_event`] or block in [`ChatService::wait_event`] on a
 //! worker thread and marshal the result to its UI thread.
 
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use aish_core::{AishError, ContextToolCall, LlmEvent, LlmEventType, MemoryType};
-use aish_llm::{
-    ApprovalChoice, ApprovalMemory, ChatMessage, LlmSession, MessageContent,
-    PreflightSecurityContext, ToolCall,
+use aish_core::{
+    AishError, ContextToolCall, LlmEvent, LlmEventType, MemoryCategory, MemoryScope, MemoryType,
 };
-use aish_session::{SessionContextMessage, SessionStateSnapshot, SessionStore};
-use aish_tools::{GlobTool, GrepTool, ReadFileTool, WebFetchTool, WebSearchConfig, WebSearchTool};
+use aish_llm::{
+    ApiAccount, ApprovalChoice, ApprovalMemory, ChatMessage, LlmSession, MessageContent,
+    PreflightSecurityContext, RetryPolicy, RotationState, ToolCall,
+};
+use aish_mcp::McpManager;
+use aish_memory::{MemoryManager, MemorySource};
+use aish_prompts::ProjectInstructionsLimits;
+use aish_security::secret::SecretScanner;
+use aish_session::{AuditStore, SessionContextMessage, SessionStateSnapshot, SessionStore};
+use aish_skills::SkillManager;
+use aish_tools::ask_user::AskUserResponse;
+use aish_tools::bash::BashTool;
+use aish_tools::fs::SnapshotStore;
+use aish_tools::undo_edit::UndoEditTool;
+use aish_tools::{
+    AgentTool, AskUserTool, EditFileTool, EnterPlanModeTool, ExitPlanModeTool, GlobTool, GrepTool,
+    MemorySearchResult, MemoryTool, PythonTool, ReadFileTool, SkillInfo, SkillInstallTool,
+    SkillSearchTool, SkillTool, SkillTrustTool, WebFetchTool, WebSearchConfig, WebSearchTool,
+    WriteFileTool,
+};
 use base64::Engine;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -40,8 +57,10 @@ const MAX_LIVE_SESSIONS: usize = 8;
 
 /// Configuration accepted by [`ChatService::new`].
 ///
-/// It intentionally mirrors the fields aish already owns; a GUI can build this
-/// from `~/.config/aish/config.yaml` or from its own settings page.
+/// The normal frontend path is [`ChatService::from_aish_config`], which reads
+/// `~/.config/aish/config.yaml` and all shared aish state. This struct exists
+/// so tests and embedders can pass an isolated configuration without writing
+/// a user config file.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChatConfig {
     pub model: String,
@@ -63,6 +82,32 @@ pub struct ChatConfig {
     pub session_db_path: Option<String>,
     #[serde(default = "default_true")]
     pub enable_tools: bool,
+    /// Skill discovery/registry configuration, shared with the aish CLI.
+    #[serde(default)]
+    pub skills: aish_config::SkillsConfig,
+    /// MCP servers, timeouts and output caps, shared with the aish CLI.
+    #[serde(default)]
+    pub mcp: aish_config::McpConfig,
+    /// Long-term memory configuration, shared with the aish CLI.
+    #[serde(default)]
+    pub memory: Option<aish_config::MemoryConfig>,
+    /// Project-level AGENTS.md discovery, shared with the aish CLI.
+    #[serde(default)]
+    pub project_instructions: aish_config::model::ProjectInstructionsConfig,
+    /// Preferred answer language from the aish config.
+    #[serde(default)]
+    pub output_language: Option<String>,
+    /// Message window used by the CLI prompt builder.
+    #[serde(default)]
+    pub max_llm_messages: Option<usize>,
+    /// Ordered model fallbacks, shared with the aish CLI.
+    #[serde(default)]
+    pub fallback_models: Vec<String>,
+    /// Additional provider credentials for quota rotation.
+    #[serde(default)]
+    pub api_accounts: Vec<aish_config::ApiAccountConfig>,
+    #[serde(default = "default_true")]
+    pub fallback_revert_on_cooldown: bool,
 }
 
 fn default_true() -> bool {
@@ -93,6 +138,15 @@ impl ChatConfig {
             system_prompt: None,
             session_db_path: config.session_db_path.or_else(default_session_db_path),
             enable_tools: true,
+            skills: config.skills,
+            mcp: config.mcp,
+            memory: config.memory,
+            project_instructions: config.project_instructions,
+            output_language: config.output_language,
+            max_llm_messages: Some(config.max_llm_messages),
+            fallback_models: config.fallback_models,
+            api_accounts: config.api_accounts,
+            fallback_revert_on_cooldown: config.fallback_revert_on_cooldown,
         })
     }
 }
@@ -197,7 +251,15 @@ pub struct ChatService {
     sessions: Mutex<HashMap<String, Arc<ChatSession>>>,
     events: Arc<EventQueue>,
     approvals: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<ApprovalChoice>>>>,
+    interactions: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<AskUserResponse>>>>,
     store: Option<Arc<Mutex<SessionStore>>>,
+    audit_store: Option<Arc<AuditStore>>,
+    /// aish's tool/runtime state is shared by every session, but only one
+    /// foreground turn runs at a time (the same model as the aish CLI's
+    /// single active shell). The guard also keeps the process cwd stable for
+    /// relative tool paths during a turn.
+    turn_lock: Arc<tokio::sync::Mutex<()>>,
+    mcp_manager: Option<Arc<McpManager>>,
 }
 
 impl ChatService {
@@ -207,13 +269,37 @@ impl ChatService {
             .build()
             .map_err(|error| format!("failed to start tokio runtime: {error}"))?;
 
-        let store = match config.session_db_path.as_deref() {
-            Some(path) if !path.trim().is_empty() => {
+        let session_db_path = config.session_db_path.clone();
+        let store = match session_db_path
+            .as_deref()
+            .filter(|path| !path.trim().is_empty())
+        {
+            Some(path) => {
                 let store = SessionStore::open(Some(Path::new(path)))
                     .map_err(|error| format!("failed to open session database: {error}"))?;
                 Some(Arc::new(Mutex::new(store)))
             }
-            _ => None,
+            None => None,
+        };
+        let audit_store = session_db_path
+            .as_deref()
+            .filter(|path| !path.trim().is_empty())
+            .and_then(|path| AuditStore::open(Some(Path::new(path))).ok())
+            .map(Arc::new);
+
+        // MCP is part of aish's normal tool pool. Keep the manager alive for
+        // the lifetime of the service so its background drivers survive
+        // individual chat turns.
+        let (mcp_settings, mcp_warnings) = aish_mcp::resolve_settings(&config.mcp);
+        for warning in &mcp_warnings {
+            tracing::warn!(%warning, "MCP configuration warning");
+        }
+        let mcp_manager = if mcp_settings.is_inactive() {
+            None
+        } else {
+            let manager = McpManager::new(mcp_settings);
+            manager.start(runtime.handle());
+            Some(manager)
         };
 
         Ok(Self {
@@ -222,7 +308,11 @@ impl ChatService {
             sessions: Mutex::new(HashMap::new()),
             events: Arc::new(EventQueue::new()),
             approvals: Arc::new(Mutex::new(HashMap::new())),
+            interactions: Arc::new(Mutex::new(HashMap::new())),
             store,
+            audit_store,
+            turn_lock: Arc::new(tokio::sync::Mutex::new(())),
+            mcp_manager,
         })
     }
 
@@ -259,7 +349,9 @@ impl ChatService {
             Uuid::new_v4().to_string()
         };
 
-        self.create_session_inner(session_id, model, Vec::new())
+        let cwd = std::env::current_dir()
+            .map_err(|error| format!("cannot determine current directory: {error}"))?;
+        self.create_session_inner(session_id, model, Vec::new(), cwd)
     }
 
     /// Build a live session around an existing transcript.
@@ -271,6 +363,7 @@ impl ChatService {
         session_id: String,
         model: String,
         history: Vec<ChatMessage>,
+        cwd: PathBuf,
     ) -> Result<String, String> {
         let mut llm = LlmSession::new(
             &self.config.api_base,
@@ -282,11 +375,51 @@ impl ChatService {
         if let Some(tokens) = self.config.max_context_tokens {
             llm.set_max_context_tokens(tokens);
         }
+        // Match the CLI's multi-account quota rotation and model fallback.
+        let mut accounts = vec![ApiAccount {
+            name: "primary".to_string(),
+            api_key: self.config.api_key.clone(),
+            api_base: None,
+            model: None,
+            weight: 1,
+            disabled: self.config.api_key.trim().is_empty(),
+        }];
+        for account in &self.config.api_accounts {
+            accounts.push(ApiAccount {
+                name: account.name.clone(),
+                api_key: account.api_key.clone(),
+                api_base: account.api_base.clone(),
+                model: account.model.clone(),
+                weight: account.weight.max(1),
+                disabled: account.disabled,
+            });
+        }
+        if !self.config.fallback_models.is_empty() || accounts.len() > 1 {
+            let mut policy = RetryPolicy::default();
+            policy.revert_on_cooldown = self.config.fallback_revert_on_cooldown;
+            let rotation = RotationState::new(
+                model.clone(),
+                accounts,
+                self.config.fallback_models.clone(),
+                policy,
+            );
+            if rotation.is_active() {
+                llm.set_rotation(rotation);
+            }
+        }
         // A GUI renders tokens as they arrive; the terminal client keeps the
         // legacy "render final text" behaviour.
         llm.set_stream_content_deltas(true);
         if self.config.enable_tools {
-            register_default_tools(&mut llm, &self.config, &model);
+            register_session_tools(
+                &mut llm,
+                &self.config,
+                &model,
+                &session_id,
+                self.events.clone(),
+                self.interactions.clone(),
+                self.mcp_manager.as_ref(),
+            );
         }
 
         let events = self.events.clone();
@@ -353,6 +486,23 @@ impl ChatService {
 
         llm.set_approval_memory(Arc::new(parking_lot::Mutex::new(ApprovalMemory::new())));
 
+        // Match the CLI: tool calls and security decisions are written to the
+        // shared audit table, with secrets redacted before they reach SQLite.
+        if let Some(audit) = &self.audit_store {
+            let policy = aish_security::load_policy(None);
+            let scanner = SecretScanner::new(&policy.secret_patterns);
+            let redactor: Arc<dyn Fn(&str) -> String + Send + Sync> =
+                Arc::new(move |text| aish_security::secret::redact_secrets(text, &scanner));
+            let host = Arc::new(Mutex::new(Some(host_name())));
+            llm.set_audit_context(
+                audit.clone() as Arc<dyn aish_core::AuditSink>,
+                Some(redactor),
+                session_id.clone(),
+                std::env::var("USER").ok(),
+                Some(host),
+            );
+        }
+
         let session = Arc::new(ChatSession {
             id: session_id.clone(),
             model,
@@ -369,7 +519,15 @@ impl ChatService {
             events: self.events.clone(),
             store: self.store.clone(),
             session_uuid: session_id.clone(),
+            cwd: Mutex::new(cwd),
+            project_instructions: ProjectInstructionsLimits {
+                enabled: self.config.project_instructions.enabled,
+                max_file_bytes: self.config.project_instructions.max_file_bytes,
+                max_total_bytes: self.config.project_instructions.max_total_bytes,
+            },
+            output_language: self.config.output_language.clone(),
         });
+        session.persist_snapshot();
 
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.insert(session_id.clone(), session);
@@ -398,15 +556,105 @@ impl ChatService {
 
     pub fn send(&self, session_id: &str, text: &str, images: Vec<String>) -> Result<(), String> {
         let session = self.session(session_id)?;
+        let cwd = session.cwd_path();
+        if !cwd.is_dir() {
+            return Err(format!("会话目录已不存在：{}", cwd.display()));
+        }
+        // Match the aish CLI model: one foreground turn owns the process cwd.
+        // The guard is acquired before spawning so a second session cannot
+        // silently race relative paths.
+        let guard = match self.turn_lock.clone().try_lock_owned() {
+            Ok(guard) => guard,
+            Err(_) => return Err("another aish session is already running".to_string()),
+        };
         if !session.begin_turn() {
             return Err("session is already running a turn".to_string());
         }
         let text = text.to_string();
         let session_for_task = session.clone();
         self.runtime.spawn(async move {
-            session_for_task.run_turn(text, images).await;
+            session_for_task.run_turn(text, images, guard).await;
         });
         Ok(())
+    }
+
+    /// Change the active workspace. With a session id this updates the same
+    /// `sessions.state.cwd` field the aish CLI restores; without one it only
+    /// changes the directory inherited by the next new conversation.
+    pub fn set_workspace(&self, session_id: Option<&str>, path: &str) -> Result<String, String> {
+        let canonical = fs::canonicalize(path)
+            .map_err(|error| format!("cannot open workspace {path}: {error}"))?;
+        if !canonical.is_dir() {
+            return Err(format!(
+                "workspace is not a directory: {}",
+                canonical.display()
+            ));
+        }
+        if let Some(session_id) = session_id.filter(|id| !id.trim().is_empty()) {
+            let session = self.session(session_id)?;
+            if session.running.load(Ordering::SeqCst) {
+                return Err("cannot change workspace while this session is running".to_string());
+            }
+            if let Ok(mut cwd) = session.cwd.lock() {
+                *cwd = canonical.clone();
+            }
+            std::env::set_current_dir(&canonical)
+                .map_err(|error| format!("cannot switch workspace: {error}"))?;
+            session.persist_snapshot();
+        } else {
+            std::env::set_current_dir(&canonical)
+                .map_err(|error| format!("cannot switch workspace: {error}"))?;
+        }
+        Ok(canonical.to_string_lossy().to_string())
+    }
+
+    /// Answer a pending `ask_user` interaction. The GUI can add a question
+    /// card later without changing the tool/runtime boundary.
+    pub fn respond_interaction(&self, request_id: &str, response_json: &str) -> bool {
+        let response: AskUserResponse = match serde_json::from_str::<Value>(response_json) {
+            Ok(value) => {
+                if value
+                    .get("cancelled")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                {
+                    AskUserResponse::Cancelled
+                } else if let Some(text) = value.get("text").and_then(Value::as_str) {
+                    AskUserResponse::Text(text.to_string())
+                } else if let Some(text) = value.get("answer").and_then(Value::as_str) {
+                    AskUserResponse::Text(text.to_string())
+                } else {
+                    let selected = value.get("selected").unwrap_or(&Value::Null);
+                    let selected_value = selected
+                        .get("value")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    if selected_value.is_empty() {
+                        AskUserResponse::Cancelled
+                    } else {
+                        AskUserResponse::Selected {
+                            value: selected_value.to_string(),
+                            label: selected
+                                .get("label")
+                                .and_then(Value::as_str)
+                                .unwrap_or(selected_value)
+                                .to_string(),
+                            description: selected
+                                .get("description")
+                                .and_then(Value::as_str)
+                                .map(str::to_string),
+                        }
+                    }
+                }
+            }
+            Err(_) => return false,
+        };
+        if let Ok(mut pending) = self.interactions.lock() {
+            if let Some(sender) = pending.remove(request_id) {
+                return sender.send(response).is_ok();
+            }
+        }
+        false
     }
 
     pub fn cancel(&self, session_id: &str) {
@@ -449,11 +697,27 @@ impl ChatService {
             .map_err(|_| "session history lock poisoned".to_string())
     }
 
+    /// Tool names registered for a session. Exposed for frontend diagnostics
+    /// and tests so the GUI can prove it is using aish's tool pool rather than
+    /// a private subset.
+    pub fn tool_names(&self, session_id: &str) -> Result<Vec<String>, String> {
+        let session = self.session(session_id)?;
+        Ok(session
+            .llm
+            .tool_specs()
+            .into_iter()
+            .map(|spec| spec.function.name)
+            .collect())
+    }
+
     /// Resume a persisted session and return its model plus transcript.
     ///
     /// The session id is preserved, so continuing the conversation appends to
     /// the same rows the CLI and the GUI already share.
-    pub fn resume_session(&self, session_id: &str) -> Result<(String, Vec<ChatMessage>), String> {
+    pub fn resume_session(
+        &self,
+        session_id: &str,
+    ) -> Result<(String, Vec<ChatMessage>, PathBuf, Option<String>), String> {
         if session_id.trim().is_empty() {
             return Err("session id must not be empty".to_string());
         }
@@ -465,11 +729,13 @@ impl ChatService {
                     .lock()
                     .map(|history| history.clone())
                     .map_err(|_| "session history lock poisoned".to_string())?;
-                return Ok((session.model.clone(), history));
+                let cwd = session.cwd_path();
+                let warning = activate_cwd(&cwd);
+                return Ok((session.model.clone(), history, cwd, warning));
             }
         }
 
-        let (model, history) = {
+        let (model, history, cwd, warning) = {
             let Some(store) = &self.store else {
                 return Err("session database is not configured".to_string());
             };
@@ -480,16 +746,45 @@ impl ChatService {
                 .get_session(session_id)
                 .map_err(|error| format!("failed to load session: {error}"))?
                 .ok_or_else(|| format!("session not found: {session_id}"))?;
+            let snapshot = record.state_snapshot();
             let messages = store
                 .get_ai_messages(session_id)
                 .map_err(|error| format!("failed to load transcript: {error}"))?;
-            let history: Vec<ChatMessage> =
-                messages.into_iter().map(from_session_message).collect();
-            (record.model, history)
+            // CLI sessions predate the GUI transcript table: their complete
+            // context lives in sessions.state. Fall back to it instead of
+            // showing an empty conversation.
+            let history: Vec<ChatMessage> = if messages.is_empty() {
+                snapshot
+                    .context_messages_snapshot
+                    .iter()
+                    .cloned()
+                    .map(from_session_message)
+                    .collect()
+            } else {
+                messages.into_iter().map(from_session_message).collect()
+            };
+
+            let fallback = std::env::current_dir()
+                .map_err(|error| format!("cannot determine current directory: {error}"))?;
+            let (cwd, warning) = match snapshot.cwd.as_deref() {
+                Some(saved) if Path::new(saved).is_dir() => (PathBuf::from(saved), None),
+                Some(saved) => (
+                    fallback,
+                    Some(format!("会话保存的目录已不存在：{saved}；已使用当前目录")),
+                ),
+                None => (fallback, None),
+            };
+            (record.model, history, cwd, warning)
         };
 
-        self.create_session_inner(session_id.to_string(), model.clone(), history.clone())?;
-        Ok((model, history))
+        let warning = warning.or_else(|| activate_cwd(&cwd));
+        self.create_session_inner(
+            session_id.to_string(),
+            model.clone(),
+            history.clone(),
+            cwd.clone(),
+        )?;
+        Ok((model, history, cwd, warning))
     }
 
     /// List recent sessions for a history sidebar.
@@ -509,9 +804,19 @@ impl ChatService {
         let mut sessions = Vec::with_capacity(records.len());
         for record in records {
             let snapshot = record.state_snapshot();
+            let cwd = snapshot.cwd.clone();
             let summary = snapshot
                 .summary_preview
                 .clone()
+                .or_else(|| {
+                    snapshot
+                        .context_messages_snapshot
+                        .iter()
+                        .find(|message| {
+                            message.role == "user" && !message.content.starts_with("[Shell]")
+                        })
+                        .map(|message| message.content.clone())
+                })
                 .or_else(|| {
                     store
                         .get_first_user_message(&record.session_uuid)
@@ -519,12 +824,19 @@ impl ChatService {
                         .flatten()
                 })
                 .map(|text| summarize(text.trim(), 60))
-                .unwrap_or_default();
+                .filter(|text| !text.is_empty())
+                .or_else(|| {
+                    cwd.as_deref()
+                        .and_then(|path| Path::new(path).file_name())
+                        .map(|name| name.to_string_lossy().to_string())
+                })
+                .unwrap_or_else(|| "未命名会话".to_string());
             let updated_at = snapshot.updated_at.unwrap_or(record.created_at);
             sessions.push(json!({
                 "session_id": record.session_uuid,
                 "model": record.model,
                 "summary": summary,
+                "cwd": cwd,
                 "created_at": record.created_at.to_rfc3339(),
                 "updated_at": updated_at.to_rfc3339(),
             }));
@@ -656,6 +968,11 @@ impl ChatService {
                 session.cancel();
             }
         }
+        if let Some(manager) = &self.mcp_manager {
+            let _ = self.runtime.block_on(async {
+                manager.shutdown().await;
+            });
+        }
     }
 
     fn session(&self, session_id: &str) -> Result<Arc<ChatSession>, String> {
@@ -679,6 +996,11 @@ struct ChatSession {
     events: Arc<EventQueue>,
     store: Option<Arc<Mutex<SessionStore>>>,
     session_uuid: String,
+    /// The aish session cwd, persisted in `sessions.state.cwd` and restored by
+    /// `resume_session`. The GUI must not maintain a second workspace state.
+    cwd: Mutex<PathBuf>,
+    project_instructions: ProjectInstructionsLimits,
+    output_language: Option<String>,
 }
 
 impl ChatSession {
@@ -694,9 +1016,64 @@ impl ChatSession {
         self.llm.cancellation_token().cancel();
     }
 
-    async fn run_turn(self: Arc<Self>, text: String, images: Vec<String>) {
+    fn cwd_path(&self) -> PathBuf {
+        self.cwd
+            .lock()
+            .map(|cwd| cwd.clone())
+            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")))
+    }
+
+    fn system_prompt_for_turn(&self) -> String {
+        let mut prompt = self.system_prompt.clone();
+        if let Ok(cwd) = std::env::current_dir() {
+            let now = chrono::Local::now();
+            prompt.push_str(&format!(
+                "\n\n## Runtime Context\n- Current directory: {}\n- Current date/time: {}\n",
+                cwd.display(),
+                now.format("%Y-%m-%d %H:%M %:z")
+            ));
+            if self.project_instructions.enabled {
+                let state = aish_prompts::discover(&cwd, &self.project_instructions);
+                let rendered = state.rendered();
+                if !rendered.is_empty() {
+                    prompt.push_str("\n");
+                    prompt.push_str(&rendered);
+                    prompt.push('\n');
+                }
+            }
+        }
+        if let Some(language) = self
+            .output_language
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            prompt.push_str("\nAnswer in ");
+            prompt.push_str(language);
+            prompt.push_str(".\n");
+        }
+        prompt
+    }
+
+    async fn run_turn(
+        self: Arc<Self>,
+        text: String,
+        images: Vec<String>,
+        turn_guard: tokio::sync::OwnedMutexGuard<()>,
+    ) {
+        let _turn_guard = turn_guard;
         if self.cancelled.swap(false, Ordering::SeqCst) {
             self.emit("cancelled", json!({"reason": "cancelled_before_start"}));
+            self.running.store(false, Ordering::SeqCst);
+            return;
+        }
+
+        let cwd = self.cwd_path();
+        if let Err(error) = std::env::set_current_dir(&cwd) {
+            self.emit(
+                "error",
+                json!({"message": format!("无法进入会话目录 {}: {error}", cwd.display())}),
+            );
             self.running.store(false, Ordering::SeqCst);
             return;
         }
@@ -738,9 +1115,10 @@ impl ChatSession {
             }
         };
 
+        let system_prompt = self.system_prompt_for_turn();
         let result = self
             .llm
-            .process_input(&user_message, &history, Some(&self.system_prompt), true)
+            .process_input(&user_message, &history, Some(&system_prompt), true)
             .await;
 
         match result {
@@ -791,19 +1169,26 @@ impl ChatSession {
         let Some(store) = &self.store else {
             return;
         };
+        if let Ok(store) = store.lock() {
+            for message in messages {
+                let persisted = to_session_message(message);
+                if let Err(error) = store.append_ai_message(&self.session_uuid, &persisted) {
+                    tracing::warn!(%error, session = %self.session_uuid, "failed to persist chat message");
+                }
+            }
+        }
+        self.persist_snapshot();
+    }
+
+    /// Persist the complete aish session snapshot (cwd + context) even when
+    /// no new message was produced, e.g. after a workspace change.
+    fn persist_snapshot(&self) {
+        let Some(store) = &self.store else {
+            return;
+        };
         let Ok(store) = store.lock() else {
             return;
         };
-        for message in messages {
-            let persisted = to_session_message(message);
-            if let Err(error) = store.append_ai_message(&self.session_uuid, &persisted) {
-                tracing::warn!(%error, session = %self.session_uuid, "failed to persist chat message");
-            }
-        }
-
-        // Keep the compacted `sessions.state` snapshot in sync with the
-        // transcript. The aish CLI uses this snapshot when resuming, while the
-        // GUI loads the append-only `ai_messages` table.
         let snapshot_messages: Vec<SessionContextMessage> = self
             .history
             .lock()
@@ -814,9 +1199,7 @@ impl ChatSession {
             .find(|message| message.role == "user")
             .map(|message| summarize(&message.content, 80));
         let snapshot = SessionStateSnapshot {
-            cwd: std::env::current_dir()
-                .ok()
-                .map(|path| path.to_string_lossy().to_string()),
+            cwd: Some(self.cwd_path().to_string_lossy().to_string()),
             summary_preview,
             context_messages_snapshot: snapshot_messages,
             updated_at: Some(Utc::now()),
@@ -832,10 +1215,90 @@ impl ChatSession {
     }
 }
 
-fn register_default_tools(llm: &mut LlmSession, config: &ChatConfig, model: &str) {
-    llm.register_tool(Box::new(WebSearchTool::from_config(
-        &WebSearchConfig::from_env(),
-    )));
+/// Register the same core tool pool as the aish CLI. The GUI is a frontend;
+/// it must not invent a reduced "permission" set of tools. aish's security
+/// policy and approval callback govern how those tools may act.
+fn register_session_tools(
+    llm: &mut LlmSession,
+    config: &ChatConfig,
+    model: &str,
+    session_id: &str,
+    events: Arc<EventQueue>,
+    interactions: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<AskUserResponse>>>>,
+    mcp_manager: Option<&Arc<McpManager>>,
+) {
+    let mut bash = BashTool::new();
+    bash.set_cancellation_token(llm.cancellation_token_arc());
+    llm.register_tool(Box::new(bash));
+
+    let snapshot_store: aish_tools::fs::SharedSnapshotStore =
+        Arc::new(Mutex::new(SnapshotStore::new()));
+    llm.register_tool(Box::new(ReadFileTool::with_store(snapshot_store.clone())));
+    llm.register_tool(Box::new(WriteFileTool::with_store(snapshot_store.clone())));
+    llm.register_tool(Box::new(EditFileTool::with_store(snapshot_store.clone())));
+    llm.register_tool(Box::new(UndoEditTool::new(snapshot_store)));
+
+    // ask_user is an interaction like approvals: emit an event and wait for
+    // the frontend. A future QML question card can call respond_interaction
+    // without changing this runtime boundary.
+    let interaction_seq = Arc::new(AtomicU64::new(0));
+    let interaction_events = events.clone();
+    let interaction_session = session_id.to_string();
+    llm.register_tool(Box::new(AskUserTool::with_runtime(Arc::new(
+        move |request: &aish_tools::ask_user::AskUserRequest| {
+            let request_id = format!(
+                "{}-interaction-{}",
+                interaction_session,
+                interaction_seq.fetch_add(1, Ordering::Relaxed)
+            );
+            let (sender, receiver) = std::sync::mpsc::channel();
+            if let Ok(mut pending) = interactions.lock() {
+                pending.insert(request_id.clone(), sender);
+            }
+            let options: Vec<Value> = request
+                .options
+                .iter()
+                .map(|option| {
+                    json!({
+                        "value": option.value,
+                        "label": option.label,
+                        "description": option.description,
+                        "recommended": option.recommended,
+                    })
+                })
+                .collect();
+            interaction_events.push(ChatEvent::new(
+                &interaction_session,
+                "interaction_required",
+                json!({
+                    "request_id": request_id,
+                    "kind": "ask_user",
+                    "title": request.title,
+                    "prompt": request.prompt,
+                    "options": options,
+                    "default": request.default,
+                    "placeholder": request.placeholder,
+                    "allow_freeform_input": request.allow_freeform_input,
+                    "required": request.required,
+                    "allow_cancel": request.allow_cancel,
+                    "min_length": request.min_length,
+                }),
+            ));
+            match receiver.recv_timeout(Duration::from_secs(300)) {
+                Ok(response) => Ok(response),
+                Err(_) => {
+                    if let Ok(mut pending) = interactions.lock() {
+                        pending.remove(&request_id);
+                    }
+                    Ok(AskUserResponse::Cancelled)
+                }
+            }
+        },
+    ))));
+
+    llm.register_tool(Box::new(PythonTool::new()));
+    llm.register_tool(Box::new(GlobTool::new()));
+    llm.register_tool(Box::new(GrepTool::new()));
     llm.register_tool(Box::new(WebFetchTool::new(
         &config.api_base,
         &config.api_key,
@@ -843,9 +1306,202 @@ fn register_default_tools(llm: &mut LlmSession, config: &ChatConfig, model: &str
         config.temperature,
         config.max_tokens,
     )));
-    llm.register_tool(Box::new(ReadFileTool::new()));
-    llm.register_tool(Box::new(GlobTool::new()));
-    llm.register_tool(Box::new(GrepTool::new()));
+    llm.register_tool(Box::new(WebSearchTool::from_config(
+        &WebSearchConfig::from_env(),
+    )));
+    llm.register_tool(Box::new(EnterPlanModeTool::new()));
+    llm.register_tool(Box::new(ExitPlanModeTool::new()));
+
+    // Long-term memory uses the shared aish Markdown store.
+    let memory_manager: Arc<Mutex<Option<MemoryManager>>> = Arc::new(Mutex::new(
+        MemoryManager::new(MemoryManager::default_path()).ok(),
+    ));
+    let mm_search = memory_manager.clone();
+    let mm_store = memory_manager.clone();
+    let mm_delete = memory_manager.clone();
+    let mm_list = memory_manager.clone();
+    let mem_session = session_id.to_string();
+    let mem_host = host_name();
+    let memory_tool = MemoryTool::new(
+        Box::new(move |query, limit| {
+            let mut guard = mm_search.lock().unwrap();
+            guard
+                .as_mut()
+                .map(|manager| {
+                    manager
+                        .recall(query, limit)
+                        .into_iter()
+                        .map(|entry| MemorySearchResult {
+                            id: entry.id as usize,
+                            content: entry.content.clone(),
+                            category: format!("{:?}", entry.category).to_lowercase(),
+                            source: entry.source.clone(),
+                            scope: format!("{:?}", entry.scope).to_lowercase(),
+                            created_at: entry.created_at.clone(),
+                            expires_at: entry.expires_at.clone(),
+                            expired: MemoryManager::is_expired(entry),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        }),
+        Box::new(
+            move |content, category, source, importance, scope, ttl_seconds| {
+                let mut guard = mm_store.lock().unwrap();
+                guard
+                    .as_mut()
+                    .map(|manager| {
+                        let source = MemorySource {
+                            label: source.to_string(),
+                            session_uuid: Some(mem_session.clone()),
+                            host: Some(mem_host.clone()),
+                        };
+                        manager
+                            .store_with_provenance(
+                                content,
+                                parse_memory_category(category),
+                                parse_memory_scope(scope),
+                                source,
+                                f64::from(importance),
+                                ttl_seconds,
+                            )
+                            .map(|id| id.to_string())
+                            .unwrap_or_else(|error| error.to_string())
+                    })
+                    .unwrap_or_else(|| "memory not available".to_string())
+            },
+        ),
+        Box::new(move |id| {
+            let mut guard = mm_delete.lock().unwrap();
+            guard
+                .as_mut()
+                .and_then(|manager| manager.remove(id as i64).ok())
+                .unwrap_or(false)
+        }),
+        Box::new(move |limit| {
+            let guard = mm_list.lock().unwrap();
+            guard
+                .as_ref()
+                .map(|manager| {
+                    manager
+                        .list()
+                        .iter()
+                        .rev()
+                        .take(limit)
+                        .map(|entry| MemorySearchResult {
+                            id: entry.id as usize,
+                            content: entry.content.clone(),
+                            category: format!("{:?}", entry.category).to_lowercase(),
+                            source: entry.source.clone(),
+                            scope: format!("{:?}", entry.scope).to_lowercase(),
+                            created_at: entry.created_at.clone(),
+                            expires_at: entry.expires_at.clone(),
+                            expired: MemoryManager::is_expired(entry),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        }),
+    );
+    llm.register_tool(Box::new(memory_tool));
+
+    // Skills are passive SKILL.md content, discovered from the same aish
+    // directories. Loading is per session so newly installed skills appear
+    // in the next conversation without a GUI-specific registry.
+    let mut skill_manager = SkillManager::new();
+    let _ = skill_manager.load_all_skills();
+    let snapshot: HashMap<String, SkillInfo> = skill_manager
+        .list_skills()
+        .iter()
+        .filter(|skill| !skill.quarantined)
+        .map(|skill| {
+            (
+                skill.metadata.name.clone(),
+                SkillInfo {
+                    name: skill.metadata.name.clone(),
+                    content: skill.content.clone(),
+                    description: skill.metadata.description.clone(),
+                    base_dir: skill.base_dir.clone(),
+                    context: skill.metadata.context,
+                    agent: skill.metadata.agent.clone(),
+                    allowed_tools: skill.metadata.allowed_tools.clone(),
+                    quarantined: skill.quarantined,
+                },
+            )
+        })
+        .collect();
+    let names: Vec<String> = snapshot.keys().cloned().collect();
+    let lookup_snapshot = snapshot.clone();
+    let lookup = Box::new(move |name: &str| lookup_snapshot.get(name).cloned());
+    let list = Box::new(move || names.clone());
+    llm.register_tool(Box::new(SkillTool::new(lookup, list)));
+    // Agent must be registered after skill so general-purpose/troubleshoot
+    // can inherit the parent's skill tool, matching aish-shell.
+    llm.register_tool(Box::new(AgentTool::new()));
+
+    let registries: Vec<aish_skills::registry::RegistryConfig> = config
+        .skills
+        .registries
+        .iter()
+        .map(|registry| aish_skills::registry::RegistryConfig {
+            name: registry.name.clone(),
+            registry_type: registry.registry_type.clone(),
+            enabled: registry.enabled,
+            url: registry.url.clone(),
+        })
+        .collect();
+    llm.register_tool(Box::new(SkillSearchTool::new(registries.clone())));
+    llm.register_tool(Box::new(SkillInstallTool::new(registries)));
+    llm.register_tool(Box::new(SkillTrustTool));
+
+    if let Some(manager) = mcp_manager {
+        for tool in aish_mcp::gateway_tools(manager) {
+            llm.register_tool(tool);
+        }
+    }
+}
+
+fn parse_memory_category(value: &str) -> MemoryCategory {
+    match value.to_lowercase().as_str() {
+        "preference" => MemoryCategory::Preference,
+        "environment" => MemoryCategory::Environment,
+        "solution" => MemoryCategory::Solution,
+        "pattern" => MemoryCategory::Pattern,
+        _ => MemoryCategory::Other,
+    }
+}
+
+fn parse_memory_scope(value: &str) -> MemoryScope {
+    match value.to_lowercase().as_str() {
+        "host" => MemoryScope::Host,
+        "project" => MemoryScope::Project,
+        _ => MemoryScope::User,
+    }
+}
+
+fn host_name() -> String {
+    std::env::var("HOSTNAME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            fs::read_to_string("/etc/hostname")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn activate_cwd(cwd: &Path) -> Option<String> {
+    if !cwd.is_dir() {
+        return Some(format!(
+            "会话保存的目录已不存在：{}；已使用当前目录",
+            cwd.display()
+        ));
+    }
+    std::env::set_current_dir(cwd)
+        .err()
+        .map(|error| format!("无法进入会话目录 {}: {error}", cwd.display()))
 }
 
 fn summarize(text: &str, max_chars: usize) -> String {

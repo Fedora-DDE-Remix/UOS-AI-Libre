@@ -46,8 +46,9 @@ known commit; do not float on `main`.
 `ChatConfig::from_aish_config()` loads `$AISH_CONFIG_DIR/config.yaml` (or the
 XDG default) and resolves the default `~/.local/share/aish/sessions.db` when
 the config does not override `session_db_path`. `ChatSession` writes both the
-append-only `ai_messages` transcript and the `sessions.state` snapshot, so the
-CLI's resume selector and the GUI see the same conversation.
+append-only `ai_messages` transcript and the `sessions.state` snapshot
+(including `cwd`), so the CLI's resume selector and the GUI see the same
+conversation and workspace.
 
 ## 6. Reasoning ordering
 
@@ -61,8 +62,10 @@ opened.
 
 `ChatService` gained `list_sessions`, `resume_session`, `delete_session` and
 `rename_session`. Resuming rebuilds a live `ChatSession` around the persisted
-`ai_messages` transcript without creating a second session row, so the CLI and
-the GUI keep appending to the same conversation. `SessionStore` also gained
+`ai_messages` transcript (falling back to `sessions.state`
+`context_messages_snapshot` when the transcript is empty) without creating a
+second session row. It also restores the saved `cwd` when the directory still
+exists, exactly like the CLI resume path. `SessionStore` also gained
 `get_first_user_message` to give older CLI sessions a useful history title.
 
 ## 8. Shared model configuration updates
@@ -76,5 +79,31 @@ credentials; active sessions are intentionally dropped.
 ## 9. Session metadata for the Qt history sidebar
 
 `list_sessions` returns a small JSON-friendly summary (session id, model,
-summary, created/updated timestamps). `config_info` exposes the current model,
-API base, database path and whether a key exists, but never the key itself.
+summary, cwd, created/updated timestamps). `config_info` exposes the current
+model, API base, database path and whether a key exists, but never the key
+itself.
+
+## 10. Headless frontend parity with aish-shell
+
+`aish-chat` is not a second agent runtime. It is the headless frontend for the
+same aish core:
+
+- Registers the same tool pool as `aish-shell`: `bash`, `read_file`,
+  `write_file`, `edit_file`, `undo_edit`, `ask_user`, `python_exec`, `glob`,
+  `grep`, `WebFetch`, `WebSearch`, `enter_plan_mode`, `exit_plan_mode`,
+  `memory`, `skill`, `Agent` (subagents), skill registry tools and one MCP
+  gateway per enabled server.
+- Uses the same `security_policy.yaml` through `BashTool` and the same
+  approval callback/remembered approvals.
+- Writes tool/security events to the shared `audit_events` table with secret
+  redaction.
+- Loads the same `skills` directories, `mcp` servers, memory, fallback models
+  and API accounts from `config.yaml`.
+- Persists `sessions.state.cwd` per conversation and passes that cwd to tool
+  execution. GUI workspace switching is therefore a view of aish session
+  state, not a separate setting.
+- Uses the same SQLite `sessions`/`ai_messages` database. GUI-created and
+  CLI-created conversations are interchangeable.
+- `ask_user` is exposed as an `interaction_required` event. The current Qt
+  bridge auto-cancels it until the GUI question card is added; the tool and
+  response API are already in place.

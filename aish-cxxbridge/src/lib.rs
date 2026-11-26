@@ -27,6 +27,12 @@ mod ffi {
         fn poll_event(service: &mut BridgeService) -> String;
         fn cancel_session(service: &mut BridgeService, session_id: &str);
         fn approve(service: &mut BridgeService, request_id: &str, decision: i32) -> bool;
+        fn respond_interaction(
+            service: &mut BridgeService,
+            request_id: &str,
+            response_json: &str,
+        ) -> bool;
+        fn tool_names(service: &mut BridgeService, session_id: &str) -> String;
         fn list_sessions(service: &mut BridgeService, limit: u32) -> String;
         fn resume_session(service: &mut BridgeService, session_id: &str) -> String;
         fn delete_session(service: &mut BridgeService, session_id: &str) -> String;
@@ -38,7 +44,7 @@ mod ffi {
             api_base: &str,
             api_key: &str,
         ) -> String;
-        fn set_workspace(path: &str) -> String;
+        fn set_workspace(service: &mut BridgeService, session_id: &str, path: &str) -> String;
         fn shutdown(service: &mut BridgeService);
     }
 }
@@ -164,6 +170,34 @@ pub fn approve(service: &mut BridgeService, request_id: &str, decision: i32) -> 
         .unwrap_or(false)
 }
 
+pub fn respond_interaction(
+    service: &mut BridgeService,
+    request_id: &str,
+    response_json: &str,
+) -> bool {
+    service
+        .inner
+        .as_ref()
+        .map(|inner| inner.respond_interaction(request_id, response_json))
+        .unwrap_or(false)
+}
+
+pub fn tool_names(service: &mut BridgeService, session_id: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.tool_names(session_id)
+    })) {
+        Ok(Ok(names)) => json!({"ok": true, "tools": names}).to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while listing tools"),
+    }
+}
+
 pub fn list_sessions(service: &mut BridgeService, limit: u32) -> String {
     let Some(inner) = service.inner.as_ref() else {
         return err(service
@@ -190,11 +224,13 @@ pub fn resume_session(service: &mut BridgeService, session_id: &str) -> String {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         inner.resume_session(session_id)
     })) {
-        Ok(Ok((model, messages))) => json!({
+        Ok(Ok((model, messages, cwd, warning))) => json!({
             "ok": true,
             "session_id": session_id,
             "model": model,
             "messages": messages,
+            "cwd": cwd.to_string_lossy(),
+            "warning": warning,
         })
         .to_string(),
         Ok(Err(error)) => err(error),
@@ -280,24 +316,20 @@ pub fn save_model_config(
     }
 }
 
-pub fn set_workspace(path: &str) -> String {
-    let canonical = match std::fs::canonicalize(path) {
-        Ok(path) => path,
-        Err(error) => return err(format!("cannot open workspace {path}: {error}")),
+pub fn set_workspace(service: &mut BridgeService, session_id: &str, path: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
     };
-    if !canonical.is_dir() {
-        return err(format!(
-            "workspace is not a directory: {}",
-            canonical.display()
-        ));
-    }
-    match std::env::set_current_dir(&canonical) {
-        Ok(()) => json!({
-            "ok": true,
-            "path": canonical.to_string_lossy(),
-        })
-        .to_string(),
-        Err(error) => err(format!("cannot switch workspace: {error}")),
+    let session_id = (!session_id.trim().is_empty()).then_some(session_id);
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.set_workspace(session_id, path)
+    })) {
+        Ok(Ok(canonical)) => json!({"ok": true, "path": canonical}).to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while switching workspace"),
     }
 }
 

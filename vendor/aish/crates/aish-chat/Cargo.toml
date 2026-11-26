@@ -9,7 +9,12 @@ description = "Headless chat/agent session API shared by GUI frontends"
 aish-config = { path = "../aish-config" }
 aish-core = { path = "../aish-core" }
 aish-llm = { path = "../aish-llm" }
+aish-mcp = { path = "../aish-mcp" }
+aish-memory = { path = "../aish-memory" }
+aish-prompts = { path = "../aish-prompts" }
+aish-security = { path = "../aish-security" }
 aish-session = { path = "../aish-session" }
+aish-skills = { path = "../aish-skills" }
 aish-tools = { path = "../aish-tools" }
 base64 = "0.22"
 chrono.workspace = true

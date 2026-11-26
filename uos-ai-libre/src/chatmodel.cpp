@@ -11,7 +11,7 @@ constexpr int kMaxUserChars = 64 * 1024;
 constexpr int kMaxAssistantChars = 512 * 1024;
 constexpr int kMaxReasoningChars = 128 * 1024;
 constexpr int kMaxToolPreviewChars = 800;
-constexpr int kMaxToolResultChars = 600;
+constexpr int kMaxToolResultChars = 16000;
 
 QString bounded(const QString &text, int limit) {
     if (text.size() <= limit)
@@ -317,7 +317,7 @@ void ChatModel::addToolEnd(const QVariantMap &data) {
                      .arg(meta.value(QStringLiteral("codeText")).toString());
     if (result.isEmpty())
         result = data.value(QStringLiteral("error")).toString();
-    result = bounded(result.simplified(), kMaxToolResultChars);
+    result = bounded(result.trimmed(), kMaxToolResultChars);
 
     const QString status = ok ? QStringLiteral("done") : QStringLiteral("failed");
     int row = m_streaming_index;
