@@ -28,6 +28,10 @@ ApplicationWindow {
 
     onThemeModeChanged: applyTheme()
     onSystemDarkChanged: applyTheme()
+    onActiveChanged: {
+        if (!active)
+            sidebar.finishRename()
+    }
 
     function showToast(message) {
         if (message && message.length > 0)
@@ -72,6 +76,7 @@ ApplicationWindow {
     }
 
     function openAppMenu() {
+        sidebar.finishRename()
         mainMenu.openMenu()
     }
 
@@ -229,6 +234,18 @@ ApplicationWindow {
                         actionText: "导入资料"
                         onActionRequested: window.showToast("知识库索引将在后续版本接入")
                     }
+                }
+
+                MouseArea {
+                    anchors.left: sidebar.right
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    z: 150
+                    visible: sidebar.renamingSessionId.length > 0
+                    enabled: visible
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                    onClicked: sidebar.finishRename()
                 }
 
                 SettingsPage {

@@ -10,6 +10,7 @@ Rectangle {
     property int cornerRadius: Theme.windowRadius
     property string renamingSessionId: ""
     property string renamingOriginal: ""
+    property string renamingDraft: ""
     signal newChatRequested()
     signal tasksRequested()
     signal knowledgeRequested()
@@ -66,12 +67,20 @@ Rectangle {
     }
 
     MouseArea {
+        anchors.fill: parent
+        z: -1
+        enabled: sidebar.renamingSessionId.length > 0
+        onClicked: sidebar.finishRename()
+    }
+
+    MouseArea {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         height: 52
         acceptedButtons: Qt.LeftButton
         onPressed: {
+            sidebar.finishRename()
             if (sidebar.appWindow)
                 sidebar.appWindow.startSystemMove()
         }
@@ -108,7 +117,10 @@ Rectangle {
         MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
-            onClicked: sidebar.collapseRequested()
+            onClicked: {
+                sidebar.finishRename()
+                sidebar.collapseRequested()
+            }
         }
     }
 
@@ -119,7 +131,10 @@ Rectangle {
         icon: "new-chat"
         label: "创建新对话"
         rightIcon: "panel-right"
-        onClicked: sidebar.newChatRequested()
+        onClicked: {
+            sidebar.finishRename()
+            sidebar.newChatRequested()
+        }
     }
 
     SidebarItem {
@@ -128,7 +143,10 @@ Rectangle {
         width: sidebar.width - 16
         icon: "tasks"
         label: "自动任务"
-        onClicked: sidebar.tasksRequested()
+        onClicked: {
+            sidebar.finishRename()
+            sidebar.tasksRequested()
+        }
     }
 
     SidebarItem {
@@ -137,7 +155,10 @@ Rectangle {
         width: sidebar.width - 16
         icon: "knowledge"
         label: "AI知识库"
-        onClicked: sidebar.knowledgeRequested()
+        onClicked: {
+            sidebar.finishRename()
+            sidebar.knowledgeRequested()
+        }
     }
 
     Item {
@@ -168,7 +189,10 @@ Rectangle {
             anchors.right: parent.right
             anchors.rightMargin: 4
             anchors.verticalCenter: parent.verticalCenter
-            onClicked: sidebar.toastRequested("历史对话按最近更新时间排序")
+            onClicked: {
+                sidebar.finishRename()
+                sidebar.toastRequested("历史对话按最近更新时间排序")
+            }
         }
     }
 
@@ -190,9 +214,15 @@ Rectangle {
             selected: sidebar.chatActive
                       && modelData.session_id === app.sessionId
             renaming: sidebar.renamingSessionId === modelData.session_id
-            onActivated: sidebar.sessionActivated(modelData.session_id)
-            onMenuRequested: (sceneY) => sidebar.openContext(modelData, sceneY)
-            onRenameRequested: sidebar.beginRename(modelData)
+            onActivated: {
+                sidebar.finishRename()
+                sidebar.sessionActivated(modelData.session_id)
+            }
+            onMenuRequested: (sceneY) => {
+                sidebar.finishRename()
+                sidebar.openContext(modelData, sceneY)
+            }
+            onRenameTextEdited: (text) => sidebar.renamingDraft = text
             onRenameCommitted: (text) => sidebar.commitRename(text)
             onRenameCancelled: sidebar.cancelRename()
         }
@@ -245,7 +275,10 @@ Rectangle {
         MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
-            onClicked: sidebar.toastRequested("本地模式无需登录，所有会话保存在本机")
+            onClicked: {
+                sidebar.finishRename()
+                sidebar.toastRequested("本地模式无需登录，所有会话保存在本机")
+            }
         }
     }
 
@@ -254,6 +287,7 @@ Rectangle {
 
     // sceneY is in window/scene coordinates, so no sidebar offset is needed.
     function openContext(session, sceneY) {
+        finishRename()
         contextSessionId = session.session_id
         contextSessionTitle = session.summary
         const anchorX = sidebar.mapToItem(Overlay.overlay,
@@ -269,7 +303,13 @@ Rectangle {
         contextSessionId = session.session_id
         contextSessionTitle = session.summary
         renamingOriginal = session.summary
+        renamingDraft = session.summary
         renamingSessionId = session.session_id
+    }
+
+    function finishRename() {
+        if (renamingSessionId.length > 0)
+            commitRename(renamingDraft)
     }
 
     function commitRename(text) {
@@ -278,12 +318,14 @@ Rectangle {
         const sessionId = renamingSessionId
         const value = text.trim()
         renamingSessionId = ""
+        renamingDraft = ""
         if (value.length > 0 && value !== renamingOriginal)
             app.renameSession(sessionId, value)
     }
 
     function cancelRename() {
         renamingSessionId = ""
+        renamingDraft = ""
     }
 
     SessionMenu {

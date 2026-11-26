@@ -9,7 +9,7 @@ Rectangle {
 
     signal activated()
     signal menuRequested(real sceneY)
-    signal renameRequested()
+    signal renameTextEdited(string text)
     signal renameCommitted(string text)
     signal renameCancelled()
 
@@ -60,7 +60,6 @@ Rectangle {
             else
                 root.activated()
         }
-        onDoubleClicked: root.renameRequested()
     }
 
     IconButton {
@@ -100,6 +99,7 @@ Rectangle {
             selectedTextColor: "#FFFFFF"
             selectByMouse: true
             clip: true
+            onTextEdited: root.renameTextEdited(text)
             onAccepted: root.renameCommitted(text)
             Keys.onEscapePressed: root.renameCancelled()
             onActiveFocusChanged: {
