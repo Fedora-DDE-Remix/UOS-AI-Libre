@@ -486,6 +486,7 @@ SettingsScroll {
 
     ConfirmDialog {
         id: trustDialog
+        confirmEnabled: !app.generating
         title: "信任并启用技能"
         message: "确定信任“" + page.pendingTrustName + "”？"
         detail: "信任会移除 .untrusted 隔离标记，技能内容将进入 AI 上下文，并可能引导 AI 使用工具。请确认来源和内容可信。"
@@ -496,6 +497,7 @@ SettingsScroll {
 
     ConfirmDialog {
         id: removeDialog
+        confirmEnabled: !app.generating
         title: "删除技能"
         message: "确定删除“" + page.pendingRemoveName + "”？"
         detail: "将删除 aish 用户技能目录中的该技能；此操作不可撤销。"
@@ -509,6 +511,7 @@ SettingsScroll {
 
     ConfirmDialog {
         id: installDialog
+        confirmEnabled: !app.generating
         title: "安装技能"
         message: "从注册表安装“" + page.pendingInstallName + "”？"
         detail: "来源 ID： " + page.pendingInstallId + "\n目标目录： " + page.pendingInstallTarget

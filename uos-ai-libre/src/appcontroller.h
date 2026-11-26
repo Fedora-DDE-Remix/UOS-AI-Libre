@@ -219,6 +219,7 @@ private:
     void onConfigChanged();
     void onSessionsChanged();
     void onSettingsJobFinished(const QVariantMap &result);
+    bool requireIdle(const QString &action);
 
     AishBridge m_bridge;
     ChatModel m_chat;

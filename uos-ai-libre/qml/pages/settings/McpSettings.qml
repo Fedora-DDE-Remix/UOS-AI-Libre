@@ -508,6 +508,7 @@ SettingsScroll {
 
     ConfirmDialog {
         id: removeDialog
+        confirmEnabled: !app.generating
         title: "移除 MCP 服务器"
         message: "确定移除“" + page.pendingRemoveName + "”？"
         detail: "将关闭连接、从 config.yaml 中删除该 server，并从当前会话移除对应的 mcp__ 工具。"

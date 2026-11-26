@@ -323,7 +323,17 @@ void AppController::refreshPolicy() {
     refreshSessionApprovals();
 }
 
+bool AppController::requireIdle(const QString &action) {
+    if (!generating())
+        return true;
+    emit toastRequested(QStringLiteral("请先停止当前回答，再%1").arg(action));
+    return false;
+}
+
 QVariantMap AppController::savePolicy(const QVariantMap &fields) {
+    if (!requireIdle(QStringLiteral("修改安全策略")))
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("session is generating")}};
     const QVariantMap result = m_bridge.savePolicy(fields);
     if (result.value(QStringLiteral("ok"), false).toBool()) {
         m_policy_info = result;
@@ -339,6 +349,9 @@ QVariantMap AppController::savePolicy(const QVariantMap &fields) {
 }
 
 QVariantMap AppController::savePolicyRules(const QVariantList &rules) {
+    if (!requireIdle(QStringLiteral("修改安全规则")))
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("session is generating")}};
     const QString fingerprint =
         m_policy_info.value(QStringLiteral("rule_file_fingerprint")).toString();
     const QVariantMap result = m_bridge.savePolicyRules(rules, fingerprint);
@@ -427,6 +440,9 @@ void AppController::searchSkills(const QString &query) {
 }
 
 void AppController::installSkill(const QString &skillId) {
+    if (!requireIdle(QStringLiteral("安装技能")))
+        return;
+
     if (m_skill_install_busy)
         return;
     const QVariantMap result = m_bridge.startSkillInstall(skillId);
@@ -449,6 +465,9 @@ void AppController::reviewSkill(const QString &name) {
 }
 
 void AppController::trustSkill(const QString &name) {
+    if (!requireIdle(QStringLiteral("信任技能")))
+        return;
+
     const QVariantMap result = m_bridge.trustSkill(name);
     if (result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("message")).toString());
@@ -462,6 +481,9 @@ void AppController::trustSkill(const QString &name) {
 }
 
 void AppController::removeSkill(const QString &name) {
+    if (!requireIdle(QStringLiteral("删除技能")))
+        return;
+
     const QVariantMap result = m_bridge.removeSkill(name);
     if (result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(QStringLiteral("技能已删除"));
@@ -485,6 +507,9 @@ void AppController::refreshMcpStatus() {
 }
 
 void AppController::reloadMcp() {
+    if (!requireIdle(QStringLiteral("重载 MCP")))
+        return;
+
     const QVariantMap result = m_bridge.reloadMcp();
     if (!result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("error")).toString());
@@ -496,6 +521,9 @@ void AppController::reloadMcp() {
 }
 
 void AppController::addMcpServer(const QVariantMap &args) {
+    if (!requireIdle(QStringLiteral("添加 MCP 服务器")))
+        return;
+
     const QVariantMap result = m_bridge.addMcpServer(args);
     if (!result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("error")).toString());
@@ -509,6 +537,8 @@ void AppController::addMcpServer(const QVariantMap &args) {
 
 void AppController::updateMcpServer(const QString &name,
                                     const QVariantMap &args) {
+    if (!requireIdle(QStringLiteral("修改 MCP 服务器")))
+        return;
     const QVariantMap result = m_bridge.updateMcpServer(name, args);
     if (!result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("error")).toString());
@@ -520,6 +550,9 @@ void AppController::updateMcpServer(const QString &name,
 }
 
 void AppController::removeMcpServer(const QString &name) {
+    if (!requireIdle(QStringLiteral("删除 MCP 服务器")))
+        return;
+
     const QVariantMap result = m_bridge.removeMcpServer(name);
     if (!result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("error")).toString());
@@ -531,6 +564,9 @@ void AppController::removeMcpServer(const QString &name) {
 }
 
 void AppController::setMcpMasterEnabled(bool enabled) {
+    if (!requireIdle(QStringLiteral("修改 MCP 总开关")))
+        return;
+
     const QVariantMap result = m_bridge.setMcpMasterEnabled(enabled);
     if (!result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("error")).toString());
@@ -542,6 +578,9 @@ void AppController::setMcpMasterEnabled(bool enabled) {
 }
 
 void AppController::setMcpEnabled(const QString &name, bool enabled) {
+    if (!requireIdle(QStringLiteral("启停 MCP 服务器")))
+        return;
+
     const QVariantMap result = m_bridge.setMcpEnabled(name, enabled);
     if (!result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("error")).toString());
@@ -555,6 +594,8 @@ void AppController::setMcpEnabled(const QString &name, bool enabled) {
 void AppController::setMcpTrust(const QString &name,
                                 const QString &tool,
                                 const QString &level) {
+    if (!requireIdle(QStringLiteral("修改 MCP 信任")))
+        return;
     const QVariantMap result = m_bridge.setMcpTrust(name, tool, level);
     if (!result.value(QStringLiteral("ok"), false).toBool()) {
         emit toastRequested(result.value(QStringLiteral("error")).toString());

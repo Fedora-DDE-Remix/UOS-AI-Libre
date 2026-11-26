@@ -874,6 +874,7 @@ SettingsScroll {
 
     ConfirmDialog {
         id: deleteRuleDialog
+        confirmEnabled: !app.generating
         title: "删除安全规则"
         message: "确定删除“" + page.pendingDeleteName + "”？删除后该路径/命令将按后续规则或默认风险处理。"
         detail: "保存会立即重写 security_policy.yaml，并让本会话已有的临时放行失效。"

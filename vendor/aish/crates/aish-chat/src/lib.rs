@@ -926,7 +926,8 @@ impl ChatService {
     }
 
     /// Update the aish security globals through the same YAML-preserving
-    /// writer the CLI settings panel uses. Rules remain YAML-edited.
+    /// writer the CLI settings panel uses. The ordered rules have a separate
+    /// raw-YAML editor (`save_policy_rules`).
     pub fn save_policy(&self, fields: &Value) -> Result<Value, String> {
         let path = aish_security::resolve_security_policy_path(None)
             .ok_or_else(|| "aish security policy path is unavailable".to_string())?;

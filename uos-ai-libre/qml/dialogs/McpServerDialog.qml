@@ -366,7 +366,7 @@ Popup {
                 AppButton {
                     text: "添加"
                     variant: "primary"
-                    enabled: !app.mcpBusy
+                    enabled: !app.mcpBusy && !app.generating
                     onClicked: {
                         const args = root.draft()
                         if (args !== null) {

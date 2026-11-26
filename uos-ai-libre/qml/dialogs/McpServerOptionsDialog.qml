@@ -130,6 +130,7 @@ Popup {
             AppButton {
                 text: "保存"
                 variant: "primary"
+                enabled: !app.generating
                 onClicked: {
                     const args = {
                         enabled: root.serverEnabled,

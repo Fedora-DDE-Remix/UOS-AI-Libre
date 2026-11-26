@@ -432,7 +432,7 @@ Popup {
                     text: root.saving ? "保存中…"
                                       : (root.editIndex >= 0 ? "保存修改" : "添加规则")
                     variant: "primary"
-                    enabled: !root.saving
+                    enabled: !root.saving && !app.generating
                     onClicked: root.save()
                 }
             }

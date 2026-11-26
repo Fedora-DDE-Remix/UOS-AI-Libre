@@ -10,6 +10,7 @@ Popup {
     property string confirmText: "确定"
     property string cancelText: "取消"
     property bool danger: false
+    property bool confirmEnabled: true
     property bool decisionMade: false
     signal accepted()
     signal confirmed()
@@ -115,6 +116,7 @@ Popup {
                 text: root.confirmText
                 minWidth: 84
                 variant: root.danger ? "danger" : "primary"
+                enabled: root.confirmEnabled
                 onClicked: {
                     root.decisionMade = true
                     root.close()
