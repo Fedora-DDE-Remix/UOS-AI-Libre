@@ -76,6 +76,10 @@ files. `build-debug/compile_commands.json` is generated for clangd/IDE use.
 
 Requirements: Qt 6.8 (Quick, Controls 2, Svg), CMake 3.21+, Ninja, a C++17
 compiler, Rust stable, and `cxxbridge-cmd` 1.0.205 for the header generator.
+`build.sh`/`build-debug.sh` look for `cxxbridge` in PATH or
+`~/.cargo/bin/cxxbridge`; if it is missing they install the pinned version with
+`cargo install cxxbridge-cmd --version 1.0.205 --locked`. No `/tmp` tool copy
+is required.
 
 Run:
 

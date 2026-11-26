@@ -47,4 +47,5 @@ private:
     QPoint m_last_position;
     bool m_has_position = false;
     bool m_quitting = false;
+    bool m_swapchainReleased = false;
 };

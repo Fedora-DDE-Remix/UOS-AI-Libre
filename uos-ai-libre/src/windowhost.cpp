@@ -4,12 +4,37 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QEvent>
 #include <QGuiApplication>
+#include <QPlatformSurfaceEvent>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickWindow>
 #include <QScreen>
+#include <QSGRendererInterface>
 #include <QTimer>
+
+namespace {
+
+// Qt 6.8's Wayland plugin destroys the platform VkSurfaceKHR while hiding the
+// QWindow, before Qt Quick releases the QRhi swapchain. Giving Quick the
+// SurfaceAboutToBeDestroyed notification while the native surface is still
+// alive makes it destroy the swapchain first, avoiding Mesa's dangling WSI
+// queue. This only affects the Vulkan backend.
+void releaseVulkanSwapchain(QQuickWindow *window) {
+    if (!window || !window->handle())
+        return;
+    const QSGRendererInterface *renderer = window->rendererInterface();
+    if (!renderer
+        || renderer->graphicsApi() != QSGRendererInterface::Vulkan) {
+        return;
+    }
+    QPlatformSurfaceEvent event(
+        QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed);
+    QCoreApplication::sendEvent(window, &event);
+}
+
+} // namespace
 
 WindowHost::WindowHost(QQmlEngine *engine, AppController *app, QObject *parent)
     : QObject(parent), m_engine(engine), m_app(app) {
@@ -19,6 +44,13 @@ WindowHost::WindowHost(QQmlEngine *engine, AppController *app, QObject *parent)
     if (m_component->isError()) {
         qWarning() << "failed to load Main.qml:" << m_component->errorString();
     }
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
+            this, [this]() {
+                if (m_window && !m_swapchainReleased) {
+                    releaseVulkanSwapchain(m_window);
+                    m_swapchainReleased = true;
+                }
+            });
 }
 
 bool WindowHost::windowVisible() const {
@@ -52,6 +84,7 @@ void WindowHost::createWindow() {
         return;
     }
 
+    m_swapchainReleased = false;
     m_window->setObjectName(QStringLiteral("mainWindow"));
     QSize target = m_last_size.isValid() ? m_last_size
                                          : QSize(1290, 800);
@@ -74,6 +107,10 @@ void WindowHost::createWindow() {
 
     connect(m_window, &QQuickWindow::closing, this,
             [this](QQuickCloseEvent *) {
+                if (!m_swapchainReleased) {
+                    releaseVulkanSwapchain(m_window);
+                    m_swapchainReleased = true;
+                }
                 if (m_quitting)
                     return;
                 if (m_app && m_app->savingSession()) {
@@ -118,6 +155,10 @@ void WindowHost::newChat() {
 }
 
 void WindowHost::quitApp() {
+    if (m_window && !m_swapchainReleased) {
+        releaseVulkanSwapchain(m_window);
+        m_swapchainReleased = true;
+    }
     m_quitting = true;
     QCoreApplication::quit();
 }

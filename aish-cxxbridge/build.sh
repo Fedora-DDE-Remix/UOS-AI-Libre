@@ -6,17 +6,29 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 profile="${PROFILE:-release}"
-cxxbridge="${CXXBRIDGE:-/tmp/cxxbridge-tools/bin/cxxbridge}"
 
-if [[ ! -x "$cxxbridge" ]]; then
-    if command -v cxxbridge >/dev/null 2>&1; then
-        cxxbridge="$(command -v cxxbridge)"
+resolve_cxxbridge() {
+    if [[ -n "${CXXBRIDGE:-}" ]]; then
+        printf '%s\n' "$CXXBRIDGE"
+    elif command -v cxxbridge >/dev/null 2>&1; then
+        command -v cxxbridge
+    elif [[ -x "$HOME/.cargo/bin/cxxbridge" ]]; then
+        printf '%s\n' "$HOME/.cargo/bin/cxxbridge"
     else
-        echo "error: cxxbridge not found; install it with:" >&2
-        echo "  cargo install cxxbridge-cmd --version 1.0.205 --locked" >&2
-        exit 1
+        echo "cxxbridge not found; installing cxxbridge-cmd 1.0.205 via cargo..." >&2
+        cargo install cxxbridge-cmd --version 1.0.205 --locked >&2
+        if [[ -x "$HOME/.cargo/bin/cxxbridge" ]]; then
+            printf '%s\n' "$HOME/.cargo/bin/cxxbridge"
+        elif command -v cxxbridge >/dev/null 2>&1; then
+            command -v cxxbridge
+        else
+            echo "cargo install finished but cxxbridge is still not found" >&2
+            exit 1
+        fi
     fi
-fi
+}
+
+cxxbridge="$(resolve_cxxbridge)"
 
 cargo build --profile "$profile" --manifest-path "$here/Cargo.toml"
 
