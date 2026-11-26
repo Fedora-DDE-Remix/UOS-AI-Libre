@@ -59,15 +59,45 @@ ApplicationWindow {
         }
     }
 
+    function syncInteraction() {
+        const request = app.pendingInteraction
+        if (request && request.request_id) {
+            askUserDialog.request = request
+            if (!askUserDialog.opened)
+                askUserDialog.open()
+        } else if (askUserDialog.opened) {
+            askUserDialog.close()
+        }
+    }
+
     Connections {
         target: app
         function onPendingApprovalChanged() { window.syncApproval() }
+        function onPendingInteractionChanged() { window.syncInteraction() }
         function onToastRequested(message) { window.showToast(message) }
     }
 
     function showSettings(index) {
         window.activePage = "settings"
         settingsPage.currentIndex = index
+    }
+
+    function showDemoInteraction() {
+        askUserDialog.request = {
+            request_id: "demo-interaction",
+            title: "需要补充信息",
+            prompt: "请选择要诊断的方向，或直接输入你的问题。",
+            options: [
+                { value: "network", label: "网络质量", description: "检查 DNS、丢包和连接质量", recommended: true },
+                { value: "disk", label: "磁盘空间", description: "分析占用并找出可清理文件" },
+                { value: "performance", label: "系统卡顿", description: "检查 CPU、内存和异常进程" }
+            ],
+            allow_freeform_input: true,
+            allow_cancel: true,
+            required: false,
+            placeholder: "也可以直接输入…"
+        }
+        askUserDialog.open()
     }
 
     function showComposerMenu() {
@@ -204,7 +234,7 @@ ApplicationWindow {
                         leftRadius: window.sidebarCollapsed ? window.corner : 0
                         rightRadius: window.corner
                         onToastRequested: (message) => window.showToast(message)
-                        onOpenSettings: window.showSettings(0)
+                        onOpenSettings: (index) => window.showSettings(index)
                     }
 
                     PlaceholderPage {
@@ -477,9 +507,15 @@ ApplicationWindow {
         onDecided: (decision) => app.resolveApproval(decision)
     }
 
+    AskUserDialog {
+        id: askUserDialog
+        onDecided: (response) => app.resolveInteraction(response)
+    }
+
     Component.onCompleted: {
         window.applyTheme()
         app.initialize()
         window.syncApproval()
+        window.syncInteraction()
     }
 }

@@ -4,6 +4,7 @@
 #include "iconprovider.h"
 #include "rhibackend-selector.h"
 
+#include <QDir>
 #include <QFont>
 #include <QFontDatabase>
 #include <QApplication>
@@ -139,9 +140,29 @@ int main(int argc, char *argv[]) {
                 request.insert(QStringLiteral("allow"), true);
                 request.insert(QStringLiteral("message"),
                                QStringLiteral("AI 需要访问该网页以获取页面标题。"));
+                request.insert(QStringLiteral("cwd"), QDir::currentPath());
+                QVariantMap rule;
+                rule.insert(QStringLiteral("id"), QStringLiteral("M-001"));
+                rule.insert(QStringLiteral("name"), QStringLiteral("家目录保护"));
+                rule.insert(QStringLiteral("pattern"), QStringLiteral("/home/**"));
+                QVariantMap sandbox;
+                sandbox.insert(QStringLiteral("enabled"), false);
+                QVariantMap analysis;
+                analysis.insert(QStringLiteral("matched_rule"), rule);
+                analysis.insert(QStringLiteral("reasons"),
+                                QVariantList{QStringLiteral("测试安全规则命中")});
+                analysis.insert(QStringLiteral("suggested_alternatives"),
+                                QVariantList{QStringLiteral("确认目标地址后再允许")});
+                analysis.insert(QStringLiteral("sandbox"), sandbox);
+                request.insert(QStringLiteral("analysis"), analysis);
                 root->setProperty("activePage", QStringLiteral("chat"));
                 QMetaObject::invokeMethod(root, "showDemoApproval",
                                           Q_ARG(QVariant, QVariant::fromValue(request)));
+            } else if (page == QStringLiteral("interaction")) {
+                root->setProperty("activePage", QStringLiteral("chat"));
+                QTimer::singleShot(250, root, [root]() {
+                    QMetaObject::invokeMethod(root, "showDemoInteraction");
+                });
             } else if (page == QStringLiteral("menu")) {
                 QMetaObject::invokeMethod(root, "openAppMenu");
             } else if (page == QStringLiteral("theme")) {

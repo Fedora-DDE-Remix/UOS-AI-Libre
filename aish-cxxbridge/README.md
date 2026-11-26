@@ -51,6 +51,15 @@ rename_session(*service, session, "New title");
 delete_session(*service, session);
 auto info = config_info(*service);                   // safe summary; no API key
 auto tools = tool_names(*service, session);          // aish's registered tool pool
+auto catalog = tool_catalog(*service);               // names/descriptions/sources
+auto policy = policy_info(*service);                 // effective aish security policy
+save_policy(*service, "{\"default_risk_level\":\"medium\"}");
+auto skills = skill_catalog(*service);               // installed aish skills
+trust_skill(*service, "some-skill");
+auto mcp = mcp_status(*service);                     // live MCP manager status
+mcp_reload(*service);
+auto memory = memory_list(*service, 200);
+auto audit = audit_tail(*service, 200);
 respond_interaction(*service, request_id, "{\"cancelled\":true}");
 save_model_config(*service, model, api_base, key);   // writes aish config, reloads service
 set_workspace(*service, session, "/path/to/project");// session cwd, persisted in sessions.state
@@ -101,3 +110,7 @@ Important event kinds:
 - `list_sessions` falls back to the first user message or session cwd when
   `sessions.state.summary_preview` is empty, so CLI-created sessions appear in
   the GUI history too.
+- `policy_info`/`save_policy` expose the effective `security_policy.yaml`
+  globals; rules remain YAML-edited. `tool_catalog`, `skill_catalog`,
+  `mcp_status`, `memory_list` and `audit_tail` feed the read-only AISH
+  settings pages without duplicating aish state in QML.

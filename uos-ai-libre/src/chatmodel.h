@@ -73,11 +73,19 @@ private:
     struct Tool {
         QString id;
         QString name;
+        QString kind; // bash, file, web, agent, mcp, skill, memory, plan
         QString target;
         QString args;
         QString result;
+        QString outputPreview;
+        QString offloadPath;
         QString status; // running, done, failed
+        QString agentType;
+        QString spawnId;
+        QString source;
+        int depth = 0;
         int durationMs = 0;
+        bool ok = true;
     };
 
     struct Message {
@@ -101,6 +109,7 @@ private:
     static QString contentText(const QVariant &content);
     static QString compactValue(const QVariant &value);
     static QString toolTarget(const QString &name, const QVariantMap &args);
+    static QString toolKind(const QString &name);
     static QVector<Tool> parseToolCalls(const QVariant &calls);
     static QVariantList toolsToVariant(const QVector<Tool> &tools);
 

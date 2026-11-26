@@ -18,6 +18,9 @@ Popup {
 
     readonly property bool blocked: request.mode === "blocked" || request.allow === false
     readonly property string risk: request.risk ? request.risk : "MEDIUM"
+    readonly property var analysis: request.analysis || ({})
+    readonly property var matchedRule: analysis.matched_rule || ({})
+    readonly property var sandbox: analysis.sandbox || ({})
     readonly property color riskColor: {
         if (risk === "HIGH" || risk === "DANGER")
             return Theme.danger
@@ -107,18 +110,20 @@ Popup {
             Rectangle {
                 height: 24
                 radius: 5
-                width: toolText.implicitWidth + 16
+                width: Math.min(toolText.implicitWidth, 260) + 16
                 color: Theme.codeBg
                 border.width: 1
                 border.color: Theme.border
                 Text {
                     id: toolText
                     anchors.centerIn: parent
+                    width: Math.min(implicitWidth, 260)
                     text: root.request.tool_name ? root.request.tool_name : "工具"
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Medium
+                    elide: Text.ElideRight
                 }
             }
             Rectangle {
@@ -167,7 +172,65 @@ Popup {
         }
 
         Text {
-            visible: root.request.message !== undefined && String(root.request.message).length > 0
+            visible: root.request.cwd !== undefined && String(root.request.cwd).length > 0
+            width: parent.width - 48
+            text: "目录  " + String(root.request.cwd)
+            color: Theme.textTertiary
+            font.family: "DejaVu Sans Mono"
+            font.pixelSize: 10
+            elide: Text.ElideMiddle
+        }
+
+        Text {
+            visible: root.matchedRule.id !== undefined || root.matchedRule.name !== undefined
+            width: parent.width - 48
+            text: "aish 规则  " +
+                  (root.matchedRule.id || "") +
+                  (root.matchedRule.name ? "  ·  " + root.matchedRule.name : "")
+            color: Theme.textSecondary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSizeTiny
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+        }
+
+        Text {
+            visible: root.analysis.reasons !== undefined
+                     && root.analysis.reasons.length > 0
+            width: parent.width - 48
+            text: (root.analysis.reasons || []).join("；")
+            color: Theme.textTertiary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSizeTiny
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+        }
+
+        Text {
+            visible: root.sandbox.enabled === true
+            width: parent.width - 48
+            text: "沙箱预演  " +
+                  (root.sandbox.error
+                   ? "不可用：" + root.sandbox.error
+                   : "已完成")
+            color: root.sandbox.error ? Theme.warning : Theme.success
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSizeTiny
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+        }
+
+        Text {
+            visible: root.analysis.suggested_alternatives !== undefined
+                     && root.analysis.suggested_alternatives.length > 0
+            width: parent.width - 48
+            text: "建议  " + (root.analysis.suggested_alternatives || []).join("；")
+            color: Theme.textTertiary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSizeTiny
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+        }
+
+        Text {
+            visible: root.request.message !== undefined
+                     && String(root.request.message).length > 0
             width: parent.width - 48
             text: root.request.message !== undefined ? String(root.request.message) : ""
             color: Theme.textSecondary
@@ -182,26 +245,33 @@ Popup {
         Row {
             anchors.right: parent.right
             anchors.rightMargin: 24
-            spacing: 10
+            spacing: 8
 
             AppButton {
                 text: root.blocked ? "知道了" : "拒绝"
-                minWidth: 88
+                minWidth: root.blocked ? 88 : 76
                 onClicked: root.decide(3)
             }
 
             AppButton {
                 visible: !root.blocked
                 text: "仅本次允许"
-                minWidth: 106
+                minWidth: 96
                 variant: "primary"
                 onClicked: root.decide(0)
             }
 
             AppButton {
                 visible: !root.blocked
+                text: "让 AI 换个方式"
+                minWidth: 104
+                onClicked: root.decide(2)
+            }
+
+            AppButton {
+                visible: !root.blocked
                 text: "本会话允许"
-                minWidth: 106
+                minWidth: 96
                 variant: "primary"
                 onClicked: root.decide(1)
             }

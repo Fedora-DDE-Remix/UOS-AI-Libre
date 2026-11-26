@@ -46,7 +46,13 @@ Rules that keep the UI maintainable:
 - Presentation-only models (`ChatModel`, `MarkdownModel`) never call the agent.
 - Visual components are composable and unaware of the backend:
   `Composer`, `AssistantMessage`, `MarkdownView`, `ToolGroupCard`,
-  `ReasoningCard`, `ApprovalDialog`, `PreviewPanel`, etc.
+  `ReasoningCard`, `ApprovalDialog`, `AskUserDialog`, `PreviewPanel`, etc.
+- The composer shows the active aish session cwd and effective security
+  policy, not a GUI-owned workspace or permission mode. History rows show the
+  same session cwd.
+- Settings pages are views over aish state: security policy, registered tool
+  catalog, installed skills, MCP manager status, long-term memory and audit
+  events. Destructive/advanced configuration stays in aish's YAML files or CLI.
 - QML is grouped by domain. `controls/` holds reusable base controls such as
   `AppButton` and `IconButton`; each page directory owns its skeleton and
   page-private pieces. Variants are expressed as properties (for example
@@ -113,6 +119,9 @@ transcript table.
 - Real-provider tests live outside the repository in
   `../../AI后端测试/`. `app_smoke.cpp` drives `AppController` end-to-end and
   verifies streaming, session list/resume/rename/delete and config saving.
+  `frontend_smoke.cpp` verifies the full aish tool pool, session cwd resume,
+  CLI snapshot fallback, shell/write/Agent turns and audit rows;
+  `policy_smoke.cpp` verifies policy read/save and the settings data APIs.
 - `qmllint` from Qt 6.8 checks every QML file. Remaining warnings concern the
   dynamic `app` context object and `Overlay.overlay` metadata, not runtime
   errors.

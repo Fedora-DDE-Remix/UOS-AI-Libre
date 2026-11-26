@@ -1,10 +1,13 @@
 #include "appcontroller.h"
 
 #include <QCoreApplication>
+#include <QDesktopServices>
+#include <QFileInfo>
 #include <QFont>
 #include <QGuiApplication>
-#include <QStyleHints>
 #include <QSettings>
+#include <QStyleHints>
+#include <QUrl>
 
 AppController::AppController(QObject *parent)
     : QObject(parent), m_chat(this) {
@@ -20,6 +23,11 @@ AppController::AppController(QObject *parent)
     m_approval_timeout.setInterval(290000);
     connect(&m_approval_timeout, &QTimer::timeout, this,
             [this]() { resolveApproval(3); });
+    m_interaction_timeout.setSingleShot(true);
+    m_interaction_timeout.setInterval(290000);
+    connect(&m_interaction_timeout, &QTimer::timeout, this, [this]() {
+        resolveInteraction({{QStringLiteral("cancelled"), true}});
+    });
 }
 
 void AppController::wire() {
@@ -45,6 +53,8 @@ void AppController::wire() {
             &AppController::toastRequested);
     connect(&m_bridge, &AishBridge::approvalRequested, this,
             &AppController::enqueueApproval);
+    connect(&m_bridge, &AishBridge::interactionRequested, this,
+            &AppController::enqueueInteraction);
     connect(&m_bridge, &AishBridge::turnStarted, this,
             &AppController::onTurnStarted);
     connect(&m_bridge, &AishBridge::contentDelta, this,
@@ -114,6 +124,23 @@ int AppController::pendingApprovalCount() const {
                ? 0
                : 1 + int(m_approval_queue.size());
 }
+QVariantMap AppController::pendingInteraction() const {
+    return m_pending_interaction;
+}
+
+int AppController::pendingInteractionCount() const {
+    return m_pending_interaction.isEmpty()
+               ? 0
+               : 1 + int(m_interaction_queue.size());
+}
+
+QVariantMap AppController::policyInfo() const { return m_policy_info; }
+QVariantList AppController::toolCatalog() const { return m_tool_catalog; }
+QVariantMap AppController::skillCatalog() const { return m_skill_catalog; }
+QVariantMap AppController::mcpStatus() const { return m_mcp_status; }
+QVariantList AppController::memoryEntries() const { return m_memory_entries; }
+QVariantList AppController::auditEvents() const { return m_audit_events; }
+
 QVariantList AppController::sessions() const { return m_bridge.sessions(); }
 QString AppController::workspace() const { return m_bridge.workspace(); }
 QString AppController::defaultWorkspace() const {
@@ -166,6 +193,14 @@ void AppController::initialize() {
     recomputeTitle();
     if (!m_bridge.lastError().isEmpty() && m_bridge.lastError() != before)
         emit errorOccurred(m_bridge.lastError());
+    if (m_bridge.ready()) {
+        refreshPolicy();
+        refreshToolCatalog();
+        refreshSkillCatalog();
+        refreshMcpStatus();
+        refreshMemory();
+        refreshAudit();
+    }
 }
 
 bool AppController::sendMessage(const QString &text,
@@ -247,6 +282,116 @@ void AppController::resolveApproval(int decision) {
     else
         m_approval_timeout.start();
     emit pendingApprovalChanged();
+}
+
+void AppController::resolveInteraction(const QVariantMap &response) {
+    if (m_pending_interaction.isEmpty())
+        return;
+    const QString request_id =
+        m_pending_interaction.value(QStringLiteral("request_id")).toString();
+    m_pending_interaction.clear();
+    if (!request_id.isEmpty())
+        m_bridge.respondInteraction(request_id, response);
+    if (!m_interaction_queue.isEmpty())
+        m_pending_interaction = m_interaction_queue.takeFirst();
+    if (m_pending_interaction.isEmpty())
+        m_interaction_timeout.stop();
+    else
+        m_interaction_timeout.start();
+    emit pendingInteractionChanged();
+}
+
+void AppController::refreshPolicy() {
+    const QVariantMap info = m_bridge.policyInfo();
+    if (info.isEmpty())
+        return;
+    m_policy_info = info;
+    emit policyInfoChanged();
+}
+
+QVariantMap AppController::savePolicy(const QVariantMap &fields) {
+    const QVariantMap result = m_bridge.savePolicy(fields);
+    if (result.value(QStringLiteral("ok"), false).toBool()) {
+        m_policy_info = result;
+        emit policyInfoChanged();
+        emit toastRequested(QStringLiteral("aish 安全策略已保存"));
+    } else {
+        const QString error = result.value(QStringLiteral("error")).toString();
+        emit toastRequested(error.isEmpty() ? QStringLiteral("安全策略保存失败")
+                                            : error);
+    }
+    return result;
+}
+
+void AppController::refreshToolCatalog() {
+    const QVariantList tools = m_bridge.toolCatalog();
+    if (tools == m_tool_catalog)
+        return;
+    m_tool_catalog = tools;
+    emit toolCatalogChanged();
+}
+
+void AppController::refreshSkillCatalog() {
+    const QVariantMap catalog = m_bridge.skillCatalog();
+    if (catalog.isEmpty())
+        return;
+    m_skill_catalog = catalog;
+    emit skillCatalogChanged();
+}
+
+void AppController::trustSkill(const QString &name) {
+    const QVariantMap result = m_bridge.trustSkill(name);
+    if (result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("message")).toString());
+        refreshSkillCatalog();
+    } else {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+    }
+}
+
+void AppController::refreshMcpStatus() {
+    const QVariantMap status = m_bridge.mcpStatus();
+    if (status.isEmpty())
+        return;
+    m_mcp_status = status;
+    emit mcpStatusChanged();
+}
+
+void AppController::reloadMcp() {
+    const QVariantMap status = m_bridge.reloadMcp();
+    if (status.isEmpty())
+        return;
+    m_mcp_status = status;
+    emit mcpStatusChanged();
+    emit toastRequested(QStringLiteral("MCP 连接已重载"));
+}
+
+void AppController::refreshMemory() {
+    const QVariantList entries = m_bridge.memoryList();
+    if (entries == m_memory_entries)
+        return;
+    m_memory_entries = entries;
+    emit memoryEntriesChanged();
+}
+
+void AppController::refreshAudit() {
+    const QVariantList events = m_bridge.auditTail();
+    if (events == m_audit_events)
+        return;
+    m_audit_events = events;
+    emit auditEventsChanged();
+}
+
+void AppController::openPath(const QString &path) {
+    if (path.isEmpty())
+        return;
+    const QFileInfo info(path);
+    if (!info.exists()) {
+        emit toastRequested(QStringLiteral("路径不存在：%1").arg(path));
+        return;
+    }
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(info.absoluteFilePath())))
+        emit toastRequested(QStringLiteral("无法打开路径"));
 }
 
 void AppController::setWorkspace(const QString &path) {
@@ -385,6 +530,18 @@ void AppController::enqueueApproval(const QVariantMap &request) {
         m_approval_queue.append(request);
     }
     emit pendingApprovalChanged();
+}
+
+void AppController::enqueueInteraction(const QVariantMap &request) {
+    if (request.value(QStringLiteral("request_id")).toString().isEmpty())
+        return;
+    if (m_pending_interaction.isEmpty()) {
+        m_pending_interaction = request;
+        m_interaction_timeout.start();
+    } else {
+        m_interaction_queue.append(request);
+    }
+    emit pendingInteractionChanged();
 }
 
 void AppController::onSessionCleared() {

@@ -55,6 +55,17 @@ public:
                                  const QString &model);
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void approve(const QString &requestId, int decision);
+    Q_INVOKABLE bool respondInteraction(const QString &requestId,
+                                        const QVariantMap &response);
+    Q_INVOKABLE QVariantMap policyInfo();
+    Q_INVOKABLE QVariantMap savePolicy(const QVariantMap &fields);
+    Q_INVOKABLE QVariantList toolCatalog();
+    Q_INVOKABLE QVariantMap skillCatalog();
+    Q_INVOKABLE QVariantMap trustSkill(const QString &name);
+    Q_INVOKABLE QVariantMap mcpStatus();
+    Q_INVOKABLE QVariantMap reloadMcp();
+    Q_INVOKABLE QVariantList memoryList();
+    Q_INVOKABLE QVariantList auditTail();
     Q_INVOKABLE void refreshSessions();
     Q_INVOKABLE void loadSession(const QString &sessionId);
     Q_INVOKABLE void deleteSession(const QString &sessionId);
@@ -95,6 +106,7 @@ signals:
     void turnError(const QString &message);
     void turnCancelled();
     void approvalRequested(const QVariantMap &request);
+    void interactionRequested(const QVariantMap &request);
 
     void sessionLoaded(const QVariantList &messages, const QString &model);
     void sessionCleared();

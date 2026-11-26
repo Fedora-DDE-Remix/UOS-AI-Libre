@@ -311,6 +311,149 @@ void AishBridge::approve(const QString &requestId, int decision) {
         emit toastRequested(QStringLiteral("审批请求已失效"));
 }
 
+bool AishBridge::respondInteraction(const QString &requestId,
+                                    const QVariantMap &response) {
+    if (!m_service || requestId.isEmpty())
+        return false;
+    const QByteArray json =
+        QJsonDocument(QJsonObject::fromVariantMap(response))
+            .toJson(QJsonDocument::Compact);
+    return ::respond_interaction(**m_service, requestId.toStdString(),
+                                 json.toStdString());
+}
+
+QVariantMap AishBridge::policyInfo() {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString raw = toQString(policy_info(**m_service));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), error}};
+    }
+    return object.toVariantMap();
+}
+
+QVariantMap AishBridge::savePolicy(const QVariantMap &fields) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    const QByteArray json =
+        QJsonDocument(QJsonObject::fromVariantMap(fields))
+            .toJson(QJsonDocument::Compact);
+    QString raw = toQString(save_policy(**m_service, json.toStdString()));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), error}};
+    }
+    return object.toVariantMap();
+}
+
+QVariantList AishBridge::toolCatalog() {
+    if (!ensureService())
+        return {};
+    QString raw = toQString(tool_catalog(**m_service));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {};
+    }
+    return object.value(QStringLiteral("tools")).toArray().toVariantList();
+}
+
+QVariantMap AishBridge::skillCatalog() {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString raw = toQString(skill_catalog(**m_service));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), error}};
+    }
+    return object.toVariantMap();
+}
+
+QVariantMap AishBridge::trustSkill(const QString &name) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString raw = toQString(trust_skill(**m_service, name.toStdString()));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), error}};
+    }
+    return object.toVariantMap();
+}
+
+QVariantMap AishBridge::mcpStatus() {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString raw = toQString(mcp_status(**m_service));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), error}};
+    }
+    return object.toVariantMap();
+}
+
+QVariantMap AishBridge::reloadMcp() {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString raw = toQString(mcp_reload(**m_service));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), error}};
+    }
+    return object.toVariantMap();
+}
+
+QVariantList AishBridge::memoryList() {
+    if (!ensureService())
+        return {};
+    QString raw = toQString(memory_list(**m_service, 200));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {};
+    }
+    return object.value(QStringLiteral("entries")).toArray().toVariantList();
+}
+
+QVariantList AishBridge::auditTail() {
+    if (!ensureService())
+        return {};
+    QString raw = toQString(audit_tail(**m_service, 200));
+    QJsonObject object;
+    QString error;
+    if (!parseResponse(raw, &object, &error)) {
+        setLastError(error);
+        return {};
+    }
+    return object.value(QStringLiteral("events")).toArray().toVariantList();
+}
+
 void AishBridge::refreshSessions() {
     if (!m_service)
         return;
@@ -711,17 +854,7 @@ void AishBridge::handleEvent(const QJsonObject &event) {
     } else if (kind == QStringLiteral("approval_request")) {
         emit approvalRequested(data);
     } else if (kind == QStringLiteral("interaction_required")) {
-        // The aish runtime exposes ask_user as an interaction event. A QML
-        // question card is deliberately out of scope for this pass; cancel it
-        // immediately instead of leaving the tool blocked for five minutes.
-        const QString request_id =
-            data.value(QStringLiteral("request_id")).toString();
-        if (!request_id.isEmpty() && m_service) {
-            ::respond_interaction(**m_service, request_id.toStdString(),
-                                  R"({"cancelled":true})");
-        }
-        emit toastRequested(
-            QStringLiteral("AI 需要补充信息；当前版本请直接在对话中输入"));
+        emit interactionRequested(data);
     } else if (kind == QStringLiteral("turn_done")) {
         setGenerating(false);
         emit turnDone(data);

@@ -211,6 +211,7 @@ Rectangle {
         delegate: HistoryRow {
             width: historyList.width
             title: modelData.summary
+            cwd: modelData.cwd || ""
             selected: sidebar.chatActive
                       && modelData.session_id === app.sessionId
             renaming: sidebar.renamingSessionId === modelData.session_id

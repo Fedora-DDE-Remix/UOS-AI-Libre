@@ -14,7 +14,7 @@ Item {
     property int rightRadius: Theme.windowRadius
 
     signal toastRequested(string message)
-    signal openSettings()
+    signal openSettings(int pageIndex)
 
     readonly property var chatModel: app.chat
     readonly property bool hasConversation: chatModel.count > 0
@@ -24,11 +24,11 @@ Item {
     }
     readonly property string workspaceLabel: {
         const current = app.workspace
-        if (!current || current === app.defaultWorkspace)
-            return "默认工作空间"
+        if (!current)
+            return "当前目录"
         const parts = current.split("/")
         return parts.length > 0 && parts[parts.length - 1].length > 0
-                ? parts[parts.length - 1] : "默认工作空间"
+                ? parts[parts.length - 1] : current
     }
     readonly property string chatTitle: app.sessionTitle
 
@@ -266,7 +266,7 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: page.openSettings()
+                                onClicked: page.openSettings(0)
                             }
                         }
                     }
@@ -288,7 +288,10 @@ Item {
                         onTextChanged: page.draft = welcomeComposer.text
                         onSendRequested: page.sendFrom(welcomeComposer)
                         onToastRequested: (message) => page.toastRequested(message)
-                        onSettingsRequested: page.openSettings()
+                        onSettingsRequested: page.openSettings(0)
+                        onSecurityRequested: page.openSettings(1)
+                        onSkillsRequested: page.openSettings(3)
+                        onMcpRequested: page.openSettings(4)
                     }
 
                     Item { width: 1; height: 18 }
@@ -554,7 +557,8 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: Math.min(940, parent.width - 96)
                 compact: true
-                showWorkspace: false
+                showWorkspace: true
+                workspaceLabel: page.workspaceLabel
                 modelName: page.activeModel
                 generating: app.generating
                 text: page.draft
@@ -562,7 +566,10 @@ Item {
                 onSendRequested: page.sendFrom(chatComposer)
                 onStopRequested: app.stop()
                 onToastRequested: (message) => page.toastRequested(message)
-                onSettingsRequested: page.openSettings()
+                onSettingsRequested: page.openSettings(0)
+                onSecurityRequested: page.openSettings(1)
+                onSkillsRequested: page.openSettings(3)
+                onMcpRequested: page.openSettings(4)
             }
         }
     }

@@ -11,14 +11,16 @@ Rectangle {
     property bool showWorkspace: false
     property bool generating: false
     property string modelName: ""
-    property string workspaceLabel: "默认工作空间"
-    property bool webSearch: false
+    property string workspaceLabel: "当前目录"
     property string placeholder: "请输入您的问题"
     property bool canSend: text.trim().length > 0 || attachments.length > 0
 
     signal sendRequested()
     signal stopRequested()
     signal settingsRequested()
+    signal securityRequested()
+    signal skillsRequested()
+    signal mcpRequested()
     signal toastRequested(string message)
 
     function focusInput() {
@@ -213,55 +215,23 @@ Rectangle {
                 }
 
                 Item {
-                    width: 30
-                    height: 30
-                    HoverHandler { id: globeHover }
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: Theme.radiusSmall
-                        color: root.webSearch
-                               ? Theme.accentSoft
-                               : (globeHover.hovered ? Theme.hover : "transparent")
-                    }
-                    AppIcon {
-                        anchors.centerIn: parent
-                        name: "globe"
-                        size: 16
-                        color: root.webSearch ? Theme.accent : Theme.icon
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.webSearch = !root.webSearch
-                            root.toastRequested(root.webSearch
-                                ? "已开启联网检索，模型可按需调用搜索工具"
-                                : "已关闭联网检索")
-                        }
-                    }
-                }
-
-                Item {
-                    // Match the 30px icon targets so the permission pill sits on
-                    // the same visual baseline as the plus/globe buttons.
-                    visible: root.compact
-                    width: visible ? permissionPill.width : 0
+                    width: policyPill.width
                     height: 30
 
                     Rectangle {
-                        id: permissionPill
+                        id: policyPill
                         anchors.verticalCenter: parent.verticalCenter
-                        width: permissionRow.width + 18
+                        width: policyRow.width + 18
                         height: 26
                         radius: Theme.radiusSmall
-                        color: permissionHover.hovered ? Theme.hover : "transparent"
+                        color: policyHover.hovered ? Theme.hover : "transparent"
                         border.width: 1
                         border.color: Theme.border
 
-                        HoverHandler { id: permissionHover }
+                        HoverHandler { id: policyHover }
 
                         Row {
-                            id: permissionRow
+                            id: policyRow
                             anchors.centerIn: parent
                             spacing: 5
                             AppIcon {
@@ -272,23 +242,17 @@ Rectangle {
                             }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "默认权限"
+                                text: "aish · " + String(app.policyInfo.default_risk_level || "low").toUpperCase()
                                 color: Theme.textSecondary
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSizeSmall
-                            }
-                            AppIcon {
-                                anchors.verticalCenter: parent.verticalCenter
-                                name: "chevron-down"
-                                size: 10
-                                color: Theme.iconSecondary
                             }
                         }
 
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.openPermissionMenu()
+                            onClicked: root.securityRequested()
                         }
                     }
                 }
@@ -301,8 +265,8 @@ Rectangle {
                 spacing: 3
 
                 Item {
-                    // The send button is 32px; center the shorter model and mic
-                    // controls instead of letting Row top-align them.
+                    // The send button is 32px; center the shorter model control
+                    // instead of letting Row top-align it.
                     width: modelButton.width
                     height: 32
 
@@ -348,30 +312,6 @@ Rectangle {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: root.openModelMenu()
                         }
-                    }
-                }
-
-                Item {
-                    width: 30
-                    height: 32
-                    HoverHandler { id: micHover }
-                    Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 30
-                        height: 30
-                        radius: Theme.radiusSmall
-                        color: micHover.hovered ? Theme.hover : "transparent"
-                    }
-                    AppIcon {
-                        anchors.centerIn: parent
-                        name: "mic"
-                        size: 16
-                        color: Theme.iconSecondary
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.toastRequested("语音输入暂未接入")
                     }
                 }
 
@@ -444,10 +384,12 @@ Rectangle {
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, root.width - 70)
                     text: root.workspaceLabel
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeSmall
+                    elide: Text.ElideMiddle
                 }
                 AppIcon {
                     anchors.verticalCenter: parent.verticalCenter
@@ -535,13 +477,6 @@ Rectangle {
         modelMenu.y = Math.max(8, point.y - modelMenu.height - 6)
     }
 
-    function openPermissionMenu() {
-        const point = permissionRow.mapToItem(Overlay.overlay, 0, 0)
-        permissionMenu.open()
-        permissionMenu.x = Math.max(8, point.x)
-        permissionMenu.y = Math.max(8, point.y - permissionMenu.height - 6)
-    }
-
     function openWorkspaceMenu() {
         const point = workspaceRow.mapToItem(Overlay.overlay, 0, 0)
         workspaceMenu.open()
@@ -585,7 +520,7 @@ Rectangle {
                 onHovered: root.closeAttachSubmenuForHover()
                 onClicked: {
                     plusMenu.close()
-                    root.toastRequested("aish 技能会按任务自动加载")
+                    root.skillsRequested()
                 }
             }
             MenuRow {
@@ -595,7 +530,7 @@ Rectangle {
                 onHovered: root.closeAttachSubmenuForHover()
                 onClicked: {
                     plusMenu.close()
-                    root.toastRequested("MCP 连接器由 aish 配置统一管理")
+                    root.mcpRequested()
                 }
             }
         }
@@ -686,38 +621,25 @@ Rectangle {
     }
 
     MenuPopup {
-        id: permissionMenu
-        parent: Overlay.overlay
-        menuWidth: 160
-        items: [
-            { label: "默认权限", icon: "shield", checked: true },
-            { label: "仅读取", icon: "file" },
-            { label: "完全访问", icon: "lock" }
-        ]
-        onItemClicked: (index) => {
-            permissionMenu.close()
-            root.toastRequested("工具权限由 aish 安全策略与审批确认控制")
-        }
-    }
-
-    MenuPopup {
         id: workspaceMenu
         parent: Overlay.overlay
-        menuWidth: 190
+        menuWidth: 210
         items: [
-            { label: root.workspaceLabel, icon: "folder", checked: true },
+            { label: app.workspace && app.workspace.length > 0 ? app.workspace : root.workspaceLabel,
+              icon: "folder", checked: true },
             { separator: true },
-            { label: "打开本地文件夹", icon: "workspace" },
-            { label: "新建工作空间", icon: "plus" }
+            { label: "选择目录…", icon: "folder" },
+            { label: "打开当前目录", icon: "workspace" },
+            { label: "复制目录路径", icon: "copy" }
         ]
         onItemClicked: (index) => {
             workspaceMenu.close()
-            if (index === 0)
-                app.resetWorkspace()
-            else if (index === 2)
+            if (index === 2)
                 folderDialog.open()
             else if (index === 3)
-                root.toastRequested("新建工作空间暂未接入")
+                app.openPath(app.workspace)
+            else if (index === 4)
+                app.copyText(app.workspace)
         }
     }
 

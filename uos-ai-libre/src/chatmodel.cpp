@@ -269,6 +269,28 @@ QString ChatModel::toolTarget(const QString &name, const QVariantMap &args) {
     return bounded(compact, 240);
 }
 
+QString ChatModel::toolKind(const QString &name) {
+    if (name == QStringLiteral("bash"))
+        return QStringLiteral("bash");
+    if (name == QStringLiteral("read_file") || name == QStringLiteral("write_file")
+        || name == QStringLiteral("edit_file") || name == QStringLiteral("undo_edit"))
+        return QStringLiteral("file");
+    if (name == QStringLiteral("WebFetch") || name == QStringLiteral("WebSearch"))
+        return QStringLiteral("web");
+    if (name == QStringLiteral("Agent"))
+        return QStringLiteral("agent");
+    if (name.startsWith(QStringLiteral("mcp__")))
+        return QStringLiteral("mcp");
+    if (name == QStringLiteral("skill") || name.startsWith(QStringLiteral("skill_")))
+        return QStringLiteral("skill");
+    if (name == QStringLiteral("memory"))
+        return QStringLiteral("memory");
+    if (name == QStringLiteral("enter_plan_mode")
+        || name == QStringLiteral("exit_plan_mode"))
+        return QStringLiteral("plan");
+    return QStringLiteral("tool");
+}
+
 void ChatModel::addToolStart(const QVariantMap &data) {
     if (m_streaming_index < 0)
         beginAssistant({});
@@ -279,6 +301,11 @@ void ChatModel::addToolStart(const QVariantMap &data) {
     tool.name = data.value(QStringLiteral("tool_name")).toString();
     if (tool.name.isEmpty())
         tool.name = QStringLiteral("工具");
+    tool.kind = toolKind(tool.name);
+    tool.agentType = data.value(QStringLiteral("agent_type")).toString();
+    tool.spawnId = data.value(QStringLiteral("spawn_id")).toString();
+    tool.source = data.value(QStringLiteral("source")).toString();
+    tool.depth = data.value(QStringLiteral("depth")).toInt();
     const QVariantMap args = data.value(QStringLiteral("tool_args")).toMap();
     tool.target = toolTarget(tool.name, args);
     tool.args = bounded(compactValue(args), kMaxToolPreviewChars);
@@ -306,8 +333,13 @@ void ChatModel::addToolEnd(const QVariantMap &data) {
     const bool ok = data.value(QStringLiteral("ok"), true).toBool();
     const int duration = data.value(QStringLiteral("duration_ms")).toInt();
     const QVariantMap meta = data.value(QStringLiteral("meta")).toMap();
+    const QString outputFull = data.value(QStringLiteral("output_full")).toString();
+    const QString outputPreview =
+        data.value(QStringLiteral("output_preview")).toString();
     QString result;
-    if (meta.contains(QStringLiteral("result")))
+    if (!outputFull.isEmpty())
+        result = outputFull;
+    else if (meta.contains(QStringLiteral("result")))
         result = meta.value(QStringLiteral("result")).toString();
     else if (meta.contains(QStringLiteral("error")))
         result = meta.value(QStringLiteral("error")).toString();
@@ -315,9 +347,16 @@ void ChatModel::addToolEnd(const QVariantMap &data) {
         result = QStringLiteral("HTTP %1 %2")
                      .arg(meta.value(QStringLiteral("code")).toInt())
                      .arg(meta.value(QStringLiteral("codeText")).toString());
+    else if (!outputPreview.isEmpty())
+        result = outputPreview;
     if (result.isEmpty())
         result = data.value(QStringLiteral("error")).toString();
     result = bounded(result.trimmed(), kMaxToolResultChars);
+    QString offloadPath;
+    const QVariantMap offload = meta.value(QStringLiteral("offload")).toMap();
+    offloadPath = offload.value(QStringLiteral("stdout_clean_path")).toString();
+    if (offloadPath.isEmpty())
+        offloadPath = offload.value(QStringLiteral("stdout_path")).toString();
 
     const QString status = ok ? QStringLiteral("done") : QStringLiteral("failed");
     int row = m_streaming_index;
@@ -336,7 +375,14 @@ void ChatModel::addToolEnd(const QVariantMap &data) {
         if (!id.isEmpty() && tool.id == id) {
             tool.status = status;
             tool.result = result;
+            tool.outputPreview = outputPreview;
+            tool.offloadPath = offloadPath;
             tool.durationMs = duration;
+            tool.ok = ok;
+            tool.agentType = data.value(QStringLiteral("agent_type")).toString();
+            tool.spawnId = data.value(QStringLiteral("spawn_id")).toString();
+            tool.source = data.value(QStringLiteral("source")).toString();
+            tool.depth = data.value(QStringLiteral("depth")).toInt();
             found = true;
             break;
         }
@@ -347,12 +393,20 @@ void ChatModel::addToolEnd(const QVariantMap &data) {
         tool.name = data.value(QStringLiteral("tool_name")).toString();
         if (tool.name.isEmpty())
             tool.name = QStringLiteral("工具");
+        tool.kind = toolKind(tool.name);
         const QVariantMap args = data.value(QStringLiteral("tool_args")).toMap();
         tool.target = toolTarget(tool.name, args);
         tool.args = bounded(compactValue(args), kMaxToolPreviewChars);
         tool.status = status;
         tool.result = result;
+        tool.outputPreview = outputPreview;
+        tool.offloadPath = offloadPath;
         tool.durationMs = duration;
+        tool.ok = ok;
+        tool.agentType = data.value(QStringLiteral("agent_type")).toString();
+        tool.spawnId = data.value(QStringLiteral("spawn_id")).toString();
+        tool.source = data.value(QStringLiteral("source")).toString();
+        tool.depth = data.value(QStringLiteral("depth")).toInt();
         message.tools.append(tool);
     }
     emitRowChanged(row, {ToolsRole});
@@ -443,10 +497,18 @@ QVariantList ChatModel::toolsToVariant(const QVector<Tool> &tools) {
         QVariantMap item;
         item.insert(QStringLiteral("id"), tool.id);
         item.insert(QStringLiteral("name"), tool.name);
+        item.insert(QStringLiteral("kind"), tool.kind);
         item.insert(QStringLiteral("target"), tool.target);
         item.insert(QStringLiteral("args"), tool.args);
         item.insert(QStringLiteral("result"), tool.result);
+        item.insert(QStringLiteral("outputPreview"), tool.outputPreview);
+        item.insert(QStringLiteral("offloadPath"), tool.offloadPath);
         item.insert(QStringLiteral("status"), tool.status);
+        item.insert(QStringLiteral("ok"), tool.ok);
+        item.insert(QStringLiteral("agentType"), tool.agentType);
+        item.insert(QStringLiteral("spawnId"), tool.spawnId);
+        item.insert(QStringLiteral("source"), tool.source);
+        item.insert(QStringLiteral("depth"), tool.depth);
         item.insert(QStringLiteral("durationMs"), tool.durationMs);
         result.append(item);
     }
@@ -482,9 +544,17 @@ QVector<ChatModel::Tool> ChatModel::parseToolCalls(const QVariant &calls) {
         Tool tool;
         tool.id = map.value(QStringLiteral("id")).toString();
         tool.name = map.value(QStringLiteral("name")).toString();
+        // ChatMessage::Serialize emits the OpenAI shape: { id, type,
+        // function: { name, arguments } }. Live tool events use flat fields.
+        const QVariantMap function = map.value(QStringLiteral("function")).toMap();
+        if (tool.name.isEmpty())
+            tool.name = function.value(QStringLiteral("name")).toString();
         if (tool.name.isEmpty())
             tool.name = QStringLiteral("工具");
+        tool.kind = toolKind(tool.name);
         QVariant arguments = map.value(QStringLiteral("arguments"));
+        if (arguments.isNull() || !arguments.isValid())
+            arguments = function.value(QStringLiteral("arguments"));
         QVariantMap args;
         if (arguments.metaType().id() == QMetaType::QString) {
             const QJsonDocument doc =
@@ -527,7 +597,7 @@ void ChatModel::loadTranscript(const QVariantList &messages) {
         if (role == QStringLiteral("tool")) {
             const QString id = map.value(QStringLiteral("tool_call_id")).toString();
             const QString result =
-                bounded(contentText(map.value(QStringLiteral("content"))).simplified(),
+                bounded(contentText(map.value(QStringLiteral("content"))).trimmed(),
                         kMaxToolResultChars);
             bool updated = false;
             for (Tool &tool : pending_tools) {

@@ -35,6 +35,14 @@ class AppController final : public QObject {
     Q_PROPERTY(QVariantMap config READ config NOTIFY configChanged)
     Q_PROPERTY(QVariantMap pendingApproval READ pendingApproval NOTIFY pendingApprovalChanged)
     Q_PROPERTY(int pendingApprovalCount READ pendingApprovalCount NOTIFY pendingApprovalChanged)
+    Q_PROPERTY(QVariantMap pendingInteraction READ pendingInteraction NOTIFY pendingInteractionChanged)
+    Q_PROPERTY(int pendingInteractionCount READ pendingInteractionCount NOTIFY pendingInteractionChanged)
+    Q_PROPERTY(QVariantMap policyInfo READ policyInfo NOTIFY policyInfoChanged)
+    Q_PROPERTY(QVariantList toolCatalog READ toolCatalog NOTIFY toolCatalogChanged)
+    Q_PROPERTY(QVariantMap skillCatalog READ skillCatalog NOTIFY skillCatalogChanged)
+    Q_PROPERTY(QVariantMap mcpStatus READ mcpStatus NOTIFY mcpStatusChanged)
+    Q_PROPERTY(QVariantList memoryEntries READ memoryEntries NOTIFY memoryEntriesChanged)
+    Q_PROPERTY(QVariantList auditEvents READ auditEvents NOTIFY auditEventsChanged)
     Q_PROPERTY(QVariantList sessions READ sessions NOTIFY sessionsChanged)
     Q_PROPERTY(QString workspace READ workspace NOTIFY workspaceChanged)
     Q_PROPERTY(QString defaultWorkspace READ defaultWorkspace CONSTANT)
@@ -62,6 +70,14 @@ public:
     QVariantMap config() const;
     QVariantMap pendingApproval() const;
     int pendingApprovalCount() const;
+    QVariantMap pendingInteraction() const;
+    int pendingInteractionCount() const;
+    QVariantMap policyInfo() const;
+    QVariantList toolCatalog() const;
+    QVariantMap skillCatalog() const;
+    QVariantMap mcpStatus() const;
+    QVariantList memoryEntries() const;
+    QVariantList auditEvents() const;
     QVariantList sessions() const;
     QString workspace() const;
     QString defaultWorkspace() const;
@@ -82,6 +98,17 @@ public:
                                      const QString &apiBase,
                                      const QString &apiKey);
     Q_INVOKABLE void resolveApproval(int decision);
+    Q_INVOKABLE void resolveInteraction(const QVariantMap &response);
+    Q_INVOKABLE void refreshPolicy();
+    Q_INVOKABLE QVariantMap savePolicy(const QVariantMap &fields);
+    Q_INVOKABLE void refreshToolCatalog();
+    Q_INVOKABLE void refreshSkillCatalog();
+    Q_INVOKABLE void trustSkill(const QString &name);
+    Q_INVOKABLE void refreshMcpStatus();
+    Q_INVOKABLE void reloadMcp();
+    Q_INVOKABLE void refreshMemory();
+    Q_INVOKABLE void refreshAudit();
+    Q_INVOKABLE void openPath(const QString &path);
     Q_INVOKABLE void setWorkspace(const QString &path);
     Q_INVOKABLE void resetWorkspace();
     Q_INVOKABLE void openConfigFile();
@@ -109,6 +136,13 @@ signals:
     void workspaceChanged();
     void toastRequested(const QString &message);
     void pendingApprovalChanged();
+    void pendingInteractionChanged();
+    void policyInfoChanged();
+    void toolCatalogChanged();
+    void skillCatalogChanged();
+    void mcpStatusChanged();
+    void memoryEntriesChanged();
+    void auditEventsChanged();
     void sessionLoaded();
     void sessionCleared();
     void errorOccurred(const QString &message);
@@ -130,6 +164,7 @@ private:
     void onSessionLoaded(const QVariantList &messages, const QString &model);
     void onSessionCleared();
     void enqueueApproval(const QVariantMap &request);
+    void enqueueInteraction(const QVariantMap &request);
     void onConfigChanged();
     void onSessionsChanged();
 
@@ -141,6 +176,15 @@ private:
     QVariantMap m_pending_approval;
     QList<QVariantMap> m_approval_queue;
     QTimer m_approval_timeout;
+    QVariantMap m_pending_interaction;
+    QList<QVariantMap> m_interaction_queue;
+    QTimer m_interaction_timeout;
+    QVariantMap m_policy_info;
+    QVariantList m_tool_catalog;
+    QVariantMap m_skill_catalog;
+    QVariantMap m_mcp_status;
+    QVariantList m_memory_entries;
+    QVariantList m_audit_events;
     int m_theme_mode = 2;
     bool m_saving_session = false;
     bool m_assistant_open = false;

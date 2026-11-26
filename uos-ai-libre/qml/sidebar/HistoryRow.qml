@@ -4,6 +4,7 @@ import UosAiLibre
 Rectangle {
     id: root
     property string title
+    property string cwd: ""
     property bool selected: false
     property bool renaming: false
 
@@ -14,7 +15,7 @@ Rectangle {
     signal renameCancelled()
 
     width: parent ? parent.width : 0
-    height: 30
+    height: 38
     radius: Theme.radiusSmall
     color: rowMouse.pressed
            ? Theme.sidebarPressed
@@ -34,16 +35,30 @@ Rectangle {
 
     Text {
         x: 12
+        y: 3
         width: Math.max(0, parent.width - 12
                            - (root.actionsVisible ? 42 : 14))
-        anchors.verticalCenter: parent.verticalCenter
         visible: !root.renaming
         text: root.title
         color: Theme.textPrimary
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeBase
         elide: Text.ElideRight
+        height: 18
         verticalAlignment: Text.AlignVCenter
+    }
+
+    Text {
+        x: 12
+        y: 20
+        width: Math.max(0, parent.width - 12
+                           - (root.actionsVisible ? 42 : 14))
+        visible: !root.renaming && root.cwd.length > 0
+        text: root.cwd
+        color: Theme.textTertiary
+        font.family: Theme.fontFamily
+        font.pixelSize: 10
+        elide: Text.ElideMiddle
     }
 
     // Keep the row mouse area below the action button so the button receives
