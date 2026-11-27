@@ -60,8 +60,9 @@ Rules that keep the UI maintainable:
   and registry file settings remain aish-native.
 - The model page is provider-centric: providers come from aish's primary
   endpoint and `api_accounts`. Adding a provider offers aish's built-in
-  presets (OpenAI, Anthropic, DeepSeek, OpenRouter, Gemini, xAI, Moonshot,
-  MiniMax, Qwen, Mistral, Together, Ollama, ...), which only need an API key,
+  presets (OpenAI, Anthropic, OpenCode Go, DeepSeek, OpenRouter, Gemini, xAI,
+  Moonshot, MiniMax, Qwen, Mistral, Together, Ollama, ...), which only need an
+  API key,
   plus a separate OpenAI-Compatible flow for a custom base URL and live model
   catalogue. Anthropic built-in uses `api.anthropic.com` and aish's native
   Messages path; custom Anthropic endpoints remain unsupported because aish
@@ -70,7 +71,9 @@ Rules that keep the UI maintainable:
   on the left and provider on the right and a search box above the list. The
   provider dialog caches the last fetched catalogue per endpoint, so editing a
   provider shows every model from that fetch with the enabled ones checked;
-  long catalogues scroll inside the dialog.
+  long catalogues scroll inside the dialog. OpenCode Go uses aish's
+  `x-opencode-session` header injection and chat-only model discovery; the
+  session id is derived from the persisted aish session UUID.
 - aish-llm's upstream 20-round tool-call window is controlled by the
   `工具循环上限` field on the security page: `0` (default) means unlimited;
   a positive value stops the turn at the next 20-round window. The explicit

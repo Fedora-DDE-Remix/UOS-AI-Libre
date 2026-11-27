@@ -394,6 +394,9 @@ impl ChatService {
             self.config.temperature,
             self.config.max_tokens,
         );
+        // OpenCode Go routes requests by conversation id. Reuse the persisted
+        // aish session UUID so retries and later turns hit the same route.
+        llm.set_opencode_session_id(format!("ses_{session_id}"));
         if let Some(tokens) = self.config.max_context_tokens {
             llm.set_max_context_tokens(tokens);
         }
@@ -3020,6 +3023,12 @@ async fn fetch_provider_models(
     if protocol.trim().eq_ignore_ascii_case("anthropic") {
         return fetch_anthropic_models(base, api_key).await;
     }
+    if base
+        .to_ascii_lowercase()
+        .contains("opencode.ai/inference/go")
+    {
+        return fetch_opencode_go_models(base, api_key).await;
+    }
     let models = aish_llm::fetch_models_from_api(
         base,
         (!api_key.trim().is_empty()).then_some(api_key.trim()),
@@ -3046,6 +3055,84 @@ async fn fetch_provider_models(
     result.truncate(300);
     if result.is_empty() {
         return Err("端点返回了空模型列表".to_string());
+    }
+    Ok(result)
+}
+
+async fn fetch_opencode_go_models(base: &str, api_key: &str) -> Result<Vec<Value>, String> {
+    if api_key.trim().is_empty() {
+        return Err("OpenCode Go 需要 API Key".to_string());
+    }
+    let url = format!("{}/models", base.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .build()
+        .map_err(|error| format!("failed to build HTTP client: {error}"))?;
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key.trim()))
+        .send()
+        .await
+        .map_err(|error| {
+            if error.is_timeout() {
+                "请求超时（12 秒）".to_string()
+            } else if error.is_connect() {
+                "连接失败，请检查 API 地址和网络".to_string()
+            } else {
+                format!("请求失败：{error}")
+            }
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        let body = aish_mcp::redact::sanitize_diagnostic_text(&body);
+        let mut preview: String = body.chars().take(300).collect();
+        if body.chars().count() > 300 {
+            preview.push_str("...");
+        }
+        return Err(format!(
+            "OpenCode Go 返回 HTTP {}：{preview}",
+            status.as_u16()
+        ));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| format!("无法解析模型列表：{error}"))?;
+    let mut result: Vec<Value> = body
+        .get("data")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter(|item| {
+                    item.get("type")
+                        .and_then(Value::as_str)
+                        .map(|kind| kind.eq_ignore_ascii_case("chat"))
+                        .unwrap_or(true)
+                })
+                .filter_map(|item| {
+                    let id = item.get("id").and_then(Value::as_str)?;
+                    Some(json!({
+                        "id": id,
+                        "owned_by": item
+                            .get("owned_by")
+                            .and_then(Value::as_str)
+                            .unwrap_or("opencode"),
+                    }))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    result.sort_by(|left, right| {
+        left["id"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(right["id"].as_str().unwrap_or_default())
+    });
+    result.truncate(300);
+    if result.is_empty() {
+        return Err("OpenCode Go 返回了空模型列表".to_string());
     }
     Ok(result)
 }
