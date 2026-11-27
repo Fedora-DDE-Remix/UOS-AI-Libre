@@ -10,7 +10,28 @@ the `uos-ai` package (or `Obsoletes: uos-ai`); the RPM/DEB should own:
 /etc/xdg/autostart/uos-ai-libre-service.desktop
 ```
 
-On development machines where UOS AI was unpacked manually, use the script:
+On development machines where UOS AI was unpacked manually, use one of the
+scripts below.
+
+## User-level takeover (no root)
+
+```bash
+packaging/install-user-service.sh --build-dir uos-ai-libre/build --yes
+packaging/install-user-service.sh --restore
+```
+
+This is the recommended path on the current development machine. It copies the
+binary to `~/.local/bin`, writes higher-priority service files to
+`~/.local/share/dbus-1/services`, disables the system UOS AI autostart with a
+`Hidden=true` user override, and installs a user autostart entry. The original
+system `/usr/share/dbus-1/services` files are not modified. D-Bus activation
+prefers the user service directory, so screen recorder and Grand Search start
+UOS AI Libre on demand. D-Bus activation was verified by killing the running
+process and calling com.deepin.copilot.version again.
+
+## System-wide takeover (sudo)
+
+For a system-wide install, use the script:
 
 ```bash
 # Build first: ./build.sh
