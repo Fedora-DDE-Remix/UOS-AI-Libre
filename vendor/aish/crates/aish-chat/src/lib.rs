@@ -1840,6 +1840,64 @@ impl ChatService {
         }))
     }
 
+    /// Remove a user message and everything after it.
+    ///
+    /// `keep_count` is the absolute transcript index of the user message. The
+    /// live history and the append-only `ai_messages` rows are trimmed
+    /// together, then the session snapshot is rewritten so a reload cannot
+    /// resurrect the undone turns.
+    pub fn undo_to_message(&self, session_id: &str, keep_count: usize) -> Result<Value, String> {
+        let session = self.session(session_id)?;
+        if session.running.load(Ordering::SeqCst) {
+            return Err("会话正在运行，无法撤回".to_string());
+        }
+        let mut history = session
+            .history
+            .lock()
+            .map_err(|_| "session history lock poisoned".to_string())?;
+        let total = history.len();
+        if keep_count > total {
+            return Err(format!("撤回位置超出会话历史：{keep_count} > {total}"));
+        }
+        if keep_count == total {
+            return Ok(json!({
+                "ok": true,
+                "total": total,
+                "removed": 0,
+            }));
+        }
+        if let Some(store) = &session.store {
+            let store = store
+                .lock()
+                .map_err(|_| "session store lock poisoned".to_string())?;
+            store
+                .truncate_ai_messages(session_id, keep_count)
+                .map_err(|error| format!("failed to truncate transcript: {error}"))?;
+        }
+        history.truncate(keep_count);
+        drop(history);
+        session.persist_snapshot();
+        Ok(json!({
+            "ok": true,
+            "total": keep_count,
+            "removed": total - keep_count,
+        }))
+    }
+
+    /// Delete all rows from aish's audit table.
+    pub fn clear_audit_events(&self) -> Result<Value, String> {
+        let Some(store) = &self.store else {
+            return Err("session database is not configured".to_string());
+        };
+        let store = store
+            .lock()
+            .map_err(|_| "session store lock poisoned".to_string())?;
+        let deleted = store
+            .clear_audit_events()
+            .map_err(|error| format!("failed to clear audit events: {error}"))?;
+        Ok(json!({"ok": true, "deleted": deleted}))
+    }
+
     /// List recent sessions for a history sidebar.
     ///
     /// Only metadata is returned; the transcript is loaded on demand by
@@ -2683,9 +2741,13 @@ impl ChatSession {
                 new_messages.extend(result.new_messages.iter().cloned());
                 new_messages.push(ChatMessage::assistant(result.text.clone()));
 
-                if let Ok(mut history) = self.history.lock() {
-                    history.extend(new_messages.iter().cloned());
-                }
+                let history_len = match self.history.lock() {
+                    Ok(mut history) => {
+                        history.extend(new_messages.iter().cloned());
+                        history.len()
+                    }
+                    Err(_) => 0,
+                };
                 self.persist(&new_messages);
 
                 let stats = self.llm.token_stats();
@@ -2693,6 +2755,7 @@ impl ChatSession {
                     "turn_done",
                     json!({
                         "text": result.text,
+                        "history_len": history_len,
                         "usage": {
                             "input_tokens": stats.total_input,
                             "output_tokens": stats.total_output,

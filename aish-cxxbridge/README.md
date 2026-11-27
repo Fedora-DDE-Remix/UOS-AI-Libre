@@ -47,6 +47,9 @@ approve(*service, request_id, 0);                    // 0 once, 1 remember, 2 re
 cancel_session(*service, session);
 auto sessions = list_sessions(*service, 100);        // {"ok":true,"sessions":[...]}
 auto resumed = resume_session(*service, session);    // model, transcript, cwd, warning
+auto window = resume_session_window(*service, session, 40); // newest UIMessage page
+auto older = history_page(*service, session, before, 40);    // older page, user-aligned
+undo_to_message(*service, session, keep_count);      // remove a user turn and everything after it
 rename_session(*service, session, "New title");
 delete_session(*service, session);
 auto info = config_info(*service);                   // safe summary; no API key
@@ -84,6 +87,7 @@ refresh_mcp_tools(*service);                         // live gateway tools
 mcp_reload(*service);
 auto memory = memory_list(*service, 200);
 auto audit = audit_tail(*service, 200);
+clear_audit_events(*service);                        // delete all audit_events rows
 respond_interaction(*service, request_id, "{\"cancelled\":true}");
 save_model_config(*service, model, api_base, key);   // writes aish config, reloads service
 set_workspace(*service, session, "/path/to/project");// session cwd, persisted in sessions.state

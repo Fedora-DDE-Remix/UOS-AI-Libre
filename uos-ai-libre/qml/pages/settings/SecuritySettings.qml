@@ -576,77 +576,96 @@ SettingsScroll {
                     width: parent.width - 28
                     spacing: 5
 
-                    Row {
+                    Item {
                         width: parent.width
-                        spacing: 8
-                        Text {
+                        height: 34
+
+                        Row {
+                            id: ruleInfo
+                            anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.id || "未命名规则"
-                            color: Theme.textPrimary
-                            font.family: "DejaVu Sans Mono"
-                            font.pixelSize: Theme.fontSizeTiny
-                            font.weight: Font.DemiBold
-                        }
-                        Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: riskText.implicitWidth + 12
-                            height: 18
-                            radius: 4
-                            color: Qt.rgba(page.riskColor(modelData.risk).r,
-                                           page.riskColor(modelData.risk).g,
-                                           page.riskColor(modelData.risk).b, 0.12)
+                            width: Math.max(0, ruleActions.x - 8)
+                            spacing: 8
+
                             Text {
-                                id: riskText
-                                anchors.centerIn: parent
-                                text: String(modelData.risk || "LOW").toUpperCase()
-                                color: page.riskColor(modelData.risk)
+                                id: ruleIdText
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.id || "未命名规则"
+                                color: Theme.textPrimary
                                 font.family: "DejaVu Sans Mono"
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fontSizeTiny
                                 font.weight: Font.DemiBold
                             }
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.max(0, parent.width - 330)
-                            text: modelData.name || "（无名称）"
-                            color: Theme.textSecondary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeSmall
-                            elide: Text.ElideRight
-                        }
-                        Item { width: 1; height: 1 }
-                        AppButton {
-                            text: "编辑"
-                            minWidth: 50
-                            horizontalPadding: 10
-                            onClicked: {
-                                ruleDialog.allRules = page.rawRules()
-                                ruleDialog.openFor(modelData, index)
+                            Rectangle {
+                                id: riskBadge
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: riskText.implicitWidth + 12
+                                height: 18
+                                radius: 4
+                                color: Qt.rgba(page.riskColor(modelData.risk).r,
+                                               page.riskColor(modelData.risk).g,
+                                               page.riskColor(modelData.risk).b, 0.12)
+                                Text {
+                                    id: riskText
+                                    anchors.centerIn: parent
+                                    text: String(modelData.risk || "LOW").toUpperCase()
+                                    color: page.riskColor(modelData.risk)
+                                    font.family: "DejaVu Sans Mono"
+                                    font.pixelSize: 9
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.max(0, parent.width - ruleIdText.width
+                                                - riskBadge.width - 24)
+                                text: modelData.name || "（无名称）"
+                                color: Theme.textSecondary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeSmall
+                                elide: Text.ElideRight
                             }
                         }
-                        AppButton {
-                            text: "↑"
-                            minWidth: 28
-                            horizontalPadding: 6
-                            enabled: index > 0
-                            onClicked: page.moveRule(index, -1)
-                        }
-                        AppButton {
-                            text: "↓"
-                            minWidth: 28
-                            horizontalPadding: 6
-                            enabled: index < (app.policyInfo.rule_groups || []).length - 1
-                            onClicked: page.moveRule(index, 1)
-                        }
-                        AppButton {
-                            text: "删除"
-                            variant: "danger"
-                            minWidth: 50
-                            horizontalPadding: 10
-                            onClicked: {
-                                page.pendingDeleteIndex = index
-                                page.pendingDeleteName = modelData.name || modelData.id || "该规则"
-                                deleteRuleDialog.open()
+
+                        Row {
+                            id: ruleActions
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 8
+
+                            AppButton {
+                                text: "编辑"
+                                minWidth: 50
+                                horizontalPadding: 10
+                                onClicked: {
+                                    ruleDialog.allRules = page.rawRules()
+                                    ruleDialog.openFor(modelData, index)
+                                }
+                            }
+                            AppButton {
+                                text: "↑"
+                                minWidth: 28
+                                horizontalPadding: 6
+                                enabled: index > 0
+                                onClicked: page.moveRule(index, -1)
+                            }
+                            AppButton {
+                                text: "↓"
+                                minWidth: 28
+                                horizontalPadding: 6
+                                enabled: index < (app.policyInfo.rule_groups || []).length - 1
+                                onClicked: page.moveRule(index, 1)
+                            }
+                            AppButton {
+                                text: "删除"
+                                variant: "danger"
+                                minWidth: 50
+                                horizontalPadding: 10
+                                onClicked: {
+                                    page.pendingDeleteIndex = index
+                                    page.pendingDeleteName = modelData.name || modelData.id || "该规则"
+                                    deleteRuleDialog.open()
+                                }
                             }
                         }
                     }

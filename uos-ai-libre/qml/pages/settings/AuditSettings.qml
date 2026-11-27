@@ -4,7 +4,46 @@ import UosAiLibre
 SettingsScroll {
     id: page
 
-    onVisibleChanged: { if (visible) app.refreshAudit() }
+    property string auditQuery: ""
+    property var filteredEvents: []
+
+    onVisibleChanged: {
+        if (visible) {
+            app.refreshAudit()
+            rebuild()
+        }
+    }
+
+    Component.onCompleted: {
+        if (visible) {
+            app.refreshAudit()
+            rebuild()
+        }
+    }
+
+    function rebuild() {
+        const source = app.auditEvents || []
+        const query = auditQuery.trim().toLowerCase()
+        if (query.length === 0) {
+            filteredEvents = source
+            return
+        }
+        const result = []
+        for (let i = 0; i < source.length; ++i) {
+            const item = source[i]
+            const haystack = [
+                item.event_type, item.command, item.ai_tool, item.ai_args,
+                item.ai_result, item.decision, item.user_choice,
+                item.matched_rule, item.risk_level, item.session_uuid,
+                item.ts, item.outcome, item.user, item.host, item.source
+            ].map(function (value) {
+                return value === undefined || value === null ? "" : String(value)
+            }).join(" ").toLowerCase()
+            if (haystack.indexOf(query) >= 0)
+                result.push(item)
+        }
+        filteredEvents = result
+    }
 
     function decisionColor(decision) {
         if (decision === "block" || decision === "no")
@@ -12,6 +51,11 @@ SettingsScroll {
         if (decision === "confirm")
             return Theme.warning
         return Theme.success
+    }
+
+    Connections {
+        target: app
+        function onAuditEventsChanged() { page.rebuild() }
     }
 
     Text {
@@ -32,11 +76,34 @@ SettingsScroll {
     }
 
     Row {
+        width: parent.width
         spacing: 8
-        AppButton { text: "刷新"; onClicked: app.refreshAudit() }
+
+        AppTextField {
+            width: Math.min(360, parent.width - 190)
+            height: 32
+            placeholder: "搜索事件、工具、命令、参数、决策…"
+            onTextEdited: (value) => {
+                page.auditQuery = value
+                page.rebuild()
+            }
+        }
+        AppButton {
+            text: "刷新"
+            minWidth: 76
+            onClicked: app.refreshAudit()
+        }
+        AppButton {
+            text: "清空"
+            variant: "danger"
+            minWidth: 76
+            enabled: (app.auditEvents.length || 0) > 0
+            onClicked: clearAuditDialog.open()
+        }
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: (app.auditEvents.length || 0) + " 条"
+            text: page.filteredEvents.length + " / "
+                  + (app.auditEvents.length || 0) + " 条"
             color: Theme.textTertiary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeSmall
@@ -44,7 +111,7 @@ SettingsScroll {
     }
 
     Repeater {
-        model: app.auditEvents
+        model: page.filteredEvents
         delegate: Rectangle {
             width: parent.width
             height: auditColumn.implicitHeight + 22
@@ -121,10 +188,23 @@ SettingsScroll {
 
     Text {
         width: parent.width
-        visible: app.auditEvents.length === 0
-        text: "当前没有审计事件。"
+        visible: page.filteredEvents.length === 0
+        text: page.auditQuery.length > 0
+              ? "没有匹配的审计事件。"
+              : "当前没有审计事件。"
         color: Theme.textTertiary
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeSmall
+    }
+
+    ConfirmDialog {
+        id: clearAuditDialog
+        title: "清空审计日志"
+        message: "确定清空全部审计记录？"
+        detail: "将删除 aish sessions.db 中全部 audit_events，包括其它会话产生的记录。此操作无法恢复。"
+        confirmText: "清空"
+        danger: true
+        confirmEnabled: !app.generating
+        onConfirmed: app.clearAudit()
     }
 }

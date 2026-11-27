@@ -5,8 +5,12 @@ Item {
     id: root
     property string text: ""
     property var attachments: []
+    property bool canUndo: false
+    property int sourceIndex: -1
     width: parent ? parent.width : 0
     implicitHeight: bubble.height + 8
+
+    signal undoRequested(int sourceIndex, string text)
 
     readonly property real maxBubbleWidth: Math.max(240, Math.min(680, width * 0.76))
     readonly property real maxTextWidth: maxBubbleWidth - 32
@@ -28,14 +32,14 @@ Item {
         id: bubble
         anchors.right: parent.right
         width: Math.max(root.attachmentWidth, root.desiredWidth)
-        height: contentColumn.implicitHeight + 24
+        height: contentColumn.implicitHeight + 14
         radius: 10
         color: Theme.userBubble
 
         Column {
             id: contentColumn
             x: 16
-            y: 12
+            y: 8
             width: bubble.width - 32
             spacing: 8
 
@@ -75,7 +79,7 @@ Item {
                 color: Theme.userText
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeChat
-                lineHeight: 1.58
+                lineHeight: 1.45
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere
             }
         }
@@ -84,29 +88,66 @@ Item {
     HoverHandler { id: hover }
 
     Item {
-        visible: hover.hovered && root.text.length > 0
-        width: 24
+        id: actions
+        visible: hover.hovered
+                 && (root.text.length > 0 || root.attachments.length > 0)
+        width: 52
         height: 24
         anchors.right: bubble.left
         anchors.rightMargin: 8
-        anchors.top: bubble.top
+        anchors.verticalCenter: bubble.verticalCenter
 
-        Rectangle {
+        Row {
             anchors.fill: parent
-            radius: Theme.radiusSmall
-            color: copyHover.hovered ? Theme.hover : "transparent"
-            HoverHandler { id: copyHover }
-        }
-        AppIcon {
-            anchors.centerIn: parent
-            name: "copy"
-            size: 14
-            color: Theme.iconSecondary
-        }
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: app.copyText(root.text)
+            spacing: 4
+
+            Item {
+                width: 24
+                height: 24
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusSmall
+                    color: copyHover.hovered ? Theme.hover : "transparent"
+                    HoverHandler { id: copyHover }
+                }
+                AppIcon {
+                    anchors.centerIn: parent
+                    name: "copy"
+                    size: 14
+                    color: Theme.iconSecondary
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: app.copyText(root.text)
+                }
+            }
+
+            Item {
+                width: 24
+                height: 24
+                opacity: root.canUndo ? 1.0 : 0.35
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusSmall
+                    color: undoHover.hovered && root.canUndo ? Theme.hover : "transparent"
+                    HoverHandler { id: undoHover }
+                }
+                AppIcon {
+                    anchors.centerIn: parent
+                    name: "undo"
+                    size: 14
+                    color: Theme.iconSecondary
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.canUndo
+                    cursorShape: root.canUndo ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: root.undoRequested(root.sourceIndex, root.text)
+                }
+            }
         }
     }
 }

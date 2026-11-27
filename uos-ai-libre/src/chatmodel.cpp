@@ -66,6 +66,7 @@ QHash<int, QByteArray> ChatModel::roleNames() const {
         {NoticeRole, "notice"},
         {AttachmentsRole, "attachments"},
         {TimestampRole, "timestamp"},
+        {SourceIndexRole, "sourceIndex"},
     };
 }
 
@@ -104,6 +105,8 @@ QVariant ChatModel::data(const QModelIndex &index, int role) const {
         return message.attachments;
     case TimestampRole:
         return message.timestamp;
+    case SourceIndexRole:
+        return message.sourceIndex;
     default:
         return {};
     }
@@ -128,13 +131,15 @@ void ChatModel::clear() {
 }
 
 void ChatModel::appendUser(const QString &text,
-                           const QVariantList &attachments) {
+                           const QVariantList &attachments,
+                           int sourceIndex) {
     if (text.trimmed().isEmpty() && attachments.isEmpty())
         return;
     Message message;
     message.kind = QStringLiteral("user");
     message.text = bounded(text, kMaxUserChars);
     message.timestamp = QDateTime::currentMSecsSinceEpoch();
+    message.sourceIndex = sourceIndex;
     message.attachments = attachments.mid(0, 4);
     const int row = m_messages.size();
     beginInsertRows(QModelIndex(), row, row);
@@ -572,18 +577,21 @@ QVector<ChatModel::Tool> ChatModel::parseToolCalls(const QVariant &calls) {
     return result;
 }
 
-QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(const QVariantList &messages) const {
+QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(
+    const QVariantList &messages, int startIndex) const {
     QVector<Message> parsed;
 
     QVector<Tool> pending_tools;
     QString pending_reasoning;
-    for (const QVariant &entry : messages) {
-        const QVariantMap map = entry.toMap();
+    for (int messageIndex = 0; messageIndex < messages.size(); ++messageIndex) {
+        const QVariantMap map = messages.at(messageIndex).toMap();
         const QString role = map.value(QStringLiteral("role")).toString();
 
         if (role == QStringLiteral("user")) {
             Message message;
             message.kind = QStringLiteral("user");
+            message.sourceIndex =
+                startIndex >= 0 ? startIndex + messageIndex : -1;
             message.text = bounded(contentText(map.value(QStringLiteral("content"))),
                                    kMaxUserChars);
             if (message.text.trimmed().isEmpty())
@@ -675,9 +683,9 @@ QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(const QVariantLis
     return parsed;
 }
 
-void ChatModel::loadTranscript(const QVariantList &messages) {
+void ChatModel::loadTranscript(const QVariantList &messages, int startIndex) {
     beginResetModel();
-    m_messages = parseTranscriptMessages(messages);
+    m_messages = parseTranscriptMessages(messages, startIndex);
     m_streaming_index = -1;
     endResetModel();
     emit countChanged();
@@ -685,8 +693,8 @@ void ChatModel::loadTranscript(const QVariantList &messages) {
     emit contentChanged();
 }
 
-void ChatModel::prependTranscript(const QVariantList &messages) {
-    QVector<Message> older = parseTranscriptMessages(messages);
+void ChatModel::prependTranscript(const QVariantList &messages, int startIndex) {
+    QVector<Message> older = parseTranscriptMessages(messages, startIndex);
     if (older.isEmpty())
         return;
     beginInsertRows(QModelIndex(), 0, older.size() - 1);

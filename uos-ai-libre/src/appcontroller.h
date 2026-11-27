@@ -123,6 +123,7 @@ public:
     Q_INVOKABLE void newConversation();
     Q_INVOKABLE void loadSession(const QString &sessionId);
     Q_INVOKABLE void loadOlderMessages();
+    Q_INVOKABLE QVariantMap undoToMessage(int keepCount);
     Q_INVOKABLE void deleteSession(const QString &sessionId);
     Q_INVOKABLE void renameSession(const QString &sessionId,
                                    const QString &title);
@@ -140,6 +141,9 @@ public:
     Q_INVOKABLE void deleteProvider(const QString &name);
     Q_INVOKABLE void setProviderModels(const QString &apiBase,
                                        const QVariantList &models);
+    Q_INVOKABLE QVariantList cachedProviderModels(const QString &apiBase) const;
+    Q_INVOKABLE void cacheProviderModels(const QString &apiBase,
+                                         const QVariantList &models);
     Q_INVOKABLE QVariantMap activateModel(const QString &apiBase,
                                           const QString &providerName,
                                           const QString &model);
@@ -180,6 +184,7 @@ public:
     Q_INVOKABLE void testMcpDraft(const QVariantMap &args);
     Q_INVOKABLE void refreshMemory();
     Q_INVOKABLE void refreshAudit();
+    Q_INVOKABLE QVariantMap clearAudit();
     Q_INVOKABLE void openPath(const QString &path);
     Q_INVOKABLE void setWorkspace(const QString &path);
     Q_INVOKABLE void resetWorkspace();
@@ -295,6 +300,7 @@ private:
     QVariantList m_providers;
     QVariantList m_chat_models;
     QVariantMap m_provider_models;
+    QVariantMap m_provider_catalogs;
     QVariantMap m_model_fetch_result;
     QVariantMap m_provider_labels;
     bool m_model_fetch_busy = false;

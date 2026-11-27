@@ -74,20 +74,26 @@ SettingsScroll {
             spacing: 12
             Repeater {
                 model: app.toolCatalog
-                delegate: Row {
+                delegate: Item {
                     width: toolsColumn.width
-                    spacing: 10
+                    height: Math.max(32, toolTextColumn.implicitHeight)
+
                     AppIcon {
+                        x: 0
                         anchors.verticalCenter: parent.verticalCenter
                         name: page.sourceIcon(modelData.source)
                         size: 16
                         color: Theme.iconSecondary
                     }
+
                     Column {
-                        width: parent.width - 126
+                        id: toolTextColumn
+                        x: 26
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.max(0, sourceBadge.x - x - 10)
                         spacing: 2
                         Text {
-                            width: Math.min(implicitWidth, toolsColumn.width - 150)
+                            width: parent.width
                             text: modelData.name
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
@@ -106,7 +112,10 @@ SettingsScroll {
                             wrapMode: Text.NoWrap
                         }
                     }
+
                     Rectangle {
+                        id: sourceBadge
+                        anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         width: sourceText.implicitWidth + 14
                         height: 20

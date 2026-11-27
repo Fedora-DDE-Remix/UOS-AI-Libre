@@ -89,10 +89,19 @@ Popup {
         modelField.text = provider.model || ""
         selectedModel = provider.model || ""
         enabledModels = (provider.models || []).slice()
-        if (enabledModels.length === 0 && selectedModel.length > 0)
-            enabledModels = [selectedModel]
-        models = []
-        filteredModels = []
+        if (selectedModel.length > 0 && enabledModels.indexOf(selectedModel) < 0)
+            enabledModels = enabledModels.concat([selectedModel])
+        models = app.cachedProviderModels(provider.api_base || "")
+        if (enabledModels.length > 0) {
+            const seeded = models.slice()
+            for (let i = 0; i < enabledModels.length; ++i) {
+                const id = enabledModels[i]
+                if (!seeded.some(function (item) { return item.id === id }))
+                    seeded.push({ id: id, owned_by: "" })
+            }
+            models = seeded
+        }
+        filteredModels = models
         filterField.text = ""
         errorText = root.unsupported
                 ? "该供应商使用 Anthropic 协议，不在 GUI 支持范围内；请直接在 aish config.yaml 中维护。"
@@ -252,6 +261,8 @@ Popup {
                 return
             if (result.ok === true) {
                 root.models = data.models || []
+                app.cacheProviderModels(String(data.base || baseField.text).trim(),
+                                        root.models)
                 root.rebuildFilter()
                 if (root.enabledModels.length === 0 && root.models.length > 0) {
                     root.enabledModels = [root.models[0].id]
@@ -266,8 +277,6 @@ Popup {
                 }
                 root.fetchError = root.models.length === 0 ? "端点没有返回模型" : ""
             } else {
-                root.models = []
-                root.filteredModels = []
                 root.fetchError = result.error || "获取模型失败"
             }
         }
@@ -630,7 +639,7 @@ Popup {
                     onClicked: root.save(false)
                 }
                 AppButton {
-                    text: root.saving ? "保存中…" : "保存并切换"
+                    text: root.saving ? "保存中…" : "保存"
                     variant: "primary"
                     enabled: !root.saving && !app.generating && !root.unsupported
                     onClicked: root.save(true)

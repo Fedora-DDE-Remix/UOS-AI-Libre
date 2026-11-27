@@ -770,6 +770,20 @@ QVariantList AishBridge::memoryList() {
     return object.value(QStringLiteral("entries")).toArray().toVariantList();
 }
 
+QVariantMap AishBridge::clearAudit() {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(clear_audit_events(**m_service)), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
 QVariantList AishBridge::auditTail() {
     if (!ensureService())
         return {};
@@ -856,6 +870,23 @@ QVariantMap AishBridge::historyPage(const QString &sessionId,
         toQString(history_page(**m_service, sessionId.toStdString(),
                                static_cast<uint32_t>(qMax(0, before)),
                                static_cast<uint32_t>(qBound(1, limit, 200)))),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::undoToMessage(const QString &sessionId,
+                                      int keepCount) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(undo_to_message(**m_service, sessionId.toStdString(),
+                                  static_cast<uint32_t>(qMax(0, keepCount)))),
         &error);
     if (!error.isEmpty()) {
         setLastError(error);

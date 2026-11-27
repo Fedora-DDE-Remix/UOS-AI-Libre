@@ -65,7 +65,17 @@ Rules that keep the UI maintainable:
   endpoints are shown read-only and must be maintained in `config.yaml`. The
   chat composer lists every enabled OpenAI-compatible model across providers,
   with the model on the left and provider on the right and a search box above
-  the list.
+  the list. The provider dialog caches the last fetched catalogue per endpoint,
+  so editing a provider shows every model from that fetch with the enabled
+  ones checked; long catalogues scroll inside the dialog.
+- The audit page supports free-text filtering across event type, tool, command,
+  arguments, decision and rule fields, and a confirmed "清空" action that
+  removes aish's `audit_events` rows.
+- Each user bubble exposes copy and undo actions on hover. Undo asks for
+  confirmation, is disabled while a turn is running, and deletes that user
+  message plus every later message from both the live history and
+  `ai_messages`. The composer sends on Enter and inserts a newline on
+  Shift+Enter or Ctrl+Enter.
 - Long conversations load lazily: opening a session materialises only the
   newest transcript window, and "加载更早消息" pages older turns into the same
   model without re-reading the whole conversation into QML.

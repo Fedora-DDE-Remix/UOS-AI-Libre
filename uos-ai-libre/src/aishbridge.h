@@ -94,10 +94,13 @@ public:
     Q_INVOKABLE QVariantMap testMcpDraft(const QVariantMap &args);
     Q_INVOKABLE QVariantList memoryList();
     Q_INVOKABLE QVariantList auditTail();
+    Q_INVOKABLE QVariantMap clearAudit();
     Q_INVOKABLE void refreshSessions();
     Q_INVOKABLE void loadSession(const QString &sessionId);
     Q_INVOKABLE QVariantMap historyPage(const QString &sessionId,
                                         int before, int limit);
+    Q_INVOKABLE QVariantMap undoToMessage(const QString &sessionId,
+                                          int keepCount);
     Q_INVOKABLE void deleteSession(const QString &sessionId);
     Q_INVOKABLE void renameSession(const QString &sessionId,
                                    const QString &title);

@@ -32,6 +32,7 @@ public:
         NoticeRole,
         AttachmentsRole,
         TimestampRole,
+        SourceIndexRole,
     };
     Q_ENUM(Role)
 
@@ -47,7 +48,8 @@ public:
 
     Q_INVOKABLE void clear();
     Q_INVOKABLE void appendUser(const QString &text,
-                                const QVariantList &attachments = {});
+                                const QVariantList &attachments = {},
+                                int sourceIndex = -1);
     Q_INVOKABLE int beginAssistant(const QString &model = {});
     Q_INVOKABLE void appendContent(const QString &delta);
     Q_INVOKABLE void setContent(const QString &text);
@@ -59,8 +61,10 @@ public:
     Q_INVOKABLE void finishAssistant();
     Q_INVOKABLE void failAssistant(const QString &message);
     Q_INVOKABLE void cancelAssistant();
-    Q_INVOKABLE void loadTranscript(const QVariantList &messages);
-    Q_INVOKABLE void prependTranscript(const QVariantList &messages);
+    Q_INVOKABLE void loadTranscript(const QVariantList &messages,
+                                    int startIndex = 0);
+    Q_INVOKABLE void prependTranscript(const QVariantList &messages,
+                                       int startIndex = 0);
     Q_INVOKABLE QString lastUserText() const;
     Q_INVOKABLE int lastUserRow() const;
     Q_INVOKABLE QVariantList lastUserAttachments() const;
@@ -103,6 +107,7 @@ private:
         qint64 turnStartedAt = 0;
         qint64 elapsedMs = 0;
         qint64 timestamp = 0;
+        int sourceIndex = -1;
         QVariantList attachments;
         QVector<Tool> tools;
     };
@@ -113,7 +118,8 @@ private:
     static QString toolKind(const QString &name);
     static QVector<Tool> parseToolCalls(const QVariant &calls);
     static QVariantList toolsToVariant(const QVector<Tool> &tools);
-    QVector<Message> parseTranscriptMessages(const QVariantList &messages) const;
+    QVector<Message> parseTranscriptMessages(const QVariantList &messages,
+                                             int startIndex) const;
 
     void emitRowChanged(int row, const QVector<int> &roles);
     void setToolStatus(const QString &id, const QString &status,

@@ -553,6 +553,42 @@ impl SessionStore {
         Ok(self.conn.last_insert_rowid())
     }
 
+    /// Delete transcript rows after the first `keep_count` messages.
+    ///
+    /// This is an explicit user-driven undo, not normal compaction: the
+    /// append-only safety net is trimmed together with the live session so a
+    /// reload cannot resurrect the removed turns.
+    pub fn truncate_ai_messages(&self, session_uuid: &str, keep_count: usize) -> Result<usize> {
+        if keep_count == 0 {
+            return self
+                .conn
+                .execute(
+                    "DELETE FROM ai_messages WHERE session_uuid = ?1",
+                    params![session_uuid],
+                )
+                .map_err(|e| AishError::Session(format!("failed to clear ai messages: {e}")));
+        }
+        self.conn
+            .execute(
+                "DELETE FROM ai_messages
+                 WHERE session_uuid = ?1
+                   AND seq >= (
+                       SELECT seq FROM ai_messages
+                       WHERE session_uuid = ?1
+                       ORDER BY seq ASC LIMIT 1 OFFSET ?2
+                   )",
+                params![session_uuid, keep_count as i64],
+            )
+            .map_err(|e| AishError::Session(format!("failed to truncate ai messages: {e}")))
+    }
+
+    /// Delete every audit event. Returns the number of removed rows.
+    pub fn clear_audit_events(&self) -> Result<usize> {
+        self.conn
+            .execute("DELETE FROM audit_events", [])
+            .map_err(|e| AishError::Session(format!("failed to clear audit events: {e}")))
+    }
+
     /// Return the first user-visible prompt so session lists can fall back to
     /// a meaningful title when `sessions.state` has no `summary_preview`.
     pub fn get_first_user_message(&self, session_uuid: &str) -> Result<Option<String>> {
@@ -1494,6 +1530,48 @@ mod tests {
         );
         assert!(messages[0].tool_calls.is_none());
         assert!(messages[0].reasoning_content.is_none());
+    }
+
+    #[test]
+    fn truncate_ai_messages_keeps_the_prefix() {
+        let (_temp, store) = temp_store();
+        let session = store.create_session("m", None).unwrap();
+        let uuid = &session.session_uuid;
+        for text in ["one", "two", "three", "four"] {
+            store
+                .append_ai_message(uuid, &ai_msg("user", text))
+                .unwrap();
+        }
+        assert_eq!(store.truncate_ai_messages(uuid, 2).unwrap(), 2);
+        let messages = store.get_ai_messages(uuid).unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].content, "one");
+        assert_eq!(messages[1].content, "two");
+
+        assert_eq!(store.truncate_ai_messages(uuid, 0).unwrap(), 2);
+        assert!(store.get_ai_messages(uuid).unwrap().is_empty());
+    }
+
+    #[test]
+    fn clear_audit_events_removes_every_row() {
+        use aish_core::AuditEvent;
+
+        let (_temp, store) = temp_store();
+        let now = Utc::now();
+        store
+            .add_audit_event(&AuditEvent::command(
+                now,
+                Some("sess-1".into()),
+                None,
+                None,
+                "ls".into(),
+                "chat".into(),
+                0,
+            ))
+            .unwrap();
+        assert_eq!(store.clear_audit_events().unwrap(), 1);
+        let events = store.query_audit_events(&AuditQuery::default()).unwrap();
+        assert!(events.is_empty());
     }
 
     #[test]

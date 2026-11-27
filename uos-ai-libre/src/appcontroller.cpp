@@ -18,6 +18,8 @@ AppController::AppController(QObject *parent)
         QSettings().value(QStringLiteral("model/providerLabels")).toMap();
     m_provider_models =
         QSettings().value(QStringLiteral("model/providerModels")).toMap();
+    m_provider_catalogs =
+        QSettings().value(QStringLiteral("model/providerCatalogs")).toMap();
     m_theme_mode = QSettings().value(QStringLiteral("theme/mode"), 2).toInt();
     if (m_theme_mode < 0 || m_theme_mode > 2)
         m_theme_mode = 2;
@@ -243,7 +245,8 @@ bool AppController::sendMessage(const QString &text,
         attachment.insert(QStringLiteral("previewUrl"), m_bridge.imageUrl(path));
         attachments.append(attachment);
     }
-    m_chat.appendUser(text, attachments);
+    m_chat.appendUser(text, attachments,
+                      m_history_total >= 0 ? m_history_total : -1);
     if (m_local_title.trimmed().isEmpty()) {
         m_local_title = text.trimmed().isEmpty()
                             ? QStringLiteral("图片对话")
@@ -327,6 +330,35 @@ void AppController::setProviderModelsStore(const QString &apiBase,
     m_provider_models.insert(apiBase, stored);
     QSettings().setValue(QStringLiteral("model/providerModels"),
                          m_provider_models);
+}
+
+QVariantList AppController::cachedProviderModels(const QString &apiBase) const {
+    return m_provider_catalogs.value(apiBase).toList();
+}
+
+void AppController::cacheProviderModels(const QString &apiBase,
+                                        const QVariantList &models) {
+    if (apiBase.isEmpty())
+        return;
+    QVariantList stored;
+    QStringList seen;
+    for (const QVariant &entry : models) {
+        const QVariantMap source = entry.toMap();
+        const QString id = source.value(QStringLiteral("id")).toString().trimmed();
+        if (id.isEmpty() || seen.contains(id))
+            continue;
+        seen.append(id);
+        QVariantMap item;
+        item.insert(QStringLiteral("id"), id);
+        item.insert(QStringLiteral("owned_by"),
+                    source.value(QStringLiteral("owned_by")).toString());
+        stored.append(item);
+        if (stored.size() >= 300)
+            break;
+    }
+    m_provider_catalogs.insert(apiBase, stored);
+    QSettings().setValue(QStringLiteral("model/providerCatalogs"),
+                         m_provider_catalogs);
 }
 
 void AppController::refreshProviders() {
@@ -930,6 +962,22 @@ void AppController::refreshAudit() {
     emit auditEventsChanged();
 }
 
+QVariantMap AppController::clearAudit() {
+    const QVariantMap result = m_bridge.clearAudit();
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        const QString error = result.value(QStringLiteral("error")).toString();
+        emit toastRequested(error.isEmpty() ? QStringLiteral("清空审计日志失败")
+                                            : error);
+        return result;
+    }
+    m_audit_events.clear();
+    emit auditEventsChanged();
+    const int deleted = result.value(QStringLiteral("deleted")).toInt();
+    emit toastRequested(QStringLiteral("已清空 %1 条审计记录").arg(deleted));
+    refreshAudit();
+    return result;
+}
+
 void AppController::openPath(const QString &path) {
     if (path.isEmpty())
         return;
@@ -1030,6 +1078,12 @@ void AppController::onToolEnd(const QVariantMap &tool) {
 }
 
 void AppController::onTurnDone(const QVariantMap &info) {
+    const int history_len =
+        info.value(QStringLiteral("history_len"), m_history_total).toInt();
+    if (history_len != m_history_total) {
+        m_history_total = history_len;
+        emit historyWindowChanged();
+    }
     beginAssistantIfNeeded();
     m_chat.setContent(info.value(QStringLiteral("text")).toString());
     m_chat.finishAssistant();
@@ -1053,7 +1107,7 @@ void AppController::onSessionLoaded(const QVariantList &messages,
     m_history_total = total;
     m_history_start = start;
     m_history_loading = false;
-    m_chat.loadTranscript(messages);
+    m_chat.loadTranscript(messages, start);
     m_assistant_open = false;
     m_model = model.isEmpty() ? m_bridge.model() : model;
     emit modelChanged();
@@ -1062,6 +1116,27 @@ void AppController::onSessionLoaded(const QVariantList &messages,
     refreshSessionApprovals();
     emit historyWindowChanged();
     emit sessionLoaded();
+}
+
+QVariantMap AppController::undoToMessage(int keepCount) {
+    if (!requireIdle(QStringLiteral("撤回消息")))
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("session is generating")}};
+    if (keepCount < 0 || sessionId().isEmpty())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("无效的撤回位置")}};
+    const QVariantMap result =
+        m_bridge.undoToMessage(sessionId(), keepCount);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        const QString error = result.value(QStringLiteral("error")).toString();
+        emit toastRequested(error.isEmpty() ? QStringLiteral("撤回失败") : error);
+        return result;
+    }
+    m_chat.clear();
+    loadSession(sessionId());
+    refreshSessions();
+    emit toastRequested(QStringLiteral("已撤回该消息及其之后的对话"));
+    return result;
 }
 
 void AppController::loadOlderMessages() {
@@ -1079,7 +1154,8 @@ void AppController::loadOlderMessages() {
     }
     const QVariantList messages =
         result.value(QStringLiteral("messages")).toList();
-    m_chat.prependTranscript(messages);
+    m_chat.prependTranscript(messages,
+                            result.value(QStringLiteral("start")).toInt());
     m_history_start = result.value(QStringLiteral("start"), m_history_start).toInt();
     m_history_total = result.value(QStringLiteral("total"), m_history_total).toInt();
     emit historyWindowChanged();

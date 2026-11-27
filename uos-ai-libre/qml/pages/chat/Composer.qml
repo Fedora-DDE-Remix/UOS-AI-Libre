@@ -173,10 +173,12 @@ Rectangle {
                 Keys.onPressed: (event) => {
                     if (input.inputMethodComposing)
                         return
-                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-                            && !(event.modifiers & Qt.ShiftModifier)) {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        if (event.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))
+                            input.insert(input.cursorPosition, "\n")
+                        else
+                            root.sendRequested()
                         event.accepted = true
-                        root.sendRequested()
                     }
                 }
             }
@@ -237,7 +239,7 @@ Rectangle {
                             AppIcon {
                                 anchors.verticalCenter: parent.verticalCenter
                                 name: "shield"
-                                size: 13
+                                size: 16
                                 color: Theme.iconSecondary
                             }
                             Text {
@@ -287,7 +289,7 @@ Rectangle {
                             AppIcon {
                                 anchors.verticalCenter: parent.verticalCenter
                                 name: "cloud"
-                                size: 15
+                                size: 18
                                 color: Theme.iconSecondary
                             }
                             Text {
@@ -295,14 +297,14 @@ Rectangle {
                                 text: root.modelName.length > 0 ? root.modelName : "选择模型"
                                 color: Theme.textSecondary
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSizeSmall
+                                font.pixelSize: Theme.fontSizeBase
                                 elide: Text.ElideRight
-                                width: Math.min(150, implicitWidth)
+                                width: Math.min(170, implicitWidth)
                             }
                             AppIcon {
                                 anchors.verticalCenter: parent.verticalCenter
                                 name: "chevron-down"
-                                size: 10
+                                size: 12
                                 color: Theme.iconSecondary
                             }
                         }

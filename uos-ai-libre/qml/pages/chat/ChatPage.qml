@@ -13,6 +13,8 @@ Item {
     property int leftRadius: 0
     property int rightRadius: Theme.windowRadius
     property int historyAnchorIndex: 0
+    property int pendingUndoIndex: -1
+    property string pendingUndoText: ""
 
     signal toastRequested(string message)
     signal openSettings(int pageIndex)
@@ -140,6 +142,15 @@ Item {
                                                 ListView.Beginning)
             })
         }
+    }
+
+    function requestUndo(sourceIndex, messageText) {
+        if (sourceIndex < 0 || app.generating)
+            return
+        pendingUndoIndex = sourceIndex
+        pendingUndoText = messageText.length > 180
+                ? messageText.slice(0, 180) + "…" : messageText
+        undoDialog.open()
     }
 
     function sendFrom(composer) {
@@ -531,6 +542,7 @@ Item {
                         property string rowError: error
                         property string rowNotice: notice
                         property var rowAttachments: attachments
+                        property int rowSourceIndex: sourceIndex
                         width: Math.min(900, messageRow.width - 96)
                         height: implicitHeight
                         x: (messageRow.width - width) / 2
@@ -540,6 +552,11 @@ Item {
                             if (rowKind === "user") {
                                 item.text = Qt.binding(function() { return loader.rowText })
                                 item.attachments = Qt.binding(function() { return loader.rowAttachments })
+                                item.sourceIndex = Qt.binding(function() { return loader.rowSourceIndex })
+                                item.canUndo = Qt.binding(function() { return !app.generating })
+                                item.undoRequested.connect(function(index, text) {
+                                    page.requestUndo(index, text)
+                                })
                             } else {
                                 item.text = Qt.binding(function() { return loader.rowText })
                                 item.reasoning = Qt.binding(function() { return loader.rowReasoning })
@@ -642,6 +659,18 @@ Item {
         Behavior on opacity { NumberAnimation { duration: 160 } }
         onCloseRequested: page.previewOpen = false
         onToastRequested: (message) => page.toastRequested(message)
+    }
+
+    ConfirmDialog {
+        id: undoDialog
+        title: "撤回消息"
+        message: "撤回这条消息及其之后的所有对话？"
+        detail: "“" + page.pendingUndoText + "”\n\n"
+                + "该消息及之后的内容会从会话历史中删除，无法恢复。"
+        confirmText: "撤回"
+        danger: true
+        confirmEnabled: !app.generating
+        onConfirmed: app.undoToMessage(page.pendingUndoIndex)
     }
 
     Component { id: userComponent; UserMessage {} }
