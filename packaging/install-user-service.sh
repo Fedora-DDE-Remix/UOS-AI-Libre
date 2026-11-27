@@ -29,6 +29,13 @@ ASSUME_YES=0
 
 readonly UOS_AUTOSTART="uos-ai-assistant.autostart.desktop"
 readonly OUR_AUTOSTART="uos-ai-libre-service.desktop"
+readonly KEYBINDING_SERVICE="org.deepin.dde.Keybinding1"
+readonly KEYBINDING_PATH="/org/deepin/dde/Keybinding1"
+readonly KEYBINDING_IFACE="org.deepin.dde.Keybinding1"
+readonly UOS_AI_SHORTCUT="org.deepin.dde.keybinding.shortcut.app.uos-ai"
+readonly CUSTOM_SHORTCUT_NAME="UOS AI Libre"
+readonly CUSTOM_ID_FILE="$BACKUP_DIR/keybinding-custom-id"
+readonly UOS_HOTKEY_FILE="$BACKUP_DIR/keybinding-uos-ai-hotkeys"
 
 usage() {
     sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
@@ -99,6 +106,98 @@ reload_bus() {
     [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] || return 0
     dbus-send --session --dest=org.freedesktop.DBus \
         --type=method_call / org.freedesktop.DBus.ReloadConfig || true
+}
+
+keybinding_call() {
+    gdbus call --session --dest "$KEYBINDING_SERVICE" \
+        --object-path "$KEYBINDING_PATH" \
+        --method "$KEYBINDING_IFACE.$1" "${@:2}"
+}
+
+keybinding_available() {
+    command -v gdbus >/dev/null 2>&1 || return 1
+    keybinding_call GetShortcut "$UOS_AI_SHORTCUT" >/dev/null 2>&1
+}
+
+backup_uos_hotkeys() {
+    [[ -e "$UOS_HOTKEY_FILE" ]] && return 0
+    local raw hotkeys
+    raw="$(keybinding_call GetShortcut "$UOS_AI_SHORTCUT" 2>/dev/null || true)"
+    hotkeys="$(printf '%s' "$raw" | sed -n 's/.*\[\(.*\)\].*/\1/p')"
+    if [[ -n "$hotkeys" ]]; then
+        run mkdir -p "$BACKUP_DIR"
+        if (( ! DRY_RUN )); then
+            printf '[%s]\n' "$hotkeys" > "$UOS_HOTKEY_FILE"
+        fi
+    fi
+}
+
+restore_uos_hotkeys() {
+    if [[ -f "$UOS_HOTKEY_FILE" ]]; then
+        keybinding_call ModifyHotkeys "$UOS_AI_SHORTCUT" \
+            "$(cat "$UOS_HOTKEY_FILE")" >/dev/null 2>&1 || true
+        run rm -f "$UOS_HOTKEY_FILE"
+    fi
+}
+
+delete_custom_shortcuts() {
+    local ids id
+    ids="$(keybinding_call SearchShortcuts "$CUSTOM_SHORTCUT_NAME" 2>/dev/null \
+        | grep -oE 'org\.deepin\.dde\.keybinding\.shortcut\.custom\.[0-9a-f-]+' \
+        | sort -u || true)"
+    for id in $ids; do
+        keybinding_call DeleteCustomShortcut "$id" >/dev/null 2>&1 || true
+    done
+}
+
+install_keybinding() {
+    local exec_path="$1"
+    if ! keybinding_available; then
+        say "keybinding service unavailable; Super+Space was left unchanged"
+        return 0
+    fi
+    if (( DRY_RUN )); then
+        say "would point Super+Space at: $exec_path --chat"
+        return 0
+    fi
+
+    backup_uos_hotkeys
+    delete_custom_shortcuts
+    keybinding_call Disable "$UOS_AI_SHORTCUT" >/dev/null 2>&1 || true
+
+    local out id command
+    out="$(keybinding_call AddCustomShortcut "$CUSTOM_SHORTCUT_NAME" \
+        "$exec_path --chat" "<Super>space" 2>/dev/null || true)"
+    id="$(printf '%s' "$out" \
+        | grep -oE 'org\.deepin\.dde\.keybinding\.shortcut\.custom\.[0-9a-f-]+' \
+        | head -1 || true)"
+    if [[ -z "$id" ]]; then
+        restore_uos_hotkeys
+        say "warning: could not register Super+Space; UOS AI shortcut restored"
+        return 0
+    fi
+    run mkdir -p "$BACKUP_DIR"
+    printf '%s\n' "$id" > "$CUSTOM_ID_FILE"
+    command="$(keybinding_call GetShortcutCommand "$id" 2>/dev/null || true)"
+    say "Super+Space -> $command"
+}
+
+restore_keybinding() {
+    if ! keybinding_available; then
+        return 0
+    fi
+    if (( DRY_RUN )); then
+        say "would remove the UOS AI Libre custom shortcut and restore UOS AI's Super+Space"
+        return 0
+    fi
+
+    if [[ -f "$CUSTOM_ID_FILE" ]]; then
+        keybinding_call DeleteCustomShortcut "$(cat "$CUSTOM_ID_FILE")" \
+            >/dev/null 2>&1 || true
+        rm -f "$CUSTOM_ID_FILE"
+    fi
+    delete_custom_shortcuts
+    restore_uos_hotkeys
 }
 
 write_service_files() {
@@ -220,6 +319,7 @@ if (( RESTORE )); then
 
     stop_matching "$BIN_DIR/uos-ai-libre" 1
     stop_matching "$BUILD_DIR/uos-ai-libre" 1
+    restore_keybinding
 
     run rm -f "$SERVICES_DIR/com.deepin.copilot.service"
     run rm -f "$SERVICES_DIR/com.iflytek.aiassistant.service"
@@ -268,6 +368,7 @@ run install -Dm644 "$REPO_DIR/uos-ai-libre/resources/images/logo.png" \
 
 write_service_files "$EXEC_PATH"
 write_autostart_files "$EXEC_PATH"
+install_keybinding "$EXEC_PATH"
 reload_bus
 
 if (( ! DRY_RUN )); then
