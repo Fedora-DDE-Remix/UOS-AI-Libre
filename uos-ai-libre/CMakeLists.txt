@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(uos-ai-libre VERSION 1.0.0 LANGUAGES CXX)
+project(uos-ai-libre VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +9,40 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Svg Network DBus)
 qt_standard_project_setup()
+
+# Layer-shell surfaces have no client-side move request. On Wayland we use the
+# relative-pointer protocol for drag deltas; it is optional so X11-only and
+# minimal build environments still compile.
+find_package(PkgConfig QUIET)
+set(UOS_AI_LIBRE_WAYLAND_DRAG OFF)
+if(PkgConfig_FOUND)
+    pkg_check_modules(WAYLAND_CLIENT QUIET wayland-client)
+    pkg_check_modules(WAYLAND_PROTOCOLS QUIET wayland-protocols)
+endif()
+find_program(WAYLAND_SCANNER_EXECUTABLE wayland-scanner)
+if(WAYLAND_CLIENT_FOUND AND WAYLAND_PROTOCOLS_FOUND
+   AND WAYLAND_SCANNER_EXECUTABLE)
+    pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+    set(RELATIVE_POINTER_XML
+        "${WAYLAND_PROTOCOLS_DIR}/unstable/relative-pointer/relative-pointer-unstable-v1.xml")
+    if(EXISTS "${RELATIVE_POINTER_XML}")
+        set(UOS_AI_LIBRE_WAYLAND_DRAG ON)
+        set(RELATIVE_POINTER_HEADER
+            "${CMAKE_CURRENT_BINARY_DIR}/relative-pointer-unstable-v1-client-protocol.h")
+        set(RELATIVE_POINTER_CODE
+            "${CMAKE_CURRENT_BINARY_DIR}/relative-pointer-unstable-v1-protocol.c")
+        add_custom_command(
+            OUTPUT "${RELATIVE_POINTER_HEADER}" "${RELATIVE_POINTER_CODE}"
+            COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" client-header
+                    "${RELATIVE_POINTER_XML}" "${RELATIVE_POINTER_HEADER}"
+            COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" private-code
+                    "${RELATIVE_POINTER_XML}" "${RELATIVE_POINTER_CODE}"
+            DEPENDS "${RELATIVE_POINTER_XML}"
+            VERBATIM)
+        set(RELATIVE_POINTER_SOURCES
+            "${RELATIVE_POINTER_HEADER}" "${RELATIVE_POINTER_CODE}")
+    endif()
+endif()
 
 set(AISH_CXXBRIDGE_ROOT
     "${CMAKE_CURRENT_SOURCE_DIR}/../aish-cxxbridge"
@@ -81,6 +115,9 @@ qt_add_executable(uos-ai-libre
     src/singleinstance.h
     src/windowhost.cpp
     src/windowhost.h
+    src/waylanddrag.cpp
+    src/waylanddrag.h
+    ${RELATIVE_POINTER_SOURCES}
 )
 
 target_include_directories(uos-ai-libre PRIVATE src)
@@ -89,6 +126,13 @@ target_link_libraries(uos-ai-libre PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network Qt6::DBus
     ${CMAKE_DL_LIBS}
     aish_cxxbridge)
+if(UOS_AI_LIBRE_WAYLAND_DRAG)
+    target_include_directories(uos-ai-libre PRIVATE
+        "${CMAKE_CURRENT_BINARY_DIR}" ${WAYLAND_CLIENT_INCLUDE_DIRS})
+    target_compile_definitions(uos-ai-libre PRIVATE
+        UOS_AI_LIBRE_HAVE_WAYLAND_DRAG=1)
+    target_link_libraries(uos-ai-libre PRIVATE ${WAYLAND_CLIENT_LIBRARIES})
+endif()
 
 qt_add_resources(uos-ai-libre "app_assets"
     PREFIX "/"

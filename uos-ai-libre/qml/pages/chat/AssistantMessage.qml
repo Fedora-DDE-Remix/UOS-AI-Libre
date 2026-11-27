@@ -27,7 +27,9 @@ Item {
 
         Image {
             id: avatar
-            y: 1
+            y: markdown.firstTextLineCenter >= 0
+               ? Math.max(0, markdown.firstTextLineCenter - height / 2)
+               : 1
             width: 28
             height: 28
             source: "qrc:/images/logo.png"

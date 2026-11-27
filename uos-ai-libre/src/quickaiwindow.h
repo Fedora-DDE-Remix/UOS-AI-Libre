@@ -6,6 +6,7 @@
 #include <QString>
 
 class AppController;
+class QEvent;
 class QQmlComponent;
 class QQmlEngine;
 class QQuickWindow;
@@ -28,6 +29,9 @@ public:
     void setError(const QString &message);
     void close();
     bool visible() const;
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     bool create(bool preferLayerShell);

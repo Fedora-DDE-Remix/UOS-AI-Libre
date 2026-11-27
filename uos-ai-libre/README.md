@@ -150,9 +150,14 @@ Supported today:
   Wayland/Treeland it uses dde-shell's `DLayerShellWindow` binding for the
   generic `wlr-layer-shell-unstable-v1` protocol (`LayerOverlay`, anchored to
   the cursor, keyboard-interactive on demand); on X11 it uses a frameless
-  tool-window fallback at the same point. No Treeland-private protocol is
-  needed for a fixed-size popup; `treeland-layer-shell-extension` is only for
-  compositor-driven interactive resize/move.
+  tool-window fallback at the same point. The popup is draggable by its header.
+  Wayland dragging uses `zwp_relative_pointer_v1` deltas, which are independent
+  of the moving surface, and stops when the pointer leaves the surface or a
+  screen-edge clamp prevents it from following; this avoids both the
+  surface-local feedback jitter and the stale-drag state after releasing
+  outside the window. No Treeland-private protocol is needed:
+  `treeland-layer-shell-extension`'s `begin_move` is still marked as not
+  finalized and is not used.
 - `org.deepin.copilot.chat.inputPrompt` with `file` + `defaultPrompt`;
 - text translation through `/aiassistant/trans`;
 - TTS/STT are deliberately advertised as unavailable (`getTTSEnable` /

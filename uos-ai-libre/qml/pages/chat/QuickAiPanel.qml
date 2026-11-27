@@ -15,7 +15,13 @@ Item {
     property point anchorPoint: Qt.point(0, 0)
     property string externalError: ""
     property var snapshot: ({})
+    property bool dragging: false
+    property bool relativeDrag: false
+    property bool leftDuringDrag: false
+    property int dragCancelEpoch: 0
     signal closeRequested()
+    signal dragRequested(real dx, real dy)
+    signal dragStarted(real localX, real localY)
 
     readonly property bool hasAnswer: snapshot
         && snapshot.row !== undefined
@@ -33,11 +39,70 @@ Item {
     }
 
     Component.onCompleted: refresh()
+    onDragCancelEpochChanged: root.stopDrag()
 
     Connections {
         target: app.chat
         function onContentChanged() { root.refresh() }
     }
+
+    Connections {
+        target: quickAiDrag
+        function onMoved(dx, dy) {
+            if (root.dragging && root.relativeDrag && !root.leftDuringDrag)
+                root.dragRequested(dx, dy)
+        }
+        function onReleased() {
+            root.stopDrag()
+        }
+    }
+
+    function stopDrag(resetMouse) {
+        if (root.relativeDrag)
+            quickAiDrag.end()
+        root.relativeDrag = false
+        root.dragging = false
+        root.leftDuringDrag = false
+        dragLeaveTimer.stop()
+
+        // A release delivered to another surface never reaches this
+        // MouseArea, leaving QQuickMouseArea::pressed stuck. Toggling
+        // visibility synchronously triggers its itemChange -> ungrabMouse()
+        // path, which clears the stale press and emits canceled().
+        if (resetMouse !== false) {
+            dragArea.visible = false
+            dragArea.visible = true
+        }
+    }
+
+    // Layer-shell cannot grab the pointer globally: if the button is released
+    // outside the window, no release event reaches the MouseArea. Once a drag
+    // leaves the panel, never resume it on re-entry; a short timer is only a
+    // fallback for the case where the pointer never comes back.
+    Timer {
+        id: dragLeaveTimer
+        interval: 160
+        repeat: false
+        onTriggered: root.stopDrag()
+    }
+
+    HoverHandler {
+        id: panelHover
+        onHoveredChanged: {
+            if (!root.dragging)
+                return
+            if (!hovered) {
+                root.leftDuringDrag = true
+                dragLeaveTimer.start()
+            } else if (root.leftDuringDrag) {
+                // The pointer was released outside. Do not let the next
+                // relative-pointer event move the window before we notice.
+                root.stopDrag()
+            }
+        }
+    }
+
+    Component.onDestruction: root.stopDrag(false)
 
     Rectangle {
         anchors.fill: parent
@@ -53,39 +118,105 @@ Item {
             spacing: 10
 
             Item {
+                id: header
                 width: parent.width
-                height: 38
+                height: 42
 
-                Image {
-                    id: logo
-                    width: 24
-                    height: 24
-                    anchors.verticalCenter: parent.verticalCenter
-                    source: "qrc:/images/logo.png"
-                    fillMode: Image.PreserveAspectFit
-                    smooth: true
-                }
+                // Keep the logo and the title on one optical center line. The
+                // model subtitle sits under the title instead of pulling the
+                // title upwards as a vertically-centered Column would.
+                Row {
+                    id: titleRow
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    spacing: 9
 
-                Column {
-                    anchors.left: logo.right
-                    anchors.leftMargin: 9
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 1
+                    Image {
+                        id: logo
+                        width: 24
+                        height: 24
+                        source: "qrc:/images/logo.png"
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                    }
+
                     Text {
+                        id: titleText
+                        width: Math.max(0, header.width - 33 - 40)
+                        anchors.verticalCenter: parent.verticalCenter
                         text: root.modeTitle
                         color: Theme.textPrimary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSizeBody
                         font.weight: Font.DemiBold
-                    }
-                    Text {
-                        text: root.hasAnswer && root.snapshot.model
-                              ? root.snapshot.model : "AI"
-                        color: Theme.textTertiary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeTiny
                         elide: Text.ElideRight
                     }
+                }
+
+                Text {
+                    anchors.left: titleRow.left
+                    anchors.leftMargin: 33
+                    anchors.top: titleRow.bottom
+                    anchors.topMargin: 1
+                    width: Math.max(0, header.width - 33 - 40)
+                    text: root.hasAnswer && root.snapshot.model
+                          ? root.snapshot.model : "AI"
+                    color: Theme.textTertiary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSizeTiny
+                    elide: Text.ElideRight
+                }
+
+                // Layer-shell surfaces do not get window-manager titlebar
+                // dragging. The host translates this drag into margin updates
+                // on Wayland and x/y updates on X11.
+                MouseArea {
+                    id: dragArea
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    cursorShape: pressed ? Qt.ClosedHandCursor
+                                         : Qt.SizeAllCursor
+                    property point lastGlobal: Qt.point(0, 0)
+
+                    onPressed: function(mouse) {
+                        root.leftDuringDrag = false
+                        root.dragging = true
+                        dragLeaveTimer.stop()
+                        // On Wayland the raw relative deltas are independent
+                        // of the surface position. X11 (or a compositor
+                        // without relative-pointer) keeps the local fallback.
+                        root.relativeDrag = quickAiDrag.begin()
+                        if (!root.relativeDrag)
+                            lastGlobal = root.mapToGlobal(mouse.x, mouse.y)
+                        // The MouseArea lives in the header, not at the panel
+                        // origin. Convert to panel coordinates so the
+                        // screen-edge clamp check measures the whole window.
+                        const local = root.mapFromItem(dragArea, mouse.x,
+                                                       mouse.y)
+                        root.dragStarted(local.x, local.y)
+                    }
+                    onPositionChanged: function(mouse) {
+                        if (!root.dragging)
+                            return
+                        // If the release happened while the pointer was
+                        // outside, the button mask tells us before we move
+                        // again.
+                        if (!(mouse.buttons & Qt.LeftButton)) {
+                            root.stopDrag()
+                            return
+                        }
+                        if (root.leftDuringDrag)
+                            return
+                        if (root.relativeDrag)
+                            return
+                        const global = root.mapToGlobal(mouse.x, mouse.y)
+                        const dx = global.x - lastGlobal.x
+                        const dy = global.y - lastGlobal.y
+                        lastGlobal = global
+                        if (dx !== 0 || dy !== 0)
+                            root.dragRequested(dx, dy)
+                    }
+                    onReleased: root.stopDrag(false)
                 }
 
                 Item {

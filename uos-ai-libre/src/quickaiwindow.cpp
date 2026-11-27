@@ -2,6 +2,7 @@
 
 #include "appcontroller.h"
 
+#include <QEvent>
 #include <QGuiApplication>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -16,6 +17,18 @@ QuickAiWindowHost::~QuickAiWindowHost() { close(); }
 
 bool QuickAiWindowHost::visible() const {
     return m_window && m_window->isVisible();
+}
+
+bool QuickAiWindowHost::eventFilter(QObject *watched, QEvent *event) {
+    // On Wayland the compositor may move pointer focus while a drag is in
+    // progress. The layer-shell client then never sees the button release.
+    // A window-level Leave is the reliable capture-loss signal; bump an epoch
+    // consumed by QuickAiPanel so it can stop the relative-pointer drag.
+    if (m_window && watched == m_window && event->type() == QEvent::Leave) {
+        const int epoch = m_window->property("dragCancelEpoch").toInt();
+        m_window->setProperty("dragCancelEpoch", epoch + 1);
+    }
+    return QObject::eventFilter(watched, event);
 }
 
 QQmlComponent *QuickAiWindowHost::loadComponent(bool layerShell) {
@@ -57,6 +70,7 @@ bool QuickAiWindowHost::create(bool preferLayerShell) {
     }
 
     m_window = window;
+    window->installEventFilter(this);
     connect(window, &QObject::destroyed, this, [this, window]() {
         if (m_window == window)
             m_window = nullptr;

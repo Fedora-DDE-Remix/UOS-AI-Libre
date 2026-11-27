@@ -2,6 +2,7 @@
 #include "dde/dde_service.h"
 #include "quickaiwindow.h"
 #include "singleinstance.h"
+#include "waylanddrag.h"
 #include "windowhost.h"
 #include "iconprovider.h"
 #include "rhibackend-selector.h"
@@ -68,9 +69,14 @@ int main(int argc, char *argv[]) {
     qInfo().noquote() << "RHI backend:" << rhiDetail;
 
     AppController app;
+    // Declared before the QML engine so its destructor (which tears down the
+    // Wayland proxies) runs after all QML objects are gone.
+    WaylandDragTracker quick_ai_drag;
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("appicon"), new AppIconProvider);
+    engine.rootContext()->setContextProperty(QStringLiteral("quickAiDrag"),
+                                             &quick_ai_drag);
     engine.rootContext()->setContextProperty(QStringLiteral("app"), &app);
     engine.rootContext()->setContextProperty(QStringLiteral("appVersion"),
                                              qtApp.applicationVersion());
@@ -117,9 +123,10 @@ int main(int argc, char *argv[]) {
                          app.queueAttachments({path});
                      });
     QObject::connect(&dde, &DdeService::quickImageRequested, &quick_ai,
-                     [&quick_ai, &window_host, &app](int mode,
-                                                    const QString &path,
-                                                    const QPoint &anchor) {
+                     [&quick_ai, &window_host, &app,
+                      &quick_ai_drag](int mode, const QString &path,
+                                      const QPoint &anchor) {
+                         quick_ai_drag.end();
                          quick_ai.show(mode, path, anchor);
                          if (!quick_ai.visible()) {
                              // If the layer-shell surface could not be created,

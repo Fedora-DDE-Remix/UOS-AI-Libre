@@ -9,6 +9,21 @@ Item {
     width: parent ? parent.width : 0
     implicitHeight: contentColumn.implicitHeight + (markdownModel.truncated ? 26 : 0)
 
+    // Vertical center of the first rendered text line, in this item's
+    // coordinates. AssistantMessage uses it to optically align its avatar with
+    // a leading heading/paragraph instead of the block's top padding.
+    readonly property real firstTextLineCenter: {
+        if (contentColumn.children.length === 0)
+            return -1
+        const first = contentColumn.children[0]
+        const text = first ? first.item : null
+        if (!text || text.font === undefined
+            || text.font.pixelSize === undefined)
+            return -1
+        const lineHeight = text.lineHeight !== undefined ? text.lineHeight : 1
+        return (text.topPadding || 0) + text.font.pixelSize * lineHeight / 2
+    }
+
     MarkdownModel {
         id: markdownModel
         text: root.text
