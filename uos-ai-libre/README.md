@@ -86,7 +86,11 @@ Rules that keep the UI maintainable:
 - The sidebar history list defaults to sessions whose saved cwd matches the
   current workspace. The globe button in the header switches to all workspaces,
   sorted by `updated_at`; the list scrollbar sits at the sidebar edge with a
-  content inset so it does not touch history rows.
+  content inset so it does not touch history rows. The composer's workspace
+  row shows `当前工作目录:` plus the full path, elided in the middle when
+  needed, and its folder icon aligns with the suggestion-card icons.
+- Menus and secondary menus open with a short fade/scale transition from
+  their top edge instead of appearing instantly.
 - Session-scoped "本会话允许" approvals are listed on the security page and can
   be revoked or cleared. They are never persisted; a policy change invalidates
   them through aish's policy fingerprint.

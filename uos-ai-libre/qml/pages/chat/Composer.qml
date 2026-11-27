@@ -375,7 +375,7 @@ Rectangle {
             }
 
             Row {
-                x: 16
+                x: 14
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 7
                 AppIcon {
@@ -386,8 +386,10 @@ Rectangle {
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(implicitWidth, root.width - 70)
-                    text: root.workspaceLabel
+                    width: Math.max(0, Math.min(implicitWidth, root.width - 80))
+                    text: "当前工作目录: "
+                          + (app.workspace && app.workspace.length > 0
+                             ? app.workspace : root.workspaceLabel)
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeSmall
@@ -516,6 +518,23 @@ Rectangle {
         modal: false
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        transformOrigin: Popup.Top
+        enter: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 0; to: 1
+                                  duration: 120; easing.type: Easing.OutCubic }
+                NumberAnimation { property: "scale"; from: 0.96; to: 1
+                                  duration: 140; easing.type: Easing.OutCubic }
+            }
+        }
+        exit: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 1; to: 0
+                                  duration: 90; easing.type: Easing.InCubic }
+                NumberAnimation { property: "scale"; from: 1; to: 0.97
+                                  duration: 90; easing.type: Easing.InCubic }
+            }
+        }
         onClosed: attachMenu.close()
         background: Rectangle {
             radius: Theme.radiusMedium
@@ -568,6 +587,23 @@ Rectangle {
         modal: false
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        transformOrigin: Popup.Top
+        enter: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 0; to: 1
+                                  duration: 120; easing.type: Easing.OutCubic }
+                NumberAnimation { property: "scale"; from: 0.96; to: 1
+                                  duration: 140; easing.type: Easing.OutCubic }
+            }
+        }
+        exit: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 1; to: 0
+                                  duration: 90; easing.type: Easing.InCubic }
+                NumberAnimation { property: "scale"; from: 1; to: 0.97
+                                  duration: 90; easing.type: Easing.InCubic }
+            }
+        }
         onClosed: {
             plusMenu.closePolicy = Popup.CloseOnEscape | Popup.CloseOnPressOutside
             if (closingForHover) {
@@ -637,6 +673,23 @@ Rectangle {
         modal: false
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        transformOrigin: Popup.Top
+        enter: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 0; to: 1
+                                  duration: 120; easing.type: Easing.OutCubic }
+                NumberAnimation { property: "scale"; from: 0.96; to: 1
+                                  duration: 140; easing.type: Easing.OutCubic }
+            }
+        }
+        exit: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 1; to: 0
+                                  duration: 90; easing.type: Easing.InCubic }
+                NumberAnimation { property: "scale"; from: 1; to: 0.97
+                                  duration: 90; easing.type: Easing.InCubic }
+            }
+        }
 
         function rebuild() {
             const q = query.trim().toLowerCase()

@@ -17,6 +17,23 @@ Popup {
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    transformOrigin: Popup.Top
+    enter: Transition {
+        ParallelAnimation {
+            NumberAnimation { property: "opacity"; from: 0; to: 1
+                              duration: 120; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "scale"; from: 0.96; to: 1
+                              duration: 140; easing.type: Easing.OutCubic }
+        }
+    }
+    exit: Transition {
+        ParallelAnimation {
+            NumberAnimation { property: "opacity"; from: 1; to: 0
+                              duration: 90; easing.type: Easing.InCubic }
+            NumberAnimation { property: "scale"; from: 1; to: 0.97
+                              duration: 90; easing.type: Easing.InCubic }
+        }
+    }
 
     background: Item {
         Rectangle {

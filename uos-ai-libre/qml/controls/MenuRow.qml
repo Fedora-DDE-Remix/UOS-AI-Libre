@@ -56,7 +56,10 @@ Item {
     Text {
         x: root.icon.length > 0 ? 34 : (root.checkLeft ? 34 : 14)
         anchors.verticalCenter: parent.verticalCenter
-        width: parent.width - x - (root.showChevron ? 30 : (root.shortcut.length > 0 ? 58 : 12))
+        width: parent.width - x
+               - (root.showChevron ? 30
+                  : (root.shortcut.length > 0 ? 58
+                     : (root.checked && !root.checkLeft ? 34 : 12)))
         text: root.label
         color: root.active ? root.activeColor : root.idleColor
         font.family: Theme.fontFamily
