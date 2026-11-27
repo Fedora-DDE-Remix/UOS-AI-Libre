@@ -167,8 +167,10 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/com.deepin.copilot.service"
     "${CMAKE_CURRENT_BINARY_DIR}/com.iflytek.aiassistant.service"
     DESTINATION share/dbus-1/services)
+# XDG system autostart is /etc/xdg/autostart, not ${prefix}/etc. Keep this
+# absolute so a /usr-prefixed package and a /usr/local dev install both work.
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/uos-ai-libre-service.desktop"
-    DESTINATION etc/xdg/autostart)
+    DESTINATION /etc/xdg/autostart)
 install(FILES resources/images/logo.png
     DESTINATION share/icons/hicolor/256x256/apps
     RENAME uos-ai-libre.png)
