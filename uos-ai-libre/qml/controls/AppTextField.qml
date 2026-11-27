@@ -17,6 +17,7 @@ Item {
 
     implicitHeight: 38
     implicitWidth: 200
+    clip: true
 
     Rectangle {
         anchors.fill: parent
@@ -41,6 +42,7 @@ Item {
         echoMode: root.password ? TextInput.Password : root.echoMode
         readOnly: root.readOnly
         inputMethodHints: root.inputMethodHints
+        clip: true
         onAccepted: root.accepted()
         onTextChanged: root.textEdited(input.text)
 
