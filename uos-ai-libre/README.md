@@ -119,6 +119,57 @@ Rules that keep the UI maintainable:
   page-private pieces. Variants are expressed as properties (for example
   `AppButton.variant`) rather than deep inheritance chains.
 
+## DDE compatibility service
+
+The binary also exposes the UOS AI desktop D-Bus contract so DDE components can
+use the aish backend without knowing anything about aish:
+
+```text
+com.deepin.copilot
+    /com/deepin/copilot          com.deepin.copilot
+    /org/deepin/copilot/chat     org.deepin.copilot.chat
+com.iflytek.aiassistant
+    /aiassistant/deepinmain      com.iflytek.aiassistant.mainWindow
+    /aiassistant/tts             com.iflytek.aiassistant.tts
+    /aiassistant/iat             com.iflytek.aiassistant.iat
+    /aiassistant/trans           com.iflytek.aiassistant.trans
+```
+
+`src/dde/dde_service.*` is transport-only: it validates paths and images,
+exposes capability booleans and emits intent signals. `main.cpp` routes those
+signals to `WindowHost`/`AppController`/`QML`. No QML file calls D-Bus directly.
+
+Supported today:
+
+- `version`, `isCopilotEnabled`, `launchChatPage`,
+  `launchChatPageWithToken`, `activateChatPage`, `launchLLMUiPage`;
+- `launchAiQuickOCR` (explain/summarize/translate/ask; local file path, data
+  URL, base64 PNG/JPEG or qCompress'ed base64 PNG) and
+  `launchChatUploadImage`;
+- `org.deepin.copilot.chat.inputPrompt` with `file` + `defaultPrompt`;
+- text translation through `/aiassistant/trans`;
+- TTS/STT are deliberately advertised as unavailable (`getTTSEnable` /
+  `getIatEnable` return false), so DTK-based apps hide those menu items instead
+  of calling a fake service. Knowledge-base ingestion is also rejected
+  explicitly rather than pretending a file was indexed.
+
+The screen-recorder and grand-search flows therefore use the user's configured
+cloud model directly. Image understanding requires a vision-capable model; if
+the active model is text-only, the request fails with the provider's normal
+error instead of silently dropping the image.
+
+Run the service explicitly with:
+
+```bash
+./build/uos-ai-libre --service
+```
+
+The install rules generate `share/dbus-1/services/com.deepin.copilot.service`,
+`share/dbus-1/services/com.iflytek.aiassistant.service` and an autostart entry.
+If UOS AI is installed, only one process can own these bus names; the packages
+must conflict with each other at packaging time. For development testing use an
+isolated D-Bus session (`dbus-run-session`) and stop the other service first.
+
 ## Build
 
 The frontend links the release static library produced by `aish-cxxbridge`.
@@ -151,7 +202,7 @@ It builds the Rust bridge with Cargo's `dev` profile and the Qt frontend into
 reused, so repeated runs only compile changed Rust crates, C++ sources or QML
 files. `build-debug/compile_commands.json` is generated for clangd/IDE use.
 
-Requirements: Qt 6.8 (Quick, Controls 2, Svg), CMake 3.21+, Ninja, a C++17
+Requirements: Qt 6.8 (Quick, Controls 2, Svg, DBus), CMake 3.21+, Ninja, a C++17
 compiler, Rust stable, and `cxxbridge-cmd` 1.0.205 for the header generator.
 `build.sh`/`build-debug.sh` look for `cxxbridge` in PATH or
 `~/.cargo/bin/cxxbridge`; if it is missing they install the pinned version with
@@ -178,6 +229,15 @@ transcript table.
 - `build/markdown-test` covers the block parser, tables, task lists, CJK soft
   joins, truncation, incremental updates and a 44 KB parse benchmark. It is
   registered with CTest as `markdown-test`.
+- `dde-payload-test` covers image path/data-URL/base64/qCompress decoding,
+  cache survival after the source is deleted, document truncation, prompt
+  construction and invalid input.
+- `dde-service-test` runs in an isolated `dbus-run-session` and verifies the
+  `com.deepin.copilot` / `com.iflytek.aiassistant` method signatures,
+  `Peer.Ping`, screen-recorder introspection, quick-image and chat-image
+  signals, compressed image input, `inputPrompt` file validation, explicit
+  knowledge-base rejection, translation capability, chat-page signals and
+  duplicate-service rejection.
 - Real-provider tests live outside the repository in
   `../../AI后端测试/`. `app_smoke.cpp` drives `AppController` end-to-end and
   verifies streaming, session list/resume/rename/delete and config saving.

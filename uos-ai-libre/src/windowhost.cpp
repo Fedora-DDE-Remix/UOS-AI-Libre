@@ -72,6 +72,19 @@ void WindowHost::showWindow() {
     m_window->requestActivate();
 }
 
+void WindowHost::showChatPage() {
+    showWindow();
+    if (m_window)
+        QMetaObject::invokeMethod(m_window, "showChatPage");
+}
+
+void WindowHost::showSettingsPage(int index) {
+    showWindow();
+    if (m_window)
+        QMetaObject::invokeMethod(m_window, "showSettings",
+                                  Q_ARG(QVariant, QVariant(index)));
+}
+
 void WindowHost::createWindow() {
     if (m_window || m_component->isError())
         return;

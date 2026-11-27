@@ -60,6 +60,7 @@ class AppController final : public QObject {
     Q_PROPERTY(QVariantList chatModels READ chatModels NOTIFY chatModelsChanged)
     Q_PROPERTY(bool modelFetchBusy READ modelFetchBusy NOTIFY modelFetchBusyChanged)
     Q_PROPERTY(QVariantMap modelFetchResult READ modelFetchResult NOTIFY modelFetchResultChanged)
+    Q_PROPERTY(QVariantList pendingAttachments READ pendingAttachments NOTIFY pendingAttachmentsChanged)
     Q_PROPERTY(QVariantList sessions READ sessions NOTIFY sessionsChanged)
     Q_PROPERTY(QString workspace READ workspace NOTIFY workspaceChanged)
     Q_PROPERTY(QString defaultWorkspace READ defaultWorkspace CONSTANT)
@@ -112,6 +113,7 @@ public:
     QVariantList chatModels() const;
     bool modelFetchBusy() const;
     QVariantMap modelFetchResult() const;
+    QVariantList pendingAttachments() const;
     QVariantList sessions() const;
     QString workspace() const;
     QString defaultWorkspace() const;
@@ -121,6 +123,14 @@ public:
     Q_INVOKABLE void initialize();
     Q_INVOKABLE bool sendMessage(const QString &text,
                                  const QVariantList &imagePaths);
+    Q_INVOKABLE bool startQuickImageAction(int mode,
+                                           const QString &imagePath);
+    Q_INVOKABLE bool startDocumentPrompt(const QString &question,
+                                         const QString &file,
+                                         const QString &defaultPrompt);
+    Q_INVOKABLE bool translateSelection();
+    Q_INVOKABLE void queueAttachments(const QVariantList &paths);
+    Q_INVOKABLE QVariantList takePendingAttachments();
     Q_INVOKABLE void stop();
     Q_INVOKABLE void newConversation();
     Q_INVOKABLE void loadSession(const QString &sessionId);
@@ -219,6 +229,7 @@ signals:
     void modelFetchBusyChanged();
     void modelFetchResultChanged();
     void modelFetchFinished(const QVariantMap &result);
+    void pendingAttachmentsChanged();
     void workspaceChanged();
     void toastRequested(const QString &message);
     void pendingApprovalChanged();
@@ -271,6 +282,8 @@ private:
     void onSessionsChanged();
     void onSettingsJobFinished(const QVariantMap &result);
     bool requireIdle(const QString &action);
+    bool canStartExternalAction(QString *error) const;
+    bool sendExternalPrompt(const QString &text, const QVariantList &images);
     QString providerLabel(const QString &apiBase) const;
     void setProviderLabel(const QString &apiBase, const QString &label);
     QVariantList providerModels(const QString &apiBase) const;
@@ -312,6 +325,7 @@ private:
     bool m_model_fetch_busy = false;
     QVariantList m_memory_entries;
     QVariantList m_audit_events;
+    QVariantList m_pending_attachments;
     int m_theme_mode = 2;
     bool m_saving_session = false;
     bool m_assistant_open = false;

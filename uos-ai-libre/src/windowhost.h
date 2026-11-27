@@ -29,6 +29,8 @@ public:
     QQuickWindow *window() const;
 
     Q_INVOKABLE void showWindow();
+    Q_INVOKABLE void showChatPage();
+    Q_INVOKABLE void showSettingsPage(int index);
     Q_INVOKABLE void windowClosed();
     Q_INVOKABLE void newChat();
     Q_INVOKABLE void quitApp();

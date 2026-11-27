@@ -1,4 +1,5 @@
 #include "appcontroller.h"
+#include "dde/dde_service.h"
 #include "singleinstance.h"
 #include "windowhost.h"
 #include "iconprovider.h"
@@ -45,6 +46,11 @@ int main(int argc, char *argv[]) {
     }
     font.setPixelSize(14);
     QGuiApplication::setFont(font);
+
+    const QStringList arguments = QCoreApplication::arguments();
+    const bool service_mode =
+        arguments.contains(QStringLiteral("--service"))
+        || arguments.contains(QStringLiteral("--dde-service"));
 
     // The agent backend lives in this process. Closing the window only
     // destroys the QML window; a second launch asks the first instance to show
@@ -96,13 +102,90 @@ int main(int argc, char *argv[]) {
                          window_host.quitApp();
                      });
 
-    window_host.showWindow();
-    QQuickWindow *window = window_host.window();
-    if (!window)
-        return 1;
-    QObject *root = window;
+    DdeService dde;
+    QObject::connect(&dde, &DdeService::chatPageRequested, &window_host,
+                     [&window_host](int) { window_host.showChatPage(); });
+    QObject::connect(&dde, &DdeService::chatPageWithTokenRequested,
+                     &window_host, [&window_host](int, const QString &) {
+                         window_host.showChatPage();
+                     });
+    QObject::connect(&dde, &DdeService::chatImageRequested, &window_host,
+                     [&window_host, &app](const QString &path) {
+                         window_host.showChatPage();
+                         app.queueAttachments({path});
+                     });
+    QObject::connect(&dde, &DdeService::quickImageRequested, &window_host,
+                     [&window_host, &app](int mode, const QString &path) {
+                         window_host.showChatPage();
+                         app.startQuickImageAction(mode, path);
+                     });
+    QObject::connect(&dde, &DdeService::promptRequested, &window_host,
+                     [&window_host, &app](const QString &question,
+                                          const QString &file,
+                                          const QString &defaultPrompt) {
+                         window_host.showChatPage();
+                         app.startDocumentPrompt(question, file, defaultPrompt);
+                     });
+    QObject::connect(&dde, &DdeService::settingsRequested, &window_host,
+                     [&window_host](bool) { window_host.showSettingsPage(0); });
+    QObject::connect(&dde, &DdeService::translationRequested, &window_host,
+                     [&window_host, &app]() {
+                         window_host.showChatPage();
+                         app.translateSelection();
+                     });
+    QObject::connect(&dde, &DdeService::screenshotRequested, &window_host,
+                     [&window_host, &app]() {
+                         window_host.showChatPage();
+                         const QString path = app.takeScreenshot();
+                         if (path.isEmpty())
+                             app.showToast(QStringLiteral("截图失败"));
+                         else
+                             app.queueAttachments({path});
+                     });
+    QObject::connect(&dde, &DdeService::wordWizardRequested, &window_host,
+                     [&window_host]() { window_host.showChatPage(); });
 
-    QTimer::singleShot(0, &app, &AppController::initialize);
+    const auto update_dde_capabilities = [&app, &dde]() {
+        dde.setTranslationAvailable(app.ready()
+                                    && !app.model().trimmed().isEmpty());
+    };
+    QObject::connect(&app, &AppController::readyChanged, &dde,
+                     update_dde_capabilities);
+    QObject::connect(&app, &AppController::modelChanged, &dde,
+                     update_dde_capabilities);
+
+    if (service_mode)
+        app.initialize();
+
+    QString dde_error;
+    if (!dde.start(&dde_error)) {
+        qWarning().noquote() << "DDE compatibility service unavailable:"
+                             << dde_error;
+        if (service_mode)
+            return 0;
+        // A running UOS AI instance may own the names. Retry in the background
+        // so stopping/replacing it does not require restarting this GUI.
+        auto *retry = new QTimer(&app);
+        retry->setInterval(5000);
+        QObject::connect(retry, &QTimer::timeout, &dde,
+                         [&dde, &dde_error, retry]() {
+                             if (dde.start(&dde_error)) {
+                                 retry->stop();
+                                 qInfo().noquote()
+                                     << "DDE compatibility service registered";
+                             }
+                         });
+        retry->start();
+    }
+    update_dde_capabilities();
+
+    if (!service_mode) {
+        window_host.showWindow();
+        QTimer::singleShot(0, &app, &AppController::initialize);
+    }
+
+    QQuickWindow *window = window_host.window();
+    QObject *root = window;
 
     const QString theme = qEnvironmentVariable("UOS_AI_LIBRE_THEME");
     if (theme == QStringLiteral("light"))
@@ -112,7 +195,7 @@ int main(int argc, char *argv[]) {
 
     const QString snapshot_path =
         qEnvironmentVariable("UOS_AI_LIBRE_SNAPSHOT");
-    if (!snapshot_path.isEmpty()) {
+    if (!service_mode && !snapshot_path.isEmpty()) {
         const QString page =
             qEnvironmentVariable("UOS_AI_LIBRE_SNAPSHOT_PAGE",
                                  QStringLiteral("welcome"));

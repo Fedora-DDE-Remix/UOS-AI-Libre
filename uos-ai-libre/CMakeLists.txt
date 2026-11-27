@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Svg Network)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Svg Network DBus)
 qt_standard_project_setup()
 
 set(AISH_CXXBRIDGE_ROOT
@@ -61,6 +61,14 @@ qt_add_executable(uos-ai-libre
     src/appcontroller.h
     src/chatmodel.cpp
     src/chatmodel.h
+    src/dde/dde_adaptors.cpp
+    src/dde/dde_adaptors.h
+    src/dde/dde_payload.cpp
+    src/dde/dde_payload.h
+    src/dde/dde_prompt.cpp
+    src/dde/dde_prompt.h
+    src/dde/dde_service.cpp
+    src/dde/dde_service.h
     src/iconprovider.cpp
     src/iconprovider.h
     src/markdownmodel.cpp
@@ -76,7 +84,7 @@ qt_add_executable(uos-ai-libre
 target_include_directories(uos-ai-libre PRIVATE src)
 target_compile_options(uos-ai-libre PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(uos-ai-libre PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network Qt6::DBus
     ${CMAKE_DL_LIBS}
     aish_cxxbridge)
 
@@ -101,6 +109,20 @@ set_target_properties(uos-ai-libre PROPERTIES
 
 install(TARGETS uos-ai-libre RUNTIME DESTINATION bin)
 install(FILES resources/uos-ai-libre.desktop DESTINATION share/applications)
+
+set(UOS_AI_LIBRE_EXEC "${CMAKE_INSTALL_FULL_BINDIR}/uos-ai-libre")
+configure_file(resources/dbus/com.deepin.copilot.service.in
+    "${CMAKE_CURRENT_BINARY_DIR}/com.deepin.copilot.service" @ONLY)
+configure_file(resources/dbus/com.iflytek.aiassistant.service.in
+    "${CMAKE_CURRENT_BINARY_DIR}/com.iflytek.aiassistant.service" @ONLY)
+configure_file(resources/autostart/uos-ai-libre-service.desktop.in
+    "${CMAKE_CURRENT_BINARY_DIR}/uos-ai-libre-service.desktop" @ONLY)
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/com.deepin.copilot.service"
+    "${CMAKE_CURRENT_BINARY_DIR}/com.iflytek.aiassistant.service"
+    DESTINATION share/dbus-1/services)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/uos-ai-libre-service.desktop"
+    DESTINATION etc/xdg/autostart)
 install(FILES resources/images/logo.png
     DESTINATION share/icons/hicolor/256x256/apps
     RENAME uos-ai-libre.png)
@@ -127,4 +149,44 @@ if(UOS_AI_LIBRE_BUILD_TESTS)
     target_compile_options(chatmodel-test PRIVATE -Wall -Wextra -Wpedantic)
     target_link_libraries(chatmodel-test PRIVATE Qt6::Core Qt6::Qml)
     add_test(NAME chatmodel-test COMMAND chatmodel-test)
+
+    add_executable(dde-payload-test
+        tests/dde_payload_test.cpp
+        src/dde/dde_payload.cpp
+        src/dde/dde_payload.h
+        src/dde/dde_prompt.cpp
+        src/dde/dde_prompt.h
+    )
+    target_include_directories(dde-payload-test PRIVATE src)
+    target_compile_options(dde-payload-test PRIVATE -Wall -Wextra -Wpedantic)
+    target_link_libraries(dde-payload-test PRIVATE Qt6::Core Qt6::Gui)
+    add_test(NAME dde-payload-test COMMAND dde-payload-test)
+    set_tests_properties(dde-payload-test PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    add_executable(dde-service-test
+        tests/dde_service_test.cpp
+        src/dde/dde_adaptors.cpp
+        src/dde/dde_adaptors.h
+        src/dde/dde_payload.cpp
+        src/dde/dde_payload.h
+        src/dde/dde_prompt.cpp
+        src/dde/dde_prompt.h
+        src/dde/dde_service.cpp
+        src/dde/dde_service.h
+    )
+    target_include_directories(dde-service-test PRIVATE src)
+    target_compile_options(dde-service-test PRIVATE -Wall -Wextra -Wpedantic)
+    target_link_libraries(dde-service-test PRIVATE
+        Qt6::Core Qt6::Gui Qt6::DBus)
+    find_program(DBUS_RUN_SESSION_EXECUTABLE dbus-run-session)
+    if(DBUS_RUN_SESSION_EXECUTABLE)
+        add_test(NAME dde-service-test
+            COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} --
+                    $<TARGET_FILE:dde-service-test>)
+    else()
+        add_test(NAME dde-service-test COMMAND dde-service-test)
+    endif()
+    set_tests_properties(dde-service-test PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

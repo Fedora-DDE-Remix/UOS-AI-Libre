@@ -188,6 +188,26 @@ Item {
         })
     }
 
+    function consumePendingAttachments() {
+        const paths = app.takePendingAttachments()
+        if (!paths || paths.length === 0)
+            return
+        if (welcomeMode.visible) {
+            welcomeComposer.addAttachments(paths)
+            Qt.callLater(function() { welcomeComposer.focusInput() })
+        } else {
+            chatComposer.addAttachments(paths)
+            Qt.callLater(function() { chatComposer.focusInput() })
+        }
+    }
+
+    Connections {
+        target: app
+        function onPendingAttachmentsChanged() {
+            Qt.callLater(page.consumePendingAttachments)
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         color: page.hasConversation ? Theme.chatBg : Theme.windowBg
@@ -738,5 +758,6 @@ Item {
             Qt.callLater(page.scrollToLastUser)
         else
             Qt.callLater(function() { welcomeComposer.focusInput() })
+        Qt.callLater(page.consumePendingAttachments)
     }
 }

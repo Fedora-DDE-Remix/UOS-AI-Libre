@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=com.iflytek.aiassistant
+Exec=@UOS_AI_LIBRE_EXEC@ --service

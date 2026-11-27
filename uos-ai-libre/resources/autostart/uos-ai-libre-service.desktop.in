@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=UOS AI Libre Service
+Comment=UOS AI compatible D-Bus service
+Exec=@UOS_AI_LIBRE_EXEC@ --service
+Icon=uos-ai-libre
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-Delay=2

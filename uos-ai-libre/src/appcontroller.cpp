@@ -1,5 +1,9 @@
 #include "appcontroller.h"
 
+#include "dde/dde_payload.h"
+#include "dde/dde_prompt.h"
+
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QDesktopServices>
 #include <QFileInfo>
@@ -170,6 +174,9 @@ QVariantList AppController::providers() const { return m_providers; }
 QVariantList AppController::chatModels() const { return m_chat_models; }
 bool AppController::modelFetchBusy() const { return m_model_fetch_busy; }
 QVariantMap AppController::modelFetchResult() const { return m_model_fetch_result; }
+QVariantList AppController::pendingAttachments() const {
+    return m_pending_attachments;
+}
 QVariantList AppController::sessions() const { return m_bridge.sessions(); }
 QString AppController::workspace() const { return m_bridge.workspace(); }
 QString AppController::defaultWorkspace() const {
@@ -265,6 +272,129 @@ bool AppController::sendMessage(const QString &text,
 }
 
 void AppController::stop() { m_bridge.cancel(); }
+
+bool AppController::canStartExternalAction(QString *error) const {
+    if (!m_bridge.ready()) {
+        if (error)
+            *error = QStringLiteral("AI 服务尚未就绪");
+        return false;
+    }
+    if (m_model.trimmed().isEmpty()) {
+        if (error)
+            *error = QStringLiteral("尚未配置可用模型");
+        return false;
+    }
+    if (m_bridge.generating()) {
+        if (error)
+            *error = QStringLiteral("请先停止当前回答");
+        return false;
+    }
+    return true;
+}
+
+bool AppController::sendExternalPrompt(const QString &text,
+                                       const QVariantList &images) {
+    QString error;
+    if (!canStartExternalAction(&error)) {
+        emit toastRequested(error);
+        return false;
+    }
+    if (text.trimmed().isEmpty() && images.isEmpty()) {
+        emit toastRequested(QStringLiteral("外部 AI 请求为空"));
+        return false;
+    }
+    newConversation();
+    if (!sendMessage(text, images)) {
+        const QString message = m_bridge.lastError().trimmed();
+        emit toastRequested(message.isEmpty() ? QStringLiteral("发送失败")
+                                              : message);
+        return false;
+    }
+    return true;
+}
+
+bool AppController::startQuickImageAction(int mode,
+                                          const QString &imagePath) {
+    if (!QFileInfo(imagePath).isFile()) {
+        emit toastRequested(QStringLiteral("图片不存在：%1").arg(imagePath));
+        return false;
+    }
+    const QString prompt = DdePrompt::quickImagePrompt(mode);
+    if (prompt.isEmpty()) {
+        emit toastRequested(QStringLiteral("不支持的 AI 快捷操作"));
+        return false;
+    }
+    return sendExternalPrompt(prompt, {imagePath});
+}
+
+bool AppController::startDocumentPrompt(const QString &question,
+                                        const QString &file,
+                                        const QString &defaultPrompt) {
+    if (file.trimmed().isEmpty() && question.trimmed().isEmpty()
+        && defaultPrompt.trimmed().isEmpty()) {
+        emit toastRequested(QStringLiteral("文档请求为空"));
+        return false;
+    }
+
+    QString text;
+    bool truncated = false;
+    bool has_file = !file.trimmed().isEmpty();
+    if (has_file) {
+        if (!QFileInfo(file).isFile()) {
+            emit toastRequested(QStringLiteral("文件不存在：%1").arg(file));
+            return false;
+        }
+        QString extract_error;
+        text = DdePayload::readDocument(file, DdePayload::kMaxDocumentChars,
+                                        &truncated, &extract_error);
+        if (text.isEmpty() && !extract_error.isEmpty())
+            emit toastRequested(extract_error);
+    }
+
+    const QString prompt = DdePrompt::documentPrompt(
+        question, defaultPrompt, file, text, truncated);
+    return sendExternalPrompt(prompt, {});
+}
+
+bool AppController::translateSelection() {
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    if (!clipboard) {
+        emit toastRequested(QStringLiteral("无法读取剪贴板"));
+        return false;
+    }
+    QString text = clipboard->text(QClipboard::Selection).trimmed();
+    if (text.isEmpty())
+        text = clipboard->text(QClipboard::Clipboard).trimmed();
+    if (text.isEmpty()) {
+        emit toastRequested(QStringLiteral("请先选择要翻译的文本"));
+        return false;
+    }
+    return sendExternalPrompt(DdePrompt::translationPrompt(text), {});
+}
+
+void AppController::queueAttachments(const QVariantList &paths) {
+    QVariantList next = m_pending_attachments;
+    for (const QVariant &entry : paths) {
+        const QString path = entry.toString().trimmed();
+        if (path.isEmpty() || !QFileInfo(path).isFile())
+            continue;
+        if (next.contains(path))
+            continue;
+        if (next.size() >= 4)
+            break;
+        next.append(path);
+    }
+    if (next == m_pending_attachments)
+        return;
+    m_pending_attachments = next;
+    emit pendingAttachmentsChanged();
+}
+
+QVariantList AppController::takePendingAttachments() {
+    const QVariantList result = m_pending_attachments;
+    m_pending_attachments.clear();
+    return result;
+}
 
 void AppController::newConversation() {
     m_bridge.newConversation();

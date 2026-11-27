@@ -43,6 +43,10 @@ ApplicationWindow {
         chatPage.startNewChat()
     }
 
+    function showChatPage() {
+        window.activePage = "chat"
+    }
+
     function showDemoApproval(request) {
         approvalDialog.request = request
         approvalDialog.open()
