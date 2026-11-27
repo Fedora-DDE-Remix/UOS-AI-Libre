@@ -25,6 +25,31 @@ Item {
             expanded = false
     }
 
+    Component.onCompleted: {
+        if (running)
+            expanded = true
+    }
+
+    function summaryText() {
+        if (!tools || tools.length === 0)
+            return "执行过程"
+        if (tools.length === 1) {
+            const tool = tools[0]
+            let label = tool && tool.name ? String(tool.name) : "工具"
+            if (tool && tool.agentType)
+                label += " · " + tool.agentType
+            if (tool && tool.target)
+                label += " · " + tool.target
+            return label
+        }
+        const names = []
+        for (let i = 0; i < Math.min(2, tools.length); ++i)
+            names.push(tools[i] && tools[i].name ? String(tools[i].name) : "工具")
+        return names.join("、") + (tools.length > 2
+                                   ? " 等 " + tools.length + " 个工具"
+                                   : "")
+    }
+
     function seconds() {
         return Math.max(1, Math.round(elapsedMs / 1000))
     }
@@ -58,13 +83,9 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width - 72
                 text: {
-                    let text = "执行过程"
+                    let text = root.summaryText()
                     if (root.running)
                         text += " · 执行中"
-                    else if (root.elapsedMs > 0)
-                        text += " 已处理" + root.seconds() + "秒"
-                    else if (root.tools.length > 0)
-                        text += " · " + root.tools.length + " 个步骤"
                     return text
                 }
                 color: Theme.textSecondary

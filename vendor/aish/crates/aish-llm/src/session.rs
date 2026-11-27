@@ -1218,11 +1218,13 @@ impl LlmSession {
             }
             iterations += 1;
 
-            messages = self.prepare_messages_for_send(messages).await;
+            // Keep reasoning_content in `messages` for the local transcript,
+            // but send a stripped copy to providers that reject the field.
+            let send_messages = self.prepare_messages_for_send(messages.clone()).await;
 
             // Estimate prompt tokens locally for the context bar.
             // This works even when the streaming API doesn't report prompt_tokens.
-            let estimate = estimate_chat_tokens(&messages, &self.context_budget_policy);
+            let estimate = estimate_chat_tokens(&send_messages, &self.context_budget_policy);
             self.last_prompt_estimate
                 .store(estimate as u64, std::sync::atomic::Ordering::Relaxed);
 
@@ -1242,7 +1244,7 @@ impl LlmSession {
 
             let response = match self
                 .chat_completion(
-                    &messages,
+                    &send_messages,
                     if has_tools { Some(&tool_specs) } else { None },
                     stream,
                     self.temperature,
@@ -1310,7 +1312,7 @@ impl LlmSession {
                                 tid,
                                 &span_name,
                                 &resolved_model,
-                                serde_json::json!(messages),
+                                serde_json::json!(send_messages),
                                 content.as_deref().unwrap_or(""),
                                 pt,
                                 ct,
@@ -1359,6 +1361,7 @@ impl LlmSession {
                         let new_messages = messages[initial_len..].to_vec();
                         return Ok(crate::types::ProcessResult {
                             text: content.unwrap_or_default(),
+                            reasoning: reasoning_content,
                             new_messages,
                         });
                     }
@@ -1627,7 +1630,7 @@ impl LlmSession {
                                 tid,
                                 &span_name,
                                 &resolved_model,
-                                serde_json::json!(messages),
+                                serde_json::json!(send_messages),
                                 &accumulated,
                                 stream_prompt_tokens,
                                 stream_completion_tokens,
@@ -1682,6 +1685,8 @@ impl LlmSession {
                         let new_messages = messages[initial_len..].to_vec();
                         return Ok(crate::types::ProcessResult {
                             text: accumulated,
+                            reasoning: (!reasoning_accumulated.is_empty())
+                                .then_some(reasoning_accumulated),
                             new_messages,
                         });
                     }
@@ -2043,7 +2048,11 @@ impl LlmSession {
             let suppress_body = matches!(reason, Some("sub_agent_cancelled" | "user_cancelled"));
             let text = if suppress_body { String::new() } else { output };
             let new_messages = messages[initial_len..].to_vec();
-            return Some(crate::types::ProcessResult { text, new_messages });
+            return Some(crate::types::ProcessResult {
+                text,
+                reasoning: None,
+                new_messages,
+            });
         }
 
         // Track consecutive failures for early termination.
@@ -2083,7 +2092,11 @@ impl LlmSession {
                 *consecutive_failures
             );
             let new_messages = messages[initial_len..].to_vec();
-            return Some(crate::types::ProcessResult { text, new_messages });
+            return Some(crate::types::ProcessResult {
+                text,
+                reasoning: None,
+                new_messages,
+            });
         }
 
         messages.push(ChatMessage::tool_result(&tc.id, output));
@@ -2192,6 +2205,7 @@ impl LlmSession {
                     }
                     return Some(crate::types::ProcessResult {
                         text: pr.text,
+                        reasoning: None,
                         new_messages: messages[initial_len..].to_vec(),
                     });
                 }
@@ -2229,6 +2243,7 @@ impl LlmSession {
                     }
                     return Some(crate::types::ProcessResult {
                         text: pr.text,
+                        reasoning: None,
                         new_messages: messages[initial_len..].to_vec(),
                     });
                 }

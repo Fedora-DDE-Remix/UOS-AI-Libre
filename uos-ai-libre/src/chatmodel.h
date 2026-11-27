@@ -96,10 +96,13 @@ private:
     };
 
     struct TimelineBlock {
-        QString kind; // text or tools
+        QString kind; // text, tools or reasoning
         QString text;
         int toolStart = 0;
         int toolCount = 0;
+        bool active = false;
+        qint64 startedAt = 0;
+        qint64 elapsedMs = 0;
     };
 
     struct Message {

@@ -2813,7 +2813,9 @@ impl ChatSession {
                 let mut new_messages = Vec::with_capacity(2 + result.new_messages.len());
                 new_messages.push(user_message);
                 new_messages.extend(result.new_messages.iter().cloned());
-                new_messages.push(ChatMessage::assistant(result.text.clone()));
+                let mut final_message = ChatMessage::assistant(result.text.clone());
+                final_message.reasoning_content = result.reasoning.clone();
+                new_messages.push(final_message);
 
                 let history_len = match self.history.lock() {
                     Ok(mut history) => {

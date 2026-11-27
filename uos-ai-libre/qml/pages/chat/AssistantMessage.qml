@@ -40,31 +40,42 @@ Item {
             width: root.width - avatar.width - row.spacing
             spacing: 8
 
-            ReasoningCard {
-                visible: root.reasoning.length > 0 || root.reasoningActive
-                width: column.width
-                reasoning: root.reasoning
-                active: root.reasoningActive
-                elapsedMs: root.reasoningElapsed
-            }
-
             Repeater {
-                model: root.timeline
+                model: root.timeline ? root.timeline.length : 0
                 delegate: Loader {
+                    required property int index
+                    property var block: root.timeline ? root.timeline[index] : null
                     width: column.width
                     height: item ? item.implicitHeight : 0
-                    sourceComponent: modelData.kind === "tools"
-                                     ? timelineToolsComponent : timelineTextComponent
+                    sourceComponent: block && block.kind === "tools"
+                                     ? timelineToolsComponent
+                                     : (block && block.kind === "reasoning"
+                                        ? timelineReasoningComponent
+                                        : timelineTextComponent)
                     onLoaded: {
                         item.width = Qt.binding(function () { return column.width })
-                        if (modelData.kind === "tools") {
-                            item.tools = Qt.binding(function () { return modelData.tools })
+                        if (block && block.kind === "tools") {
+                            item.tools = Qt.binding(function () { return block.tools })
                             item.active = Qt.binding(function () {
-                                return root.streaming && modelData.active === true
+                                return root.streaming && block.active === true
                             })
-                            item.elapsedMs = Qt.binding(function () { return root.elapsedMs })
+                            item.elapsedMs = Qt.binding(function () {
+                                return Number(block.elapsed || 0)
+                            })
+                        } else if (block && block.kind === "reasoning") {
+                            item.reasoning = Qt.binding(function () {
+                                return block.reasoning || ""
+                            })
+                            item.active = Qt.binding(function () {
+                                return root.streaming && block.active === true
+                            })
+                            item.elapsedMs = Qt.binding(function () {
+                                return Number(block.elapsed || 0)
+                            })
                         } else {
-                            item.text = Qt.binding(function () { return modelData.text })
+                            item.text = Qt.binding(function () {
+                                return block ? block.text : ""
+                            })
                             item.streaming = false
                         }
                     }
@@ -155,6 +166,11 @@ Item {
     Component {
         id: timelineTextComponent
         MarkdownView {}
+    }
+
+    Component {
+        id: timelineReasoningComponent
+        ReasoningCard {}
     }
 
     Component {

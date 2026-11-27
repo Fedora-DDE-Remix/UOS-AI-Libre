@@ -102,17 +102,23 @@ int main(int argc, char *argv[]) {
 
     const QVariantList timeline =
         live.data(live.index(0), ChatModel::TimelineRole).toList();
-    if (timeline.size() != 3)
+    if (timeline.size() != 4)
         return fail("timeline segment count");
     if (timeline.at(0).toMap().value(QStringLiteral("kind")).toString()
-        != QStringLiteral("text"))
-        return fail("first timeline segment should be text");
+        != QStringLiteral("reasoning"))
+        return fail("first timeline segment should be reasoning");
+    if (timeline.at(0).toMap().value(QStringLiteral("reasoning")).toString()
+        != QStringLiteral("think"))
+        return fail("reasoning content");
     if (timeline.at(1).toMap().value(QStringLiteral("kind")).toString()
-        != QStringLiteral("tools"))
-        return fail("second timeline segment should be tools");
-    if (timeline.at(2).toMap().value(QStringLiteral("kind")).toString()
         != QStringLiteral("text"))
-        return fail("third timeline segment should be text");
+        return fail("second timeline segment should be text");
+    if (timeline.at(2).toMap().value(QStringLiteral("kind")).toString()
+        != QStringLiteral("tools"))
+        return fail("third timeline segment should be tools");
+    if (timeline.at(3).toMap().value(QStringLiteral("kind")).toString()
+        != QStringLiteral("text"))
+        return fail("fourth timeline segment should be text");
     if (live.data(live.index(0), ChatModel::TextRole).toString()
         != QStringLiteral("beforeafter"))
         return fail("timeline text accumulation");
@@ -146,14 +152,78 @@ int main(int argc, char *argv[]) {
                                toolAssistant, toolResult, finalAssistant});
     const QVariantList transcriptTimeline =
         transcript.data(transcript.index(1), ChatModel::TimelineRole).toList();
-    if (transcriptTimeline.size() != 2)
+    if (transcriptTimeline.size() != 3)
         return fail("transcript timeline segment count");
     if (transcriptTimeline.at(0).toMap().value(QStringLiteral("kind")).toString()
-        != QStringLiteral("tools"))
-        return fail("transcript first segment should be tools");
+        != QStringLiteral("reasoning"))
+        return fail("transcript first segment should be reasoning");
     if (transcriptTimeline.at(1).toMap().value(QStringLiteral("kind")).toString()
+        != QStringLiteral("tools"))
+        return fail("transcript second segment should be tools");
+    if (transcriptTimeline.at(2).toMap().value(QStringLiteral("kind")).toString()
         != QStringLiteral("text"))
-        return fail("transcript second segment should be text");
+        return fail("transcript third segment should be text");
+
+    ChatModel multi;
+    multi.beginAssistant(QStringLiteral("model"));
+    multi.beginReasoning();
+    multi.appendReasoning(QStringLiteral("r1"));
+    multi.endReasoning();
+    QVariantMap firstTool;
+    firstTool.insert(QStringLiteral("tool_call_id"), QStringLiteral("a"));
+    firstTool.insert(QStringLiteral("tool_name"), QStringLiteral("read_file"));
+    multi.addToolStart(firstTool);
+    QVariantMap firstDone;
+    firstDone.insert(QStringLiteral("tool_call_id"), QStringLiteral("a"));
+    firstDone.insert(QStringLiteral("ok"), true);
+    multi.addToolEnd(firstDone);
+    multi.beginReasoning();
+    multi.appendReasoning(QStringLiteral("r2"));
+    multi.endReasoning();
+    QVariantMap secondTool;
+    secondTool.insert(QStringLiteral("tool_call_id"), QStringLiteral("b"));
+    secondTool.insert(QStringLiteral("tool_name"), QStringLiteral("read_file"));
+    multi.addToolStart(secondTool);
+    QVariantMap secondDone;
+    secondDone.insert(QStringLiteral("tool_call_id"), QStringLiteral("b"));
+    secondDone.insert(QStringLiteral("ok"), true);
+    multi.addToolEnd(secondDone);
+    multi.beginReasoning();
+    multi.appendReasoning(QStringLiteral("r3"));
+    multi.endReasoning();
+    multi.appendContent(QStringLiteral("done"));
+    multi.finishAssistant();
+    const QVariantList multiTimeline =
+        multi.data(multi.index(0), ChatModel::TimelineRole).toList();
+    const QStringList expected{
+        QStringLiteral("reasoning"), QStringLiteral("tools"),
+        QStringLiteral("reasoning"), QStringLiteral("tools"),
+        QStringLiteral("reasoning"), QStringLiteral("text"),
+    };
+    if (multiTimeline.size() != expected.size())
+        return fail("multi-step timeline segment count");
+    for (int i = 0; i < expected.size(); ++i) {
+        if (multiTimeline.at(i).toMap().value(QStringLiteral("kind")).toString()
+            != expected.at(i))
+            return fail("multi-step timeline order");
+    }
+
+    ChatModel sequential;
+    sequential.beginAssistant(QStringLiteral("model"));
+    sequential.addToolStart(firstTool);
+    sequential.addToolEnd(firstDone);
+    sequential.addToolStart(secondTool);
+    sequential.addToolEnd(secondDone);
+    sequential.finishAssistant();
+    const QVariantList sequentialTimeline =
+        sequential.data(sequential.index(0), ChatModel::TimelineRole).toList();
+    if (sequentialTimeline.size() != 2)
+        return fail("sequential tools should keep separate steps");
+    for (const QVariant &entry : sequentialTimeline) {
+        if (entry.toMap().value(QStringLiteral("kind")).toString()
+            != QStringLiteral("tools"))
+            return fail("sequential tool block kind");
+    }
 
     std::cout << "chatmodel-test: ok\n";
     return 0;

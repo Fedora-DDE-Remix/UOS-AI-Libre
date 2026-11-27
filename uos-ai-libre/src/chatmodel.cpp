@@ -114,7 +114,15 @@ QVariant ChatModel::data(const QModelIndex &index, int role) const {
         blocks.reserve(message.timeline.size());
         for (const TimelineBlock &block : message.timeline) {
             QVariantMap item;
-            if (block.kind == QStringLiteral("text")) {
+            if (block.kind == QStringLiteral("reasoning")) {
+                item.insert(QStringLiteral("kind"), QStringLiteral("reasoning"));
+                item.insert(QStringLiteral("reasoning"), block.text);
+                item.insert(QStringLiteral("active"), block.active);
+                item.insert(QStringLiteral("elapsed"),
+                            block.active && block.startedAt > 0
+                                ? QDateTime::currentMSecsSinceEpoch() - block.startedAt
+                                : block.elapsedMs);
+            } else if (block.kind == QStringLiteral("text")) {
                 item.insert(QStringLiteral("kind"), QStringLiteral("text"));
                 item.insert(QStringLiteral("text"), block.text);
             } else {
@@ -177,8 +185,15 @@ void ChatModel::appendToolBlock(Message &message, int toolIndex) {
         TimelineBlock &last = message.timeline.last();
         if (last.kind == QStringLiteral("tools")
             && last.toolStart + last.toolCount == toolIndex) {
-            ++last.toolCount;
-            return;
+            // Merge calls that were issued together and are still running.
+            // A completed call followed by a new one is a new step and gets
+            // its own card, which keeps the transcript chronological.
+            const int previous = toolIndex - 1;
+            if (previous >= 0 && previous < message.tools.size()
+                && message.tools.at(previous).status == QStringLiteral("running")) {
+                ++last.toolCount;
+                return;
+            }
         }
     }
     TimelineBlock block;
@@ -270,13 +285,24 @@ void ChatModel::beginReasoning() {
     if (m_streaming_index < 0)
         return;
     Message &message = m_messages[m_streaming_index];
-    if (message.reasoningActive)
-        return;
+    if (!message.timeline.isEmpty()) {
+        const TimelineBlock &last = message.timeline.last();
+        if (last.kind == QStringLiteral("reasoning") && last.active)
+            return;
+    }
+    // Any text emitted before this reasoning belongs earlier in the turn.
+    flushActiveText(message);
+    TimelineBlock block;
+    block.kind = QStringLiteral("reasoning");
+    block.active = true;
+    block.startedAt = QDateTime::currentMSecsSinceEpoch();
+    message.timeline.append(block);
     message.reasoningActive = true;
-    message.reasoningStartedAt = QDateTime::currentMSecsSinceEpoch();
+    message.reasoningStartedAt = block.startedAt;
     message.reasoningElapsedMs = 0;
     emitRowChanged(m_streaming_index,
-                   {ReasoningActiveRole, ReasoningElapsedRole});
+                   {TimelineRole, ReasoningActiveRole, ReasoningElapsedRole,
+                    TextRole, ActiveTextRole});
     emit contentChanged();
 }
 
@@ -288,13 +314,26 @@ void ChatModel::appendReasoning(const QString &delta) {
     if (m_streaming_index < 0)
         return;
     Message &message = m_messages[m_streaming_index];
-    if (!message.reasoningActive)
+    if (message.timeline.isEmpty()
+        || message.timeline.last().kind != QStringLiteral("reasoning")
+        || !message.timeline.last().active) {
         beginReasoning();
-    message.reasoning += delta;
-    if (message.reasoning.size() > kMaxReasoningChars)
-        message.reasoning = bounded(message.reasoning, kMaxReasoningChars);
+    }
+    if (m_streaming_index < 0)
+        return;
+    Message &active = m_messages[m_streaming_index];
+    if (active.timeline.isEmpty()
+        || active.timeline.last().kind != QStringLiteral("reasoning"))
+        return;
+    TimelineBlock &block = active.timeline.last();
+    block.text += delta;
+    if (block.text.size() > kMaxReasoningChars)
+        block.text = bounded(block.text, kMaxReasoningChars);
+    active.reasoning += delta;
+    if (active.reasoning.size() > kMaxReasoningChars)
+        active.reasoning = bounded(active.reasoning, kMaxReasoningChars);
     emitRowChanged(m_streaming_index,
-                   {ReasoningRole, ReasoningElapsedRole});
+                   {TimelineRole, ReasoningRole, ReasoningElapsedRole});
     emit contentChanged();
 }
 
@@ -302,14 +341,24 @@ void ChatModel::endReasoning() {
     if (m_streaming_index < 0)
         return;
     Message &message = m_messages[m_streaming_index];
-    if (!message.reasoningActive)
+    bool changed = false;
+    for (int i = message.timeline.size() - 1; i >= 0; --i) {
+        TimelineBlock &block = message.timeline[i];
+        if (block.kind != QStringLiteral("reasoning") || !block.active)
+            continue;
+        block.active = false;
+        block.elapsedMs = block.startedAt > 0
+                              ? QDateTime::currentMSecsSinceEpoch() - block.startedAt
+                              : 0;
+        message.reasoningElapsedMs = block.elapsedMs;
+        changed = true;
+        break;
+    }
+    if (!message.reasoningActive && !changed)
         return;
     message.reasoningActive = false;
-    if (message.reasoningStartedAt > 0)
-        message.reasoningElapsedMs =
-            QDateTime::currentMSecsSinceEpoch() - message.reasoningStartedAt;
     emitRowChanged(m_streaming_index,
-                   {ReasoningActiveRole, ReasoningElapsedRole});
+                   {TimelineRole, ReasoningActiveRole, ReasoningElapsedRole});
     emit contentChanged();
 }
 
@@ -364,6 +413,8 @@ void ChatModel::addToolStart(const QVariantMap &data) {
         beginAssistant({});
     if (m_streaming_index < 0)
         return;
+    if (m_messages[m_streaming_index].reasoningActive)
+        endReasoning();
     Tool tool;
     tool.id = data.value(QStringLiteral("tool_call_id")).toString();
     tool.name = data.value(QStringLiteral("tool_name")).toString();
@@ -501,13 +552,9 @@ int ChatModel::findToolMessage(const QString &id) const {
 void ChatModel::finishAssistant() {
     if (m_streaming_index < 0)
         return;
+    if (m_messages[m_streaming_index].reasoningActive)
+        endReasoning();
     Message &message = m_messages[m_streaming_index];
-    if (message.reasoningActive) {
-        message.reasoningActive = false;
-        if (message.reasoningStartedAt > 0)
-            message.reasoningElapsedMs =
-                QDateTime::currentMSecsSinceEpoch() - message.reasoningStartedAt;
-    }
     flushActiveText(message);
     message.streaming = false;
     if (message.turnStartedAt > 0)
@@ -649,9 +696,31 @@ QVector<ChatModel::Tool> ChatModel::parseToolCalls(const QVariant &calls) {
 QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(
     const QVariantList &messages, int startIndex) const {
     QVector<Message> parsed;
+    int assistantIndex = -1;
 
-    QVector<Tool> pending_tools;
-    QString pending_reasoning;
+    auto ensureAssistant = [&]() -> int {
+        if (assistantIndex < 0 || assistantIndex >= parsed.size()
+            || parsed.at(assistantIndex).kind != QStringLiteral("assistant")) {
+            Message message;
+            message.kind = QStringLiteral("assistant");
+            parsed.append(message);
+            assistantIndex = parsed.size() - 1;
+        }
+        return assistantIndex;
+    };
+
+    auto findTool = [&](const QString &id) -> Tool * {
+        if (id.isEmpty())
+            return nullptr;
+        for (int i = parsed.size() - 1; i >= 0; --i) {
+            for (Tool &tool : parsed[i].tools) {
+                if (tool.id == id)
+                    return &tool;
+            }
+        }
+        return nullptr;
+    };
+
     for (int messageIndex = 0; messageIndex < messages.size(); ++messageIndex) {
         const QVariantMap map = messages.at(messageIndex).toMap();
         const QString role = map.value(QStringLiteral("role")).toString();
@@ -666,6 +735,7 @@ QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(
             if (message.text.trimmed().isEmpty())
                 message.text = QStringLiteral("[图片]");
             parsed.append(message);
+            assistantIndex = -1;
             continue;
         }
 
@@ -674,28 +744,9 @@ QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(
             const QString result =
                 bounded(contentText(map.value(QStringLiteral("content"))).trimmed(),
                         kMaxToolResultChars);
-            bool updated = false;
-            for (Tool &tool : pending_tools) {
-                if (!id.isEmpty() && tool.id == id) {
-                    tool.status = QStringLiteral("done");
-                    tool.result = result;
-                    updated = true;
-                    break;
-                }
-            }
-            if (!updated) {
-                for (int i = parsed.size() - 1; i >= 0; --i) {
-                    for (Tool &tool : parsed[i].tools) {
-                        if (!id.isEmpty() && tool.id == id) {
-                            tool.status = QStringLiteral("done");
-                            tool.result = result;
-                            updated = true;
-                            break;
-                        }
-                    }
-                    if (updated)
-                        break;
-                }
+            if (Tool *tool = findTool(id)) {
+                tool->status = QStringLiteral("done");
+                tool->result = result;
             }
             continue;
         }
@@ -711,66 +762,33 @@ QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(
         const QVector<Tool> tools =
             parseToolCalls(map.value(QStringLiteral("tool_calls")));
 
-        if (text.trimmed().isEmpty() && !tools.isEmpty()) {
-            pending_tools += tools;
-            if (!reasoning.isEmpty())
-                pending_reasoning += reasoning;
-            continue;
-        }
-        if (text.trimmed().isEmpty() && tools.isEmpty() && reasoning.isEmpty())
+        if (text.trimmed().isEmpty() && reasoning.isEmpty() && tools.isEmpty())
             continue;
 
-        QVector<Tool> selected_tools;
-        Message message;
-        message.kind = QStringLiteral("assistant");
-        message.text = text;
-        message.reasoning = pending_reasoning + reasoning;
-        if (!pending_tools.isEmpty()) {
-            selected_tools += pending_tools;
-        }
-        pending_tools.clear();
-        pending_reasoning.clear();
-        if (!selected_tools.isEmpty()) {
+        Message &message = parsed[ensureAssistant()];
+        if (!reasoning.isEmpty()) {
             TimelineBlock block;
-            block.kind = QStringLiteral("tools");
-            block.toolStart = 0;
-            block.toolCount = selected_tools.size();
+            block.kind = QStringLiteral("reasoning");
+            block.text = bounded(reasoning, kMaxReasoningChars);
             message.timeline.append(block);
+            message.reasoning += block.text;
         }
         if (!text.trimmed().isEmpty()) {
             TimelineBlock block;
             block.kind = QStringLiteral("text");
             block.text = text;
             message.timeline.append(block);
+            message.text += text;
         }
         if (!tools.isEmpty()) {
-            const int start = selected_tools.size();
-            selected_tools += tools;
+            const int start = message.tools.size();
+            message.tools += tools;
             TimelineBlock block;
             block.kind = QStringLiteral("tools");
             block.toolStart = start;
             block.toolCount = tools.size();
             message.timeline.append(block);
         }
-        message.tools = selected_tools;
-        parsed.append(message);
-    }
-
-    if (!pending_tools.isEmpty()) {
-        for (Tool &tool : pending_tools) {
-            if (tool.status == QStringLiteral("running"))
-                tool.status = QStringLiteral("done");
-        }
-        Message message;
-        message.kind = QStringLiteral("assistant");
-        message.reasoning = pending_reasoning;
-        message.tools = pending_tools;
-        TimelineBlock block;
-        block.kind = QStringLiteral("tools");
-        block.toolStart = 0;
-        block.toolCount = pending_tools.size();
-        message.timeline.append(block);
-        parsed.append(message);
     }
 
     for (Message &message : parsed) {

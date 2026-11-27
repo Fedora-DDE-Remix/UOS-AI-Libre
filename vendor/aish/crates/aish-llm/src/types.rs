@@ -402,6 +402,10 @@ impl ChatMessage {
 pub struct ProcessResult {
     /// Final text response from the assistant.
     pub text: String,
+    /// Reasoning emitted alongside the final text, when the provider supports
+    /// it. Kept separate so callers can persist the transcript without
+    /// replaying it to providers that reject the field.
+    pub reasoning: Option<String>,
     /// New messages appended during this turn (assistant+tool_calls,
     /// tool_result pairs). Callers should extend their conversation
     /// history with these to preserve tool execution context.

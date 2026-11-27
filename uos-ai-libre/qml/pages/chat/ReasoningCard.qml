@@ -19,6 +19,18 @@ Item {
             liveSeconds = 1
         } else {
             expanded = false
+            if (bodyFlick) {
+                bodyFlick.contentY = 0
+                bodyFlick.followTail = true
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        if (active) {
+            expanded = true
+            startedAt = Date.now()
+            liveSeconds = 1
         }
     }
 
@@ -112,6 +124,7 @@ Item {
         height: visible ? Math.min(reasonText.implicitHeight + 20, 240) : 0
 
         Flickable {
+            id: bodyFlick
             anchors.fill: parent
             anchors.leftMargin: 28
             anchors.rightMargin: 14
@@ -119,6 +132,13 @@ Item {
             clip: true
             interactive: contentHeight > height
             boundsBehavior: Flickable.StopAtBounds
+            property bool followTail: true
+
+            onContentYChanged: followTail = contentY + height >= contentHeight - 8
+            onContentHeightChanged: {
+                if (root.active && followTail)
+                    contentY = Math.max(0, contentHeight - height)
+            }
 
             Text {
                 id: reasonText
