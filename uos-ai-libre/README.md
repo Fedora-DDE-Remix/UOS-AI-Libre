@@ -182,6 +182,20 @@ If UOS AI is installed, only one process can own these bus names; the packages
 must conflict with each other at packaging time. For development testing use an
 isolated D-Bus session (`dbus-run-session`) and stop the other service first.
 
+For a machine where UOS AI was unpacked outside the package manager, use the
+helpers in `packaging/`:
+
+```bash
+# Current user, no root; also takes over Super+Space:
+packaging/install-user-service.sh --build-dir uos-ai-libre/build --yes
+
+# System-wide; needs sudo:
+sudo packaging/install-service.sh --prefix /usr
+```
+
+See `packaging/README.md` for backup/restore details and the RPM/DEB conflict
+requirement.
+
 ## Build
 
 The frontend links the release static library produced by `aish-cxxbridge`.
