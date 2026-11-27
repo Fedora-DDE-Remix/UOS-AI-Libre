@@ -1791,6 +1791,55 @@ impl ChatService {
         Ok((model, history, cwd, warning))
     }
 
+    /// Load a session but return only its newest transcript window. The live
+    /// session still owns the full history for LLM context; the UI receives a
+    /// page so a very long conversation is not materialised into QML at once.
+    pub fn resume_session_window(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> Result<
+        (
+            String,
+            Vec<ChatMessage>,
+            usize,
+            usize,
+            PathBuf,
+            Option<String>,
+        ),
+        String,
+    > {
+        let (model, history, cwd, warning) = self.resume_session(session_id)?;
+        let total = history.len();
+        let (start, _) = transcript_window(&history, total, limit);
+        Ok((model, history[start..].to_vec(), total, start, cwd, warning))
+    }
+
+    /// Return one older transcript page. Pages begin at a user message so a
+    /// tool result is never split from the assistant call that produced it.
+    pub fn history_page(
+        &self,
+        session_id: &str,
+        before: usize,
+        limit: usize,
+    ) -> Result<Value, String> {
+        let session = self.session(session_id)?;
+        let history = session
+            .history
+            .lock()
+            .map_err(|_| "session history lock poisoned".to_string())?;
+        let total = history.len();
+        let end = before.min(total);
+        let (start, _) = transcript_window(&history, end, limit);
+        let page = &history[start..end];
+        Ok(json!({
+            "ok": true,
+            "messages": page,
+            "total": total,
+            "start": start,
+        }))
+    }
+
     /// List recent sessions for a history sidebar.
     ///
     /// Only metadata is returned; the transcript is loaded on demand by
@@ -2008,8 +2057,8 @@ impl ChatService {
         if api_base.chars().count() > 2048 {
             return Err("API 地址过长".to_string());
         }
-        let parsed = reqwest::Url::parse(api_base)
-            .map_err(|error| format!("API 地址无效：{error}"))?;
+        let parsed =
+            reqwest::Url::parse(api_base).map_err(|error| format!("API 地址无效：{error}"))?;
         if !matches!(parsed.scheme(), "http" | "https") {
             return Err("API 地址必须是 http(s) URL".to_string());
         }
@@ -2047,8 +2096,7 @@ impl ChatService {
         }
 
         if activate {
-            let endpoint_changed =
-                api_base != config.api_base || effective_key != config.api_key;
+            let endpoint_changed = api_base != config.api_base || effective_key != config.api_key;
             if endpoint_changed && !config.api_key.trim().is_empty() {
                 let outgoing_name = if current_name.trim().is_empty() {
                     provider_host_label(&config.api_base)
@@ -2073,8 +2121,7 @@ impl ChatService {
             }
             // The target becomes primary; do not leave a duplicate pool entry.
             accounts.retain(|account| {
-                !(account.api_base.as_deref() == Some(api_base)
-                    && account.api_key == effective_key)
+                !(account.api_base.as_deref() == Some(api_base) && account.api_key == effective_key)
             });
             config.model = model.to_string();
             config.api_base = api_base.to_string();
@@ -2082,7 +2129,7 @@ impl ChatService {
         } else {
             if api_base == config.api_base && effective_key == config.api_key {
                 return Err(
-                    "该地址和密钥与当前主供应商相同，请直接在主供应商上切换模型".to_string(),
+                    "该地址和密钥与当前主供应商相同，请直接在主供应商上切换模型".to_string()
                 );
             }
             let existing_index = accounts
@@ -2133,8 +2180,9 @@ impl ChatService {
                     );
                 }
             }
-            let accounts_yaml = serde_yaml::to_value(&accounts)
-                .map_err(|error| AishError::Config(format!("failed to encode accounts: {error}")))?;
+            let accounts_yaml = serde_yaml::to_value(&accounts).map_err(|error| {
+                AishError::Config(format!("failed to encode accounts: {error}"))
+            })?;
             map.insert(
                 serde_yaml::Value::String("api_accounts".to_string()),
                 accounts_yaml,
@@ -2175,9 +2223,9 @@ impl ChatService {
         Ok(path.to_string_lossy().to_string())
     }
 
-    /// Fetch the model catalogue of an endpoint in the background. OpenAI
-    /// compatible endpoints use `{base}/models`; native Anthropic uses
-    /// `{base}/v1/models` with `x-api-key`.
+    /// Fetch the model catalogue of an OpenAI-compatible endpoint in the
+    /// background. Third-party providers intentionally support only this
+    /// protocol; Anthropic-native endpoints are rejected during validation.
     pub fn start_model_fetch(&self, api_base: &str, api_key: &str, protocol: &str) -> Value {
         let job_id = self.next_job_id();
         let config = aish_config::ConfigLoader::load(None).ok();
@@ -2786,22 +2834,19 @@ fn provider_host_label(base: &str) -> String {
     }
 }
 
-/// aish chooses the HTTP protocol from the endpoint host. Reject a GUI choice
-/// that would silently use a different protocol.
+/// The GUI only supports third-party OpenAI-compatible endpoints. aish still
+/// recognizes `api.anthropic.com` for configurations edited by hand, but the
+/// provider UI must not silently write an Anthropic endpoint under the
+/// OpenAI label.
 fn validate_provider_protocol(api_base: &str, protocol: &str) -> Result<(), String> {
     let protocol = protocol.trim().to_ascii_lowercase();
-    if !matches!(protocol.as_str(), "openai" | "anthropic") {
-        return Err("协议必须是 openai 或 anthropic".to_string());
+    if protocol != "openai" {
+        return Err("第三方供应商仅支持 OpenAI 兼容协议".to_string());
     }
-    let actual = provider_protocol(api_base);
-    if protocol == actual {
-        return Ok(());
+    if provider_host(api_base).as_deref() == Some("api.anthropic.com") {
+        return Err("第三方接入不支持 Anthropic；请使用 OpenAI 兼容端点".to_string());
     }
-    if actual == "anthropic" {
-        Err("该地址会被 aish 识别为 Anthropic Messages；请选择 Anthropic 协议".to_string())
-    } else {
-        Err("aish 目前只对 https://api.anthropic.com 使用 Anthropic Messages；自定义端点请选择 OpenAI 兼容协议".to_string())
-    }
+    Ok(())
 }
 
 fn unique_account_name(accounts: &[aish_config::ApiAccountConfig], label: &str) -> String {
@@ -2820,7 +2865,9 @@ fn unique_account_name(accounts: &[aish_config::ApiAccountConfig], label: &str) 
     }
 }
 
-/// Fetch models for one provider without touching the active chat session.
+/// Fetch models for one OpenAI-compatible provider without touching the active
+/// chat session. Anthropic-native endpoints are not part of the third-party
+/// provider UI.
 async fn fetch_provider_models(
     api_base: &str,
     api_key: &str,
@@ -2831,99 +2878,23 @@ async fn fetch_provider_models(
     if base.is_empty() {
         return Err("API 地址不能为空".to_string());
     }
-    let protocol = protocol.trim().to_ascii_lowercase();
-    if protocol == "openai" {
-        let models = aish_llm::fetch_models_from_api(
-            base,
-            (!api_key.trim().is_empty()).then_some(api_key.trim()),
-        )
-        .await?;
-        let mut seen = HashSet::new();
-        let mut result: Vec<Value> = models
-            .iter()
-            .filter(|model| aish_llm::model_supports_tools(&model.id))
-            .filter(|model| seen.insert(model.id.clone()))
-            .map(|model| {
-                json!({
-                    "id": model.id,
-                    "owned_by": model.owned_by,
-                })
+    let models = aish_llm::fetch_models_from_api(
+        base,
+        (!api_key.trim().is_empty()).then_some(api_key.trim()),
+    )
+    .await?;
+    let mut seen = HashSet::new();
+    let mut result: Vec<Value> = models
+        .iter()
+        .filter(|model| aish_llm::model_supports_tools(&model.id))
+        .filter(|model| seen.insert(model.id.clone()))
+        .map(|model| {
+            json!({
+                "id": model.id,
+                "owned_by": model.owned_by,
             })
-            .collect();
-        result.sort_by(|left, right| {
-            left["id"]
-                .as_str()
-                .unwrap_or_default()
-                .cmp(right["id"].as_str().unwrap_or_default())
-        });
-        result.truncate(300);
-        if result.is_empty() {
-            return Err("端点返回了空模型列表".to_string());
-        }
-        return Ok(result);
-    }
-
-    if api_key.trim().is_empty() {
-        return Err("Anthropic 需要 API Key".to_string());
-    }
-    let base = base.strip_suffix("/v1/messages").unwrap_or(base);
-    let url = if base.ends_with("/v1") {
-        format!("{base}/models")
-    } else {
-        format!("{base}/v1/models")
-    };
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(12))
-        .build()
-        .map_err(|error| format!("failed to build HTTP client: {error}"))?;
-    let response = client
-        .get(&url)
-        .header("x-api-key", api_key.trim())
-        .header("anthropic-version", "2023-06-01")
-        .send()
-        .await
-        .map_err(|error| {
-            if error.is_timeout() {
-                "请求超时（12 秒）".to_string()
-            } else if error.is_connect() {
-                "连接失败，请检查 API 地址和网络".to_string()
-            } else {
-                format!("请求失败：{error}")
-            }
-        })?;
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
-        let body = aish_mcp::redact::sanitize_diagnostic_text(&body);
-        let mut preview: String = body.chars().take(300).collect();
-        if body.chars().count() > 300 {
-            preview.push_str("...");
-        }
-        return Err(format!("Anthropic 返回 HTTP {}：{preview}", status.as_u16()));
-    }
-    let body: Value = response
-        .json()
-        .await
-        .map_err(|error| format!("无法解析模型列表：{error}"))?;
-    let mut result: Vec<Value> = body
-        .get("data")
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(|item| {
-                    let id = item.get("id").and_then(Value::as_str)?;
-                    Some(json!({
-                        "id": id,
-                        "owned_by": item
-                            .get("display_name")
-                            .and_then(Value::as_str)
-                            .unwrap_or("anthropic"),
-                    }))
-                })
-                .collect()
         })
-        .unwrap_or_default();
+        .collect();
     result.sort_by(|left, right| {
         left["id"]
             .as_str()
@@ -2932,7 +2903,7 @@ async fn fetch_provider_models(
     });
     result.truncate(300);
     if result.is_empty() {
-        return Err("Anthropic 返回了空模型列表".to_string());
+        return Err("端点返回了空模型列表".to_string());
     }
     Ok(result)
 }
@@ -3198,6 +3169,17 @@ fn registry_configs_from_config() -> Vec<aish_skills::registry::RegistryConfig> 
             url: registry.url.clone(),
         })
         .collect()
+}
+
+/// Pick a page ending at `end` and beginning at a user turn.
+fn transcript_window(history: &[ChatMessage], end: usize, limit: usize) -> (usize, usize) {
+    let limit = limit.clamp(1, 200);
+    let end = end.min(history.len());
+    let mut start = end.saturating_sub(limit);
+    while start > 0 && history[start].role != "user" {
+        start -= 1;
+    }
+    (start, end)
 }
 
 /// Snapshot every trusted skill into the shape `SkillTool` consumes.
@@ -3683,4 +3665,53 @@ fn now_timestamp() -> f64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs_f64())
         .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod transcript_tests {
+    use super::*;
+
+    fn message(role: &str) -> ChatMessage {
+        ChatMessage {
+            role: role.to_string(),
+            content: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            reasoning_content: None,
+            cache_control: None,
+        }
+    }
+
+    #[test]
+    fn transcript_window_starts_at_a_user_turn() {
+        // user, assistant+tool result, user, assistant, ...
+        let mut history = Vec::new();
+        for _ in 0..6 {
+            history.push(message("user"));
+            history.push(message("assistant"));
+            history.push(message("tool"));
+            history.push(message("assistant"));
+        }
+        let (start, end) = transcript_window(&history, history.len(), 4);
+        assert_eq!(end, history.len());
+        assert_eq!(history[start].role, "user");
+        assert!(start > 0);
+        assert!(history.len() - start <= 4);
+    }
+
+    #[test]
+    fn transcript_window_handles_short_histories() {
+        let history = vec![message("user"), message("assistant")];
+        let (start, end) = transcript_window(&history, history.len(), 40);
+        assert_eq!((start, end), (0, 2));
+    }
+
+    #[test]
+    fn third_party_provider_validation_is_openai_only() {
+        assert!(validate_provider_protocol("https://api.deepseek.com/v1", "openai").is_ok());
+        assert!(validate_provider_protocol("https://api.anthropic.com", "openai").is_err());
+        assert!(validate_provider_protocol("https://api.deepseek.com", "anthropic").is_err());
+        assert!(validate_provider_protocol("https://api.deepseek.com", "other").is_err());
+    }
 }

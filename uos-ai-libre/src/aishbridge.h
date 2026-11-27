@@ -96,6 +96,8 @@ public:
     Q_INVOKABLE QVariantList auditTail();
     Q_INVOKABLE void refreshSessions();
     Q_INVOKABLE void loadSession(const QString &sessionId);
+    Q_INVOKABLE QVariantMap historyPage(const QString &sessionId,
+                                        int before, int limit);
     Q_INVOKABLE void deleteSession(const QString &sessionId);
     Q_INVOKABLE void renameSession(const QString &sessionId,
                                    const QString &title);
@@ -148,7 +150,8 @@ signals:
     void approvalRequested(const QVariantMap &request);
     void interactionRequested(const QVariantMap &request);
 
-    void sessionLoaded(const QVariantList &messages, const QString &model);
+    void sessionLoaded(const QVariantList &messages, const QString &model,
+                       int total, int start);
     void sessionCleared();
     void sessionRenamed(const QString &sessionId, const QString &title);
     void sessionDeleted(const QString &sessionId);

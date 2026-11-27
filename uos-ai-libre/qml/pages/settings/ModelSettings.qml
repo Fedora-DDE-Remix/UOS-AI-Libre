@@ -13,7 +13,7 @@ SettingsScroll {
     }
 
     function protocolLabel(value) {
-        return value === "anthropic" ? "Anthropic Messages" : "OpenAI 兼容"
+        return value === "anthropic" ? "Anthropic（不支持）" : "OpenAI 兼容"
     }
 
     function keyLabel(provider) {
@@ -35,7 +35,7 @@ SettingsScroll {
             return
         }
         const result = app.saveProvider(provider.name, provider.api_base, "",
-                                        provider.model, provider.protocol, true)
+                                        provider.model, "openai", true)
         if (!result.ok)
             app.showToast(result.error || "切换供应商失败")
     }
@@ -49,7 +49,7 @@ SettingsScroll {
     }
     Text {
         width: parent.width
-        text: "供应商来自 aish 的主端点和 api_accounts。每个供应商有自己的 API 地址、协议和模型；切换后会重写 aish config.yaml 并重建会话。"
+        text: "供应商来自 aish 的主端点和 api_accounts。第三方接入仅支持 OpenAI 兼容协议；切换后会重写 aish config.yaml 并重建会话。"
         color: Theme.textSecondary
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeSmall
@@ -82,7 +82,7 @@ SettingsScroll {
 
     Text {
         width: parent.width
-        text: "协议检查：aish 只对 api.anthropic.com 使用 Anthropic Messages，其它地址使用 OpenAI 兼容协议。自定义 Anthropic 兼容代理目前需要 aish 后端支持。"
+        text: "只在此处配置 OpenAI 兼容端点（提供 /models 模型目录）。Anthropic 原生端点或 Anthropic 兼容代理请直接在 aish config.yaml 中维护，GUI 不会写入这类配置。"
         color: Theme.textTertiary
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeTiny
@@ -174,12 +174,14 @@ SettingsScroll {
                             text: "切换"
                             minWidth: 48
                             horizontalPadding: 9
+                            enabled: modelData.protocol !== "anthropic"
                             onClicked: page.activate(modelData)
                         }
                         AppButton {
                             text: "编辑"
                             minWidth: 48
                             horizontalPadding: 9
+                            enabled: modelData.protocol !== "anthropic"
                             onClicked: providerDialog.openFor(modelData)
                         }
                         AppButton {

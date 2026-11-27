@@ -127,6 +127,11 @@ QVariantMap AppController::config() const { return m_bridge.config(); }
 
 QVariantMap AppController::pendingApproval() const { return m_pending_approval; }
 
+int AppController::historyTotal() const { return m_history_total; }
+int AppController::historyStart() const { return m_history_start; }
+bool AppController::historyLoading() const { return m_history_loading; }
+bool AppController::hasOlderHistory() const { return m_history_start > 0; }
+
 int AppController::pendingApprovalCount() const {
     return m_pending_approval.isEmpty()
                ? 0
@@ -349,16 +354,20 @@ void AppController::refreshProviders() {
         }
         if (!current.isEmpty() && !ids.contains(current))
             ids.prepend(current);
+        const bool openai_compatible =
+            provider.value(QStringLiteral("protocol")).toString()
+            != QStringLiteral("anthropic");
         QVariantList visibleModels;
         for (const QString &id : ids) {
             visibleModels.append(id);
+            if (!openai_compatible)
+                continue;
             QVariantMap item;
             item.insert(QStringLiteral("model"), id);
             item.insert(QStringLiteral("provider"),
                         provider.value(QStringLiteral("name")));
             item.insert(QStringLiteral("apiBase"), base);
-            item.insert(QStringLiteral("protocol"),
-                        provider.value(QStringLiteral("protocol")));
+            item.insert(QStringLiteral("protocol"), QStringLiteral("openai"));
             item.insert(QStringLiteral("active"),
                         provider.value(QStringLiteral("active")).toBool()
                             && id == current);
@@ -391,18 +400,21 @@ QVariantMap AppController::activateModel(const QString &apiBase,
     if (model.trimmed().isEmpty())
         return {{QStringLiteral("ok"), false},
                 {QStringLiteral("error"), QStringLiteral("模型名不能为空")}};
-    QString protocol;
     for (const QVariant &entry : m_providers) {
         const QVariantMap provider = entry.toMap();
-        if (provider.value(QStringLiteral("api_base")).toString() == apiBase) {
-            protocol = provider.value(QStringLiteral("protocol")).toString();
-            break;
+        if (provider.value(QStringLiteral("api_base")).toString() != apiBase)
+            continue;
+        if (provider.value(QStringLiteral("protocol")).toString()
+            == QStringLiteral("anthropic")) {
+            return {{QStringLiteral("ok"), false},
+                    {QStringLiteral("error"),
+                     QStringLiteral("第三方接入仅支持 OpenAI 兼容协议")}};
         }
+        break;
     }
-    if (protocol.isEmpty())
-        protocol = QStringLiteral("openai");
     const QVariantMap result = saveProvider(providerName, apiBase, QString(),
-                                            model.trimmed(), protocol, true);
+                                            model.trimmed(),
+                                            QStringLiteral("openai"), true);
     if (result.value(QStringLiteral("ok"), false).toBool()) {
         refreshProviders();
         emit toastRequested(QStringLiteral("已切换到 %1").arg(model.trimmed()));
@@ -1037,24 +1049,41 @@ void AppController::onTurnCancelled() {
 }
 
 void AppController::onSessionLoaded(const QVariantList &messages,
-                                    const QString &model) {
-    QVariantList visible = messages;
-    if (visible.size() > 300) {
-        int start = visible.size() - 300;
-        while (start < visible.size() &&
-               visible.at(start).toMap().value(QStringLiteral("role")).toString() !=
-                   QStringLiteral("user"))
-            ++start;
-        visible = visible.mid(start);
-    }
-    m_chat.loadTranscript(visible);
+                                    const QString &model, int total, int start) {
+    m_history_total = total;
+    m_history_start = start;
+    m_history_loading = false;
+    m_chat.loadTranscript(messages);
     m_assistant_open = false;
     m_model = model.isEmpty() ? m_bridge.model() : model;
     emit modelChanged();
     m_local_title.clear();
     recomputeTitle();
     refreshSessionApprovals();
+    emit historyWindowChanged();
     emit sessionLoaded();
+}
+
+void AppController::loadOlderMessages() {
+    if (m_history_loading || m_history_start <= 0 || sessionId().isEmpty())
+        return;
+    m_history_loading = true;
+    emit historyWindowChanged();
+    const QVariantMap result =
+        m_bridge.historyPage(sessionId(), m_history_start, 40);
+    m_history_loading = false;
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit historyWindowChanged();
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    const QVariantList messages =
+        result.value(QStringLiteral("messages")).toList();
+    m_chat.prependTranscript(messages);
+    m_history_start = result.value(QStringLiteral("start"), m_history_start).toInt();
+    m_history_total = result.value(QStringLiteral("total"), m_history_total).toInt();
+    emit historyWindowChanged();
+    emit historyOlderLoaded(messages.size());
 }
 
 void AppController::enqueueApproval(const QVariantMap &request) {
@@ -1097,8 +1126,12 @@ void AppController::onSessionCleared() {
     m_model = m_bridge.model();
     emit modelChanged();
     m_local_title.clear();
+    m_history_total = 0;
+    m_history_start = 0;
+    m_history_loading = false;
     recomputeTitle();
     refreshSessionApprovals();
+    emit historyWindowChanged();
     emit sessionCleared();
 }
 

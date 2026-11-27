@@ -572,10 +572,8 @@ QVector<ChatModel::Tool> ChatModel::parseToolCalls(const QVariant &calls) {
     return result;
 }
 
-void ChatModel::loadTranscript(const QVariantList &messages) {
-    beginResetModel();
-    m_messages.clear();
-    m_streaming_index = -1;
+QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(const QVariantList &messages) const {
+    QVector<Message> parsed;
 
     QVector<Tool> pending_tools;
     QString pending_reasoning;
@@ -590,7 +588,7 @@ void ChatModel::loadTranscript(const QVariantList &messages) {
                                    kMaxUserChars);
             if (message.text.trimmed().isEmpty())
                 message.text = QStringLiteral("[图片]");
-            m_messages.append(message);
+            parsed.append(message);
             continue;
         }
 
@@ -609,8 +607,8 @@ void ChatModel::loadTranscript(const QVariantList &messages) {
                 }
             }
             if (!updated) {
-                for (int i = m_messages.size() - 1; i >= 0; --i) {
-                    for (Tool &tool : m_messages[i].tools) {
+                for (int i = parsed.size() - 1; i >= 0; --i) {
+                    for (Tool &tool : parsed[i].tools) {
                         if (!id.isEmpty() && tool.id == id) {
                             tool.status = QStringLiteral("done");
                             tool.result = result;
@@ -652,7 +650,7 @@ void ChatModel::loadTranscript(const QVariantList &messages) {
         message.tools = pending_tools + tools;
         pending_tools.clear();
         pending_reasoning.clear();
-        m_messages.append(message);
+        parsed.append(message);
     }
 
     if (!pending_tools.isEmpty()) {
@@ -664,18 +662,41 @@ void ChatModel::loadTranscript(const QVariantList &messages) {
         message.kind = QStringLiteral("assistant");
         message.reasoning = pending_reasoning;
         message.tools = pending_tools;
-        m_messages.append(message);
+        parsed.append(message);
     }
 
-    for (Message &message : m_messages) {
+    for (Message &message : parsed) {
         for (Tool &tool : message.tools) {
             if (tool.status == QStringLiteral("running"))
                 tool.status = QStringLiteral("done");
         }
     }
 
+    return parsed;
+}
+
+void ChatModel::loadTranscript(const QVariantList &messages) {
+    beginResetModel();
+    m_messages = parseTranscriptMessages(messages);
+    m_streaming_index = -1;
     endResetModel();
     emit countChanged();
     emit streamingChanged();
+    emit contentChanged();
+}
+
+void ChatModel::prependTranscript(const QVariantList &messages) {
+    QVector<Message> older = parseTranscriptMessages(messages);
+    if (older.isEmpty())
+        return;
+    beginInsertRows(QModelIndex(), 0, older.size() - 1);
+    for (int i = older.size() - 1; i >= 0; --i)
+        m_messages.prepend(older.at(i));
+    if (m_streaming_index >= 0) {
+        m_streaming_index += older.size();
+        emit streamingChanged();
+    }
+    endInsertRows();
+    emit countChanged();
     emit contentChanged();
 }

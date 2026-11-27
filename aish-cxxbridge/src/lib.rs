@@ -83,6 +83,17 @@ mod ffi {
         fn audit_tail(service: &mut BridgeService, limit: u32) -> String;
         fn list_sessions(service: &mut BridgeService, limit: u32) -> String;
         fn resume_session(service: &mut BridgeService, session_id: &str) -> String;
+        fn resume_session_window(
+            service: &mut BridgeService,
+            session_id: &str,
+            limit: u32,
+        ) -> String;
+        fn history_page(
+            service: &mut BridgeService,
+            session_id: &str,
+            before: u32,
+            limit: u32,
+        ) -> String;
         fn delete_session(service: &mut BridgeService, session_id: &str) -> String;
         fn rename_session(service: &mut BridgeService, session_id: &str, title: &str) -> String;
         fn config_info(service: &mut BridgeService) -> String;
@@ -768,6 +779,57 @@ pub fn resume_session(service: &mut BridgeService, session_id: &str) -> String {
         .to_string(),
         Ok(Err(error)) => err(error),
         Err(_) => err("panic while resuming session"),
+    }
+}
+
+pub fn resume_session_window(
+    service: &mut BridgeService,
+    session_id: &str,
+    limit: u32,
+) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.resume_session_window(session_id, limit as usize)
+    })) {
+        Ok(Ok((model, messages, total, start, cwd, warning))) => json!({
+            "ok": true,
+            "session_id": session_id,
+            "model": model,
+            "messages": messages,
+            "total": total,
+            "start": start,
+            "cwd": cwd.to_string_lossy(),
+            "warning": warning,
+        })
+        .to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while resuming session window"),
+    }
+}
+
+pub fn history_page(
+    service: &mut BridgeService,
+    session_id: &str,
+    before: u32,
+    limit: u32,
+) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.history_page(session_id, before as usize, limit as usize)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while loading history page"),
     }
 }
 

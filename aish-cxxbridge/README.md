@@ -157,9 +157,9 @@ Important event kinds:
 - `provider_info`/`save_provider_config` model aish's primary endpoint plus
   `api_accounts` as switchable providers. Saving with `activate=true` mirrors
   the `/model` picker: the outgoing primary is preserved as a named account,
-  the target is promoted to primary, and the service is recreated. Protocol is
-  validated against aish's host-based dialect selection: Anthropic is only
-  accepted for `api.anthropic.com`; other endpoints are OpenAI-compatible.
-- `model_fetch_start` lists OpenAI-compatible `/models` catalogs and native
-  Anthropic `/v1/models` with the right authentication; results arrive as a
-  `model_fetch` settings job.
+  the target is promoted to primary, and the service is recreated. Third-party
+  providers are restricted to OpenAI-compatible endpoints; Anthropic-native
+  endpoints are reported but rejected for save/fetch so the UI cannot write a
+  dialect aish selects only by host.
+- `model_fetch_start` lists OpenAI-compatible `/models` catalogs; results
+  arrive as a `model_fetch` settings job.

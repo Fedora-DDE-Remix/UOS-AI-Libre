@@ -35,6 +35,10 @@ class AppController final : public QObject {
     Q_PROPERTY(QVariantMap config READ config NOTIFY configChanged)
     Q_PROPERTY(QVariantMap pendingApproval READ pendingApproval NOTIFY pendingApprovalChanged)
     Q_PROPERTY(int pendingApprovalCount READ pendingApprovalCount NOTIFY pendingApprovalChanged)
+    Q_PROPERTY(int historyTotal READ historyTotal NOTIFY historyWindowChanged)
+    Q_PROPERTY(int historyStart READ historyStart NOTIFY historyWindowChanged)
+    Q_PROPERTY(bool historyLoading READ historyLoading NOTIFY historyWindowChanged)
+    Q_PROPERTY(bool hasOlderHistory READ hasOlderHistory NOTIFY historyWindowChanged)
     Q_PROPERTY(QVariantMap pendingInteraction READ pendingInteraction NOTIFY pendingInteractionChanged)
     Q_PROPERTY(int pendingInteractionCount READ pendingInteractionCount NOTIFY pendingInteractionChanged)
     Q_PROPERTY(QVariantMap policyInfo READ policyInfo NOTIFY policyInfoChanged)
@@ -82,6 +86,10 @@ public:
     QVariantMap config() const;
     QVariantMap pendingApproval() const;
     int pendingApprovalCount() const;
+    int historyTotal() const;
+    int historyStart() const;
+    bool historyLoading() const;
+    bool hasOlderHistory() const;
     QVariantMap pendingInteraction() const;
     int pendingInteractionCount() const;
     QVariantMap policyInfo() const;
@@ -114,6 +122,7 @@ public:
     Q_INVOKABLE void stop();
     Q_INVOKABLE void newConversation();
     Q_INVOKABLE void loadSession(const QString &sessionId);
+    Q_INVOKABLE void loadOlderMessages();
     Q_INVOKABLE void deleteSession(const QString &sessionId);
     Q_INVOKABLE void renameSession(const QString &sessionId,
                                    const QString &title);
@@ -204,6 +213,8 @@ signals:
     void workspaceChanged();
     void toastRequested(const QString &message);
     void pendingApprovalChanged();
+    void historyWindowChanged();
+    void historyOlderLoaded(int added);
     void pendingInteractionChanged();
     void policyInfoChanged();
     void sessionApprovalsChanged();
@@ -241,7 +252,8 @@ private:
     void onTurnDone(const QVariantMap &info);
     void onTurnError(const QString &message);
     void onTurnCancelled();
-    void onSessionLoaded(const QVariantList &messages, const QString &model);
+    void onSessionLoaded(const QVariantList &messages, const QString &model,
+                         int total, int start);
     void onSessionCleared();
     void enqueueApproval(const QVariantMap &request);
     void enqueueInteraction(const QVariantMap &request);
@@ -260,6 +272,9 @@ private:
     QString m_local_title;
     QString m_title_cache;
     QVariantMap m_pending_approval;
+    int m_history_total = 0;
+    int m_history_start = 0;
+    bool m_history_loading = false;
     QList<QVariantMap> m_approval_queue;
     QTimer m_approval_timeout;
     QVariantMap m_pending_interaction;

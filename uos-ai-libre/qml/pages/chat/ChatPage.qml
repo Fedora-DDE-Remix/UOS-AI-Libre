@@ -12,6 +12,7 @@ Item {
     property int activeCategory: 0
     property int leftRadius: 0
     property int rightRadius: Theme.windowRadius
+    property int historyAnchorIndex: 0
 
     signal toastRequested(string message)
     signal openSettings(int pageIndex)
@@ -116,6 +117,29 @@ Item {
     function updateAtBottom() {
         atBottom = messageList.contentY + messageList.height
                    >= messageList.contentHeight - 90
+    }
+
+    function loadOlderHistory() {
+        if (!app.hasOlderHistory || app.historyLoading)
+            return
+        const headerHeight = messageList.headerItem ? messageList.headerItem.height : 0
+        const index = messageList.indexAt(1, headerHeight + 1)
+        historyAnchorIndex = index >= 0 ? index : 0
+        app.loadOlderMessages()
+    }
+
+    Connections {
+        target: app
+        function onHistoryOlderLoaded(added) {
+            if (added <= 0)
+                return
+            // Keep the first previously visible row at the top instead of
+            // jumping into the newly prepended page.
+            Qt.callLater(function () {
+                messageList.positionViewAtIndex(page.historyAnchorIndex + added,
+                                                ListView.Beginning)
+            })
+        }
     }
 
     function sendFrom(composer) {
@@ -447,7 +471,40 @@ Item {
                 reuseItems: true
                 boundsBehavior: Flickable.StopAtBounds
 
-                header: Item { width: messageList.width; height: 8 }
+                header: Item {
+                    width: messageList.width
+                    height: app.hasOlderHistory ? 44 : 8
+
+                    Rectangle {
+                        visible: app.hasOlderHistory
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.top: parent.top
+                        anchors.topMargin: 2
+                        width: loadOlderLabel.implicitWidth + 28
+                        height: 30
+                        radius: Theme.radiusSmall
+                        color: loadOlderHover.hovered ? Theme.hover : "transparent"
+                        border.width: 1
+                        border.color: Theme.border
+                        HoverHandler { id: loadOlderHover }
+                        Text {
+                            id: loadOlderLabel
+                            anchors.centerIn: parent
+                            text: app.historyLoading
+                                  ? "加载中…"
+                                  : "加载更早消息（还有 " + app.historyStart + " 条）"
+                            color: Theme.textSecondary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSizeTiny
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: !app.historyLoading
+                            onClicked: page.loadOlderHistory()
+                        }
+                    }
+                }
                 footer: Item {
                     width: messageList.width
                     height: chatComposer.height + 46

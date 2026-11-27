@@ -60,6 +60,7 @@ public:
     Q_INVOKABLE void failAssistant(const QString &message);
     Q_INVOKABLE void cancelAssistant();
     Q_INVOKABLE void loadTranscript(const QVariantList &messages);
+    Q_INVOKABLE void prependTranscript(const QVariantList &messages);
     Q_INVOKABLE QString lastUserText() const;
     Q_INVOKABLE int lastUserRow() const;
     Q_INVOKABLE QVariantList lastUserAttachments() const;
@@ -112,6 +113,7 @@ private:
     static QString toolKind(const QString &name);
     static QVector<Tool> parseToolCalls(const QVariant &calls);
     static QVariantList toolsToVariant(const QVector<Tool> &tools);
+    QVector<Message> parseTranscriptMessages(const QVariantList &messages) const;
 
     void emitRowChanged(int row, const QVector<int> &roles);
     void setToolStatus(const QString &id, const QString &status,

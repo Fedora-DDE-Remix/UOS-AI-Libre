@@ -27,6 +27,14 @@ cmake -S "$here" -B "$build_dir" -G Ninja \
     -DAISH_CXXBRIDGE_INCLUDE="$bridge_root/generated"
 cmake --build "$build_dir" -j"$jobs"
 
+# qt_add_qml_module must have produced the build-time QML cache loader. If it
+# is missing, the app would fall back to parsing QML at startup.
+qml_cache_loader="$build_dir/.rcc/qmlcache/uos-ai-libre_qmlcache_loader.cpp"
+if [[ ! -f "$qml_cache_loader" ]]; then
+    echo "error: build-time QML cache was not generated: $qml_cache_loader" >&2
+    exit 1
+fi
+
 echo
 echo "debug binary: $build_dir/uos-ai-libre"
 echo "compile commands: $build_dir/compile_commands.json"

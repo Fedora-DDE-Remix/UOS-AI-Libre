@@ -33,3 +33,11 @@ cmake -S "$here" -B "$here/build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DAISH_CXXBRIDGE_ROOT="$bridge_root"
 cmake --build "$here/build" -j"$(nproc)"
+
+# qt_add_qml_module must have produced the build-time QML cache loader. If it
+# is missing, the app would fall back to parsing QML at startup.
+qml_cache_loader="$here/build/.rcc/qmlcache/uos-ai-libre_qmlcache_loader.cpp"
+if [[ ! -f "$qml_cache_loader" ]]; then
+    echo "error: build-time QML cache was not generated: $qml_cache_loader" >&2
+    exit 1
+fi

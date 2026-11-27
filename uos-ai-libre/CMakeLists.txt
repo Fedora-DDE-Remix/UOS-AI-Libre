@@ -46,6 +46,13 @@ file(GLOB_RECURSE QML_SOURCES CONFIGURE_DEPENDS
 file(GLOB ICON_FILES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/*.svg")
 
+# qt_add_qml_module runs qmlcachegen at build time. The resulting bytecode and
+# AOT-compiled functions are linked into the executable, so the first launch
+# does not parse or compile QML from the source tree. Keep cachegen enabled
+# even if a caller has changed the default for other targets in this build.
+set_source_files_properties(${QML_SOURCES} PROPERTIES
+    QT_QML_SKIP_CACHEGEN FALSE)
+
 qt_add_executable(uos-ai-libre
     src/main.cpp
     src/aishbridge.cpp
@@ -110,4 +117,14 @@ if(UOS_AI_LIBRE_BUILD_TESTS)
     target_compile_options(markdown-test PRIVATE -Wall -Wextra -Wpedantic)
     target_link_libraries(markdown-test PRIVATE Qt6::Core)
     add_test(NAME markdown-test COMMAND markdown-test)
+
+    add_executable(chatmodel-test
+        tests/chatmodel_test.cpp
+        src/chatmodel.cpp
+        src/chatmodel.h
+    )
+    target_include_directories(chatmodel-test PRIVATE src)
+    target_compile_options(chatmodel-test PRIVATE -Wall -Wextra -Wpedantic)
+    target_link_libraries(chatmodel-test PRIVATE Qt6::Core Qt6::Qml)
+    add_test(NAME chatmodel-test COMMAND chatmodel-test)
 endif()

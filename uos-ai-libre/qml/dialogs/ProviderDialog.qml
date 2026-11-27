@@ -14,7 +14,7 @@ Popup {
     property var filteredModels: []
     property var enabledModels: []
     property bool saving: false
-    property string protocol: "openai"
+    property bool unsupported: false
     signal saveRequested(var args, bool activate)
 
     parent: Overlay.overlay
@@ -32,18 +32,12 @@ Popup {
         return match ? match[1].toLowerCase() : ""
     }
 
-    function inferProtocol(base) {
-        return hostOf(base) === "api.anthropic.com" ? "anthropic" : "openai"
-    }
-
     function protocolError() {
         const host = hostOf(baseField.text)
         if (host.length === 0)
             return "请输入 http(s) API 地址"
-        if (root.protocol === "anthropic" && host !== "api.anthropic.com")
-            return "aish 目前只对 api.anthropic.com 使用 Anthropic Messages；自定义端点请选择 OpenAI 兼容协议"
-        if (root.protocol === "openai" && host === "api.anthropic.com")
-            return "该地址应选择 Anthropic 协议"
+        if (host === "api.anthropic.com")
+            return "第三方接入仅支持 OpenAI 兼容协议，不支持 Anthropic"
         return ""
     }
 
@@ -68,7 +62,7 @@ Popup {
         editingPrimary = false
         nameField.text = ""
         baseField.text = ""
-        root.protocol = "openai"
+        root.unsupported = false
         keyField.text = ""
         keyField.placeholder = "sk-...；新建供应商时填写"
         modelField.text = ""
@@ -89,7 +83,7 @@ Popup {
         editingPrimary = provider.account !== true
         nameField.text = provider.name || ""
         baseField.text = provider.api_base || ""
-        root.protocol = provider.protocol || inferProtocol(baseField.text)
+        root.unsupported = String(provider.protocol || "") === "anthropic"
         keyField.text = ""
         keyField.placeholder = "留空保留现有密钥"
         modelField.text = provider.model || ""
@@ -100,18 +94,19 @@ Popup {
         models = []
         filteredModels = []
         filterField.text = ""
-        errorText = ""
+        errorText = root.unsupported
+                ? "该供应商使用 Anthropic 协议，不在 GUI 支持范围内；请直接在 aish config.yaml 中维护。"
+                : ""
         fetchError = ""
         saving = false
         open()
         baseField.forceInputFocus()
     }
 
-    function applyPreset(name, base, protocol) {
+    function applyPreset(name, base) {
         if (nameField.text.trim().length === 0)
             nameField.text = name
         baseField.text = base
-        root.protocol = protocol
         models = []
         filteredModels = []
         fetchError = ""
@@ -170,9 +165,9 @@ Popup {
             errorText = invalid
             return
         }
-        if (app.modelFetchBusy)
+        if (app.modelFetchBusy || root.unsupported)
             return
-        app.fetchModels(baseField.text.trim(), keyField.text.trim(), root.protocol)
+        app.fetchModels(baseField.text.trim(), keyField.text.trim(), "openai")
     }
 
     function draft() {
@@ -180,6 +175,10 @@ Popup {
         const name = nameField.text.trim()
         const base = baseField.text.trim()
         const model = modelField.text.trim()
+        if (root.unsupported) {
+            errorText = "该供应商使用 Anthropic 协议，不在 GUI 支持范围内"
+            return null
+        }
         if (name.length === 0) {
             errorText = "请填写供应商显示名称"
             return null
@@ -207,12 +206,12 @@ Popup {
             apiKey: keyField.text,
             model: model,
             models: root.enabledModels,
-            protocol: root.protocol
+            protocol: "openai"
         }
     }
 
     function save(activate) {
-        if (saving)
+        if (saving || root.unsupported)
             return
         const args = draft()
         if (args === null)
@@ -230,6 +229,17 @@ Popup {
         saving = false
         errorText = message
     }
+
+    function showLatestError() {
+        if (root.errorText.length === 0 && root.fetchError.length === 0)
+            return
+        Qt.callLater(function () {
+            bodyFlick.contentY = Math.max(0, bodyFlick.contentHeight - bodyFlick.height)
+        })
+    }
+
+    onErrorTextChanged: root.showLatestError()
+    onFetchErrorChanged: root.showLatestError()
 
     Connections {
         target: app
@@ -324,7 +334,7 @@ Popup {
 
                 Text {
                     width: parent.width
-                    text: "供应商写入 aish config.yaml 的主端点或 api_accounts。协议由 API 域名决定：api.anthropic.com 使用 Anthropic Messages，其余使用 OpenAI 兼容协议。"
+                    text: "供应商写入 aish config.yaml 的主端点或 api_accounts。第三方接入仅支持 OpenAI 兼容协议（/models 模型目录）；Anthropic 原生端点不在支持范围内。"
                     color: Theme.textTertiary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeTiny
@@ -341,9 +351,8 @@ Popup {
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSizeTiny
                     }
-                    AppButton { text: "OpenAI"; minWidth: 58; horizontalPadding: 9; onClicked: root.applyPreset("OpenAI", "https://api.openai.com/v1", "openai") }
-                    AppButton { text: "DeepSeek"; minWidth: 68; horizontalPadding: 9; onClicked: root.applyPreset("DeepSeek", "https://api.deepseek.com", "openai") }
-                    AppButton { text: "Anthropic"; minWidth: 72; horizontalPadding: 9; onClicked: root.applyPreset("Anthropic", "https://api.anthropic.com", "anthropic") }
+                    AppButton { text: "OpenAI"; minWidth: 58; horizontalPadding: 9; onClicked: root.applyPreset("OpenAI", "https://api.openai.com/v1") }
+                    AppButton { text: "DeepSeek"; minWidth: 68; horizontalPadding: 9; onClicked: root.applyPreset("DeepSeek", "https://api.deepseek.com") }
                 }
 
                 Column {
@@ -363,34 +372,12 @@ Popup {
                 Column {
                     width: parent.width
                     spacing: 5
-                    Text { text: "API 协议"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSizeTiny }
-                    SettingChoice {
-                        id: protocolChoice
-                        options: [{value: "openai", label: "OpenAI 兼容"},
-                                  {value: "anthropic", label: "Anthropic"}]
-                        value: root.protocol
-                        onChanged: (value) => {
-                            root.protocol = value
-                            root.models = []
-                            root.filteredModels = []
-                            root.fetchError = ""
-                            root.errorText = root.protocolError()
-                        }
-                    }
-                }
-
-                Column {
-                    width: parent.width
-                    spacing: 5
                     Text { text: "API 地址"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSizeTiny }
                     AppTextField {
                         id: baseField
                         width: parent.width
-                        placeholder: "https://api.deepseek.com 或 https://api.anthropic.com"
+                        placeholder: "https://api.deepseek.com 或 https://api.openai.com/v1"
                         onTextEdited: {
-                            if (root.editing === false && root.protocol === "openai"
-                                && root.hostOf(value) === "api.anthropic.com")
-                                root.protocol = "anthropic"
                             root.models = []
                             root.filteredModels = []
                             root.fetchError = ""
@@ -430,7 +417,8 @@ Popup {
                             text: app.modelFetchBusy ? "获取中…" : "获取模型列表"
                             minWidth: 100
                             horizontalPadding: 9
-                            enabled: !app.modelFetchBusy && baseField.text.trim().length > 0
+                            enabled: !app.modelFetchBusy && !root.unsupported
+                                     && baseField.text.trim().length > 0
                             onClicked: root.fetchModels()
                         }
                     }
@@ -638,13 +626,13 @@ Popup {
                 AppButton {
                     visible: !root.editingPrimary
                     text: root.saving ? "保存中…" : "仅保存"
-                    enabled: !root.saving && !app.generating
+                    enabled: !root.saving && !app.generating && !root.unsupported
                     onClicked: root.save(false)
                 }
                 AppButton {
                     text: root.saving ? "保存中…" : "保存并切换"
                     variant: "primary"
-                    enabled: !root.saving && !app.generating
+                    enabled: !root.saving && !app.generating && !root.unsupported
                     onClicked: root.save(true)
                 }
             }

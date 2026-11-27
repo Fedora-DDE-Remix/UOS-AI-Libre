@@ -818,7 +818,7 @@ void AishBridge::loadSession(const QString &sessionId) {
     if (sessionId.trimmed().isEmpty())
         return;
 
-    QString raw = toQString(resume_session(**m_service, sessionId.toStdString()));
+    QString raw = toQString(resume_session_window(**m_service, sessionId.toStdString(), 40));
     QJsonObject object;
     QString error;
     if (!parseResponse(raw, &object, &error)) {
@@ -828,6 +828,8 @@ void AishBridge::loadSession(const QString &sessionId) {
     const QString model = object.value(QStringLiteral("model")).toString();
     const QVariantList messages =
         object.value(QStringLiteral("messages")).toArray().toVariantList();
+    const int total = object.value(QStringLiteral("total")).toInt(messages.size());
+    const int start = object.value(QStringLiteral("start")).toInt(0);
     const QString cwd = object.value(QStringLiteral("cwd")).toString();
     const QString warning = object.value(QStringLiteral("warning")).toString();
     m_session_id = sessionId;
@@ -839,9 +841,27 @@ void AishBridge::loadSession(const QString &sessionId) {
         emit workspaceChanged();
     }
     emit sessionChanged();
-    emit sessionLoaded(messages, model);
+    emit sessionLoaded(messages, model, total, start);
     if (!warning.isEmpty())
         emit toastRequested(warning);
+}
+
+QVariantMap AishBridge::historyPage(const QString &sessionId,
+                                    int before, int limit) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(history_page(**m_service, sessionId.toStdString(),
+                               static_cast<uint32_t>(qMax(0, before)),
+                               static_cast<uint32_t>(qBound(1, limit, 200)))),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
 }
 
 void AishBridge::deleteSession(const QString &sessionId) {

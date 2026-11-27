@@ -59,11 +59,20 @@ Rules that keep the UI maintainable:
   add/update/remove servers and edit server options. Connection-level MCP YAML
   and registry file settings remain aish-native.
 - The model page is provider-centric: providers come from aish's primary
-  endpoint and `api_accounts`, can be added with a custom display name, an
-  explicit OpenAI/Anthropic protocol check, live model discovery, and multiple
-  enabled models per provider. The chat composer lists every enabled model
-  across providers, with the model on the left and provider on the right and a
-  search box above the list.
+  endpoint and `api_accounts`, can be added with a custom display name, live
+  model discovery, and multiple enabled models per provider. Third-party
+  providers support OpenAI-compatible endpoints only; Anthropic-native
+  endpoints are shown read-only and must be maintained in `config.yaml`. The
+  chat composer lists every enabled OpenAI-compatible model across providers,
+  with the model on the left and provider on the right and a search box above
+  the list.
+- Long conversations load lazily: opening a session materialises only the
+  newest transcript window, and "加载更早消息" pages older turns into the same
+  model without re-reading the whole conversation into QML.
+- QML is compiled at build time by `qmlcachegen`; the bytecode and AOT
+  functions are linked into the executable through `qt_add_qml_module`. Both
+  build scripts check that the QML cache loader was produced, so a packaged
+  binary never falls back to parsing QML from the source tree at startup.
 - Session-scoped "本会话允许" approvals are listed on the security page and can
   be revoked or cleared. They are never persisted; a policy change invalidates
   them through aish's policy fingerprint.
@@ -99,6 +108,7 @@ For day-to-day development use the incremental debug build:
 ```bash
 ./build-debug.sh
 ./build-debug/uos-ai-libre
+ctest --test-dir build-debug --output-on-failure
 ```
 
 It builds the Rust bridge with Cargo's `dev` profile and the Qt frontend into
