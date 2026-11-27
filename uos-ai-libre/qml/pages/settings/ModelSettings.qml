@@ -62,7 +62,7 @@ SettingsScroll {
                                         args.model, args.protocol, activate)
         if (result && result.ok === true) {
             app.setProviderModels(args.apiBase, args.models || [args.model])
-            return true
+            return result
         }
         return result || ({ ok: false, error: "供应商保存失败" })
     }
