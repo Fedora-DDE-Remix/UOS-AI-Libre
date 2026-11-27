@@ -164,6 +164,12 @@ int main(int argc, char *argv[]) {
         != QStringLiteral("text"))
         return fail("transcript third segment should be text");
 
+    const QVariantMap snapshot = transcript.lastAssistantSnapshot();
+    if (snapshot.value(QStringLiteral("text")).toString()
+            != QStringLiteral("summary")
+        || snapshot.value(QStringLiteral("timeline")).toList().size() != 3)
+        return fail("last assistant snapshot");
+
     ChatModel multi;
     multi.beginAssistant(QStringLiteral("model"));
     multi.beginReasoning();

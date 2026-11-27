@@ -146,6 +146,13 @@ Supported today:
 - `launchAiQuickOCR` (explain/summarize/translate/ask; local file path, data
   URL, base64 PNG/JPEG or qCompress'ed base64 PNG) and
   `launchChatUploadImage`;
+- `launchAiQuickOCR` opens a compact quick-answer surface: on
+  Wayland/Treeland it uses dde-shell's `DLayerShellWindow` binding for the
+  generic `wlr-layer-shell-unstable-v1` protocol (`LayerOverlay`, anchored to
+  the cursor, keyboard-interactive on demand); on X11 it uses a frameless
+  tool-window fallback at the same point. No Treeland-private protocol is
+  needed for a fixed-size popup; `treeland-layer-shell-extension` is only for
+  compositor-driven interactive resize/move.
 - `org.deepin.copilot.chat.inputPrompt` with `file` + `defaultPrompt`;
 - text translation through `/aiassistant/trans`;
 - TTS/STT are deliberately advertised as unavailable (`getTTSEnable` /

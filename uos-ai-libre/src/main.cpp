@@ -1,5 +1,6 @@
 #include "appcontroller.h"
 #include "dde/dde_service.h"
+#include "quickaiwindow.h"
 #include "singleinstance.h"
 #include "windowhost.h"
 #include "iconprovider.h"
@@ -103,6 +104,7 @@ int main(int argc, char *argv[]) {
                      });
 
     DdeService dde;
+    QuickAiWindowHost quick_ai(&engine, &app);
     QObject::connect(&dde, &DdeService::chatPageRequested, &window_host,
                      [&window_host](int) { window_host.showChatPage(); });
     QObject::connect(&dde, &DdeService::chatPageWithTokenRequested,
@@ -114,10 +116,21 @@ int main(int argc, char *argv[]) {
                          window_host.showChatPage();
                          app.queueAttachments({path});
                      });
-    QObject::connect(&dde, &DdeService::quickImageRequested, &window_host,
-                     [&window_host, &app](int mode, const QString &path) {
-                         window_host.showChatPage();
-                         app.startQuickImageAction(mode, path);
+    QObject::connect(&dde, &DdeService::quickImageRequested, &quick_ai,
+                     [&quick_ai, &window_host, &app](int mode,
+                                                    const QString &path,
+                                                    const QPoint &anchor) {
+                         quick_ai.show(mode, path, anchor);
+                         if (!quick_ai.visible()) {
+                             // If the layer-shell surface could not be created,
+                             // keep the feature usable in the main chat.
+                             window_host.showChatPage();
+                             app.startQuickImageAction(mode, path);
+                             return;
+                         }
+                         if (!app.startQuickImageAction(mode, path))
+                             quick_ai.setError(QStringLiteral(
+                                 "无法启动 AI 快捷分析，请确认模型配置和当前会话状态。"));
                      });
     QObject::connect(&dde, &DdeService::promptRequested, &window_host,
                      [&window_host, &app](const QString &question,

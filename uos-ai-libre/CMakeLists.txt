@@ -73,6 +73,8 @@ qt_add_executable(uos-ai-libre
     src/iconprovider.h
     src/markdownmodel.cpp
     src/markdownmodel.h
+    src/quickaiwindow.cpp
+    src/quickaiwindow.h
     src/rhibackend-selector.cpp
     src/rhibackend-selector.h
     src/singleinstance.cpp

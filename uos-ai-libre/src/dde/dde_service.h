@@ -3,6 +3,7 @@
 #include <QDBusConnection>
 #include <QMap>
 #include <QObject>
+#include <QPoint>
 #include <QStringList>
 
 class CopilotAdaptor;
@@ -35,7 +36,8 @@ public:
     bool translationAvailable() const;
     void setTranslationAvailable(bool available);
 
-    bool requestQuickImage(int mode, const QString &rawImage, QString *error);
+    bool requestQuickImage(int mode, const QString &rawImage,
+                           const QPoint &anchorPoint, QString *error);
     bool requestChatImage(const QString &rawImage, QString *error);
     bool requestPrompt(const QString &question,
                        const QMap<QString, QString> &params, QString *error);
@@ -52,7 +54,8 @@ signals:
     void chatPageRequested(int index);
     void chatPageWithTokenRequested(int index, const QString &token);
     void chatImageRequested(const QString &imagePath);
-    void quickImageRequested(int mode, const QString &imagePath);
+    void quickImageRequested(int mode, const QString &imagePath,
+                             const QPoint &anchorPoint);
     void settingsRequested(bool openAddAccountDialog);
     void promptRequested(const QString &question, const QString &file,
                          const QString &defaultPrompt);

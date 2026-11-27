@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QtQml/qqmlregistration.h>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QVector>
 
 /// The conversation model used by the chat page.
@@ -70,6 +71,7 @@ public:
     Q_INVOKABLE QString lastUserText() const;
     Q_INVOKABLE int lastUserRow() const;
     Q_INVOKABLE QVariantList lastUserAttachments() const;
+    Q_INVOKABLE QVariantMap lastAssistantSnapshot() const;
 
 signals:
     void countChanged();

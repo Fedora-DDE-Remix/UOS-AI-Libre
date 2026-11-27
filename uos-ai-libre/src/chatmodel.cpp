@@ -611,6 +611,29 @@ QVariantList ChatModel::lastUserAttachments() const {
     return {};
 }
 
+QVariantMap ChatModel::lastAssistantSnapshot() const {
+    for (int i = m_messages.size() - 1; i >= 0; --i) {
+        const Message &message = m_messages.at(i);
+        if (message.kind != QStringLiteral("assistant"))
+            continue;
+        QVariantMap snapshot;
+        snapshot.insert(QStringLiteral("row"), i);
+        snapshot.insert(QStringLiteral("text"), message.text);
+        snapshot.insert(QStringLiteral("reasoning"), message.reasoning);
+        snapshot.insert(QStringLiteral("reasoningActive"), message.reasoningActive);
+        snapshot.insert(QStringLiteral("reasoningElapsed"), message.reasoningElapsedMs);
+        snapshot.insert(QStringLiteral("streaming"), message.streaming);
+        snapshot.insert(QStringLiteral("timeline"), data(index(i), TimelineRole));
+        snapshot.insert(QStringLiteral("activeText"), message.activeText);
+        snapshot.insert(QStringLiteral("elapsedMs"), message.elapsedMs);
+        snapshot.insert(QStringLiteral("model"), message.model);
+        snapshot.insert(QStringLiteral("error"), message.error);
+        snapshot.insert(QStringLiteral("notice"), message.notice);
+        return snapshot;
+    }
+    return {};
+}
+
 QVariantList ChatModel::toolsToVariant(const QVector<Tool> &tools) {
     QVariantList result;
     result.reserve(tools.size());

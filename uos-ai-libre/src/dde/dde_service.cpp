@@ -144,7 +144,7 @@ void DdeService::setTranslationAvailable(bool available) {
 }
 
 bool DdeService::requestQuickImage(int mode, const QString &rawImage,
-                                   QString *error) {
+                                   const QPoint &anchorPoint, QString *error) {
     if (mode < 1 || mode > 4) {
         if (error)
             *error = QStringLiteral("未知的 AI 快捷操作类型：%1").arg(mode);
@@ -153,7 +153,7 @@ bool DdeService::requestQuickImage(int mode, const QString &rawImage,
     const QString path = DdePayload::normalizeImage(rawImage, error);
     if (path.isEmpty())
         return false;
-    emit quickImageRequested(mode, path);
+    emit quickImageRequested(mode, path, anchorPoint);
     return true;
 }
 

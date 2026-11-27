@@ -69,10 +69,9 @@ void CopilotAdaptor::launchAiQuickOCR(int type, const QString &query,
                                        const QPoint &pos, bool isCustom,
                                        const QString &imagePath) {
     Q_UNUSED(query)
-    Q_UNUSED(pos)
     Q_UNUSED(isCustom)
     QString error;
-    if (!m_service->requestQuickImage(type, imagePath, &error))
+    if (!m_service->requestQuickImage(type, imagePath, pos, &error))
         sendErrorReply(QDBusError::InvalidArgs, error);
 }
 

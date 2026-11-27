@@ -70,10 +70,12 @@ int main(int argc, char *argv[]) {
                              std::cerr << "chat image missing\n";
                      });
     QObject::connect(&service, &DdeService::quickImageRequested,
-                     [&](int, const QString &path) {
+                     [&](int, const QString &path, const QPoint &position) {
                          ++quickImages;
                          if (!QFile::exists(path))
                              std::cerr << "quick image missing\n";
+                         if (position != QPoint(30, 40))
+                             std::cerr << "quick image position mismatch\n";
                      });
     QObject::connect(&service, &DdeService::promptRequested,
                      [&](const QString &, const QString &file,
