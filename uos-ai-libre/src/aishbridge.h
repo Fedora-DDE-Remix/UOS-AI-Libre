@@ -43,6 +43,8 @@ public:
     bool hasApiKey() const;
     QString configPath() const;
     QVariantMap config() const;
+    Q_INVOKABLE int toolLoopLimit();
+    Q_INVOKABLE QVariantMap saveToolLoopLimit(int limit);
     QVariantList sessions() const;
     QString workspace() const;
     QString defaultWorkspace() const;

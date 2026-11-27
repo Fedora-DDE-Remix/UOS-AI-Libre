@@ -300,7 +300,8 @@ Popup {
             Text {
                 x: 22
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.editing ? "编辑供应商" : "添加供应商"
+                text: root.editing ? "编辑 OpenAI-Compatible 供应商"
+                                   : "添加 OpenAI-Compatible 供应商"
                 color: Theme.textPrimary
                 font.family: Theme.fontFamily
                 font.pixelSize: 17
@@ -343,7 +344,7 @@ Popup {
 
                 Text {
                     width: parent.width
-                    text: "供应商写入 aish config.yaml 的主端点或 api_accounts。第三方接入仅支持 OpenAI 兼容协议（/models 模型目录）；Anthropic 原生端点不在支持范围内。"
+                    text: "自定义端点写入 aish config.yaml 的主端点或 api_accounts。这里只支持 OpenAI 兼容协议和 /models 模型目录；an​​thropic 请使用“添加供应商”中的内置 Anthropic。"
                     color: Theme.textTertiary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeTiny

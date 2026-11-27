@@ -111,6 +111,33 @@ QString AishBridge::configPath() const {
 }
 
 QVariantMap AishBridge::config() const { return m_config; }
+
+int AishBridge::toolLoopLimit() {
+    if (!ensureService())
+        return 0;
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(tool_loop_limit(**m_service)), &error);
+    if (!error.isEmpty())
+        return 0;
+    return result.value(QStringLiteral("limit")).toInt();
+}
+
+QVariantMap AishBridge::saveToolLoopLimit(int limit) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(save_tool_loop_limit(
+            **m_service, static_cast<uint32_t>(qBound(0, limit, 100000)))),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
 QVariantList AishBridge::sessions() const { return m_sessions; }
 QString AishBridge::workspace() const { return m_workspace; }
 QString AishBridge::defaultWorkspace() const { return m_default_workspace; }

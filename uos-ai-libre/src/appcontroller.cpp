@@ -129,6 +129,8 @@ QVariantMap AppController::config() const { return m_bridge.config(); }
 
 QVariantMap AppController::pendingApproval() const { return m_pending_approval; }
 
+int AppController::toolLoopLimit() const { return m_tool_loop_limit; }
+
 int AppController::historyTotal() const { return m_history_total; }
 int AppController::historyStart() const { return m_history_start; }
 bool AppController::historyLoading() const { return m_history_loading; }
@@ -228,6 +230,11 @@ void AppController::initialize() {
         refreshMcpStatus();
         refreshMemory();
         refreshAudit();
+        const int limit = m_bridge.toolLoopLimit();
+        if (limit != m_tool_loop_limit) {
+            m_tool_loop_limit = limit;
+            emit toolLoopLimitChanged();
+        }
     }
 }
 
@@ -332,6 +339,124 @@ void AppController::setProviderModelsStore(const QString &apiBase,
                          m_provider_models);
 }
 
+QVariantList AppController::builtinProviders() const {
+    // Mirrors the provider presets shipped by aish's setup wizard. These are
+    // presentation metadata; the active endpoint/key/model still live in aish
+    // config.yaml. Providers that need OAuth or a custom base stay in the
+    // OpenAI-Compatible flow instead.
+    const QVariantList providers = {
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("openrouter")},
+                    {QStringLiteral("label"), QStringLiteral("OpenRouter")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://openrouter.ai/api/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("openrouter/auto")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("openai")},
+                    {QStringLiteral("label"), QStringLiteral("OpenAI")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.openai.com/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("gpt-4o")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("anthropic")},
+                    {QStringLiteral("label"), QStringLiteral("Anthropic")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.anthropic.com")},
+                    {QStringLiteral("protocol"), QStringLiteral("anthropic")},
+                    {QStringLiteral("default_model"), QStringLiteral("claude-3-5-sonnet-latest")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("deepseek")},
+                    {QStringLiteral("label"), QStringLiteral("DeepSeek")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.deepseek.com/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("deepseek-chat")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("gemini")},
+                    {QStringLiteral("label"), QStringLiteral("Gemini")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://generativelanguage.googleapis.com/v1beta/openai")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("gemini-2.0-flash")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("xai")},
+                    {QStringLiteral("label"), QStringLiteral("xAI (Grok)")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.x.ai/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("grok-3")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("moonshot")},
+                    {QStringLiteral("label"), QStringLiteral("Moonshot AI")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.moonshot.ai/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("kimi-k2.5")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("minimax")},
+                    {QStringLiteral("label"), QStringLiteral("MiniMax")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.minimax.io/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("MiniMax-M2.5")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("qianfan")},
+                    {QStringLiteral("label"), QStringLiteral("Baidu Qianfan")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://qianfan.baidubce.com/v2")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("ernie-4.0-8k")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("mistral")},
+                    {QStringLiteral("label"), QStringLiteral("Mistral AI")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.mistral.ai/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("mistral-large-latest")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("together")},
+                    {QStringLiteral("label"), QStringLiteral("Together AI")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.together.xyz/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QString()},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("huggingface")},
+                    {QStringLiteral("label"), QStringLiteral("HuggingFace")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api-inference.huggingface.co/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QString()},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("qwen")},
+                    {QStringLiteral("label"), QStringLiteral("Qwen (Alibaba)")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://dashscope.aliyuncs.com/compatible-mode/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("qwen-max")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("kilocode")},
+                    {QStringLiteral("label"), QStringLiteral("Kilo Gateway")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.kilocode.ai/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QString()},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("zai")},
+                    {QStringLiteral("label"), QStringLiteral("Z.AI")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://api.z.ai/api/paas/v4")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("glm-5")},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("ai_gateway")},
+                    {QStringLiteral("label"), QStringLiteral("Vercel AI Gateway")},
+                    {QStringLiteral("api_base"), QStringLiteral("https://gateway.vercel.ai/api/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QString()},
+                    {QStringLiteral("requires_key"), true}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("ollama")},
+                    {QStringLiteral("label"), QStringLiteral("Ollama")},
+                    {QStringLiteral("api_base"), QStringLiteral("http://127.0.0.1:11434/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QStringLiteral("llama3.2")},
+                    {QStringLiteral("requires_key"), false}},
+        QVariantMap{{QStringLiteral("key"), QStringLiteral("vllm")},
+                    {QStringLiteral("label"), QStringLiteral("vLLM")},
+                    {QStringLiteral("api_base"), QStringLiteral("http://127.0.0.1:8000/v1")},
+                    {QStringLiteral("protocol"), QStringLiteral("openai")},
+                    {QStringLiteral("default_model"), QString()},
+                    {QStringLiteral("requires_key"), false}},
+    };
+    return providers;
+}
+
 QVariantList AppController::cachedProviderModels(const QString &apiBase) const {
     return m_provider_catalogs.value(apiBase).toList();
 }
@@ -386,20 +511,16 @@ void AppController::refreshProviders() {
         }
         if (!current.isEmpty() && !ids.contains(current))
             ids.prepend(current);
-        const bool openai_compatible =
-            provider.value(QStringLiteral("protocol")).toString()
-            != QStringLiteral("anthropic");
         QVariantList visibleModels;
         for (const QString &id : ids) {
             visibleModels.append(id);
-            if (!openai_compatible)
-                continue;
             QVariantMap item;
             item.insert(QStringLiteral("model"), id);
             item.insert(QStringLiteral("provider"),
                         provider.value(QStringLiteral("name")));
             item.insert(QStringLiteral("apiBase"), base);
-            item.insert(QStringLiteral("protocol"), QStringLiteral("openai"));
+            item.insert(QStringLiteral("protocol"),
+                        provider.value(QStringLiteral("protocol")));
             item.insert(QStringLiteral("active"),
                         provider.value(QStringLiteral("active")).toBool()
                             && id == current);
@@ -432,21 +553,18 @@ QVariantMap AppController::activateModel(const QString &apiBase,
     if (model.trimmed().isEmpty())
         return {{QStringLiteral("ok"), false},
                 {QStringLiteral("error"), QStringLiteral("模型名不能为空")}};
+    QString protocol;
     for (const QVariant &entry : m_providers) {
         const QVariantMap provider = entry.toMap();
-        if (provider.value(QStringLiteral("api_base")).toString() != apiBase)
-            continue;
-        if (provider.value(QStringLiteral("protocol")).toString()
-            == QStringLiteral("anthropic")) {
-            return {{QStringLiteral("ok"), false},
-                    {QStringLiteral("error"),
-                     QStringLiteral("第三方接入仅支持 OpenAI 兼容协议")}};
+        if (provider.value(QStringLiteral("api_base")).toString() == apiBase) {
+            protocol = provider.value(QStringLiteral("protocol")).toString();
+            break;
         }
-        break;
     }
+    if (protocol.isEmpty())
+        protocol = QStringLiteral("openai");
     const QVariantMap result = saveProvider(providerName, apiBase, QString(),
-                                            model.trimmed(),
-                                            QStringLiteral("openai"), true);
+                                            model.trimmed(), protocol, true);
     if (result.value(QStringLiteral("ok"), false).toBool()) {
         refreshProviders();
         emit toastRequested(QStringLiteral("已切换到 %1").arg(model.trimmed()));
@@ -580,6 +698,22 @@ QVariantMap AppController::savePolicy(const QVariantMap &fields) {
         const QString error = result.value(QStringLiteral("error")).toString();
         emit toastRequested(error.isEmpty() ? QStringLiteral("安全策略保存失败")
                                             : error);
+    }
+    return result;
+}
+
+QVariantMap AppController::saveToolLoopLimit(int limit) {
+    const QVariantMap result = m_bridge.saveToolLoopLimit(limit);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        const QString error = result.value(QStringLiteral("error")).toString();
+        emit toastRequested(error.isEmpty() ? QStringLiteral("保存工具循环上限失败")
+                                            : error);
+        return result;
+    }
+    const int saved = result.value(QStringLiteral("limit"), limit).toInt();
+    if (saved != m_tool_loop_limit) {
+        m_tool_loop_limit = saved;
+        emit toolLoopLimitChanged();
     }
     return result;
 }

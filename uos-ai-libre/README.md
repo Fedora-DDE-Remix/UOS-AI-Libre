@@ -59,18 +59,22 @@ Rules that keep the UI maintainable:
   add/update/remove servers and edit server options. Connection-level MCP YAML
   and registry file settings remain aish-native.
 - The model page is provider-centric: providers come from aish's primary
-  endpoint and `api_accounts`, can be added with a custom display name, live
-  model discovery, and multiple enabled models per provider. Third-party
-  providers support OpenAI-compatible endpoints only; Anthropic-native
-  endpoints are shown read-only and must be maintained in `config.yaml`. The
-  chat composer lists every enabled OpenAI-compatible model across providers,
-  with the model on the left and provider on the right and a search box above
-  the list. The provider dialog caches the last fetched catalogue per endpoint,
-  so editing a provider shows every model from that fetch with the enabled
-  ones checked; long catalogues scroll inside the dialog.
-- aish-llm's upstream 20-round tool-call guard is not treated as a request
-  limit in this frontend: the GUI continues the loop and relies on the explicit
-  stop button, so long tool tasks do not fail with an iteration-limit error.
+  endpoint and `api_accounts`. Adding a provider offers aish's built-in
+  presets (OpenAI, Anthropic, DeepSeek, OpenRouter, Gemini, xAI, Moonshot,
+  MiniMax, Qwen, Mistral, Together, Ollama, ...), which only need an API key,
+  plus a separate OpenAI-Compatible flow for a custom base URL and live model
+  catalogue. Anthropic built-in uses `api.anthropic.com` and aish's native
+  Messages path; custom Anthropic endpoints remain unsupported because aish
+  selects that dialect by host. Each provider keeps multiple enabled models.
+  The chat composer lists every enabled model across providers, with the model
+  on the left and provider on the right and a search box above the list. The
+  provider dialog caches the last fetched catalogue per endpoint, so editing a
+  provider shows every model from that fetch with the enabled ones checked;
+  long catalogues scroll inside the dialog.
+- aish-llm's upstream 20-round tool-call window is controlled by the
+  `工具循环上限` field on the security page: `0` (default) means unlimited;
+  a positive value stops the turn at the next 20-round window. The explicit
+  stop button still cancels immediately.
 - Assistant turns render reasoning, text segments and tool groups in event
   order: a text segment streamed before a tool call stays above that tool group,
   and later text appears below it. Completed segments are immutable timeline

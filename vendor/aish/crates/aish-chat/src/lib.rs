@@ -12,7 +12,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -74,6 +74,9 @@ pub struct ChatConfig {
     pub temperature: Option<f64>,
     #[serde(default)]
     pub max_tokens: Option<u32>,
+    /// Cumulative tool-call round ceiling for one turn. 0 means unlimited.
+    #[serde(default)]
+    pub max_tool_iterations: u32,
     #[serde(default)]
     pub max_context_tokens: Option<usize>,
     #[serde(default)]
@@ -136,6 +139,7 @@ impl ChatConfig {
             api_key: config.api_key,
             temperature: Some(config.temperature),
             max_tokens: config.max_tokens,
+            max_tool_iterations: config.max_tool_iterations,
             max_context_tokens: config.context_token_budget,
             system_prompt: None,
             session_db_path: config.session_db_path.or_else(default_session_db_path),
@@ -271,6 +275,8 @@ pub struct ChatService {
     mcp_tool_names: Mutex<HashSet<String>>,
     /// Monotonic id for background settings jobs (skill registry, MCP probe).
     job_seq: AtomicU64,
+    /// Runtime-updatable tool-call ceiling (0 = unlimited).
+    tool_loop_limit: Arc<AtomicU32>,
 }
 
 impl ChatService {
@@ -313,6 +319,7 @@ impl ChatService {
             Some(manager)
         };
 
+        let max_tool_iterations = config.max_tool_iterations;
         Ok(Self {
             config,
             runtime,
@@ -327,6 +334,7 @@ impl ChatService {
             mcp_config_lock: Mutex::new(()),
             mcp_tool_names: Mutex::new(HashSet::new()),
             job_seq: AtomicU64::new(1),
+            tool_loop_limit: Arc::new(AtomicU32::new(max_tool_iterations)),
         })
     }
 
@@ -515,12 +523,20 @@ impl ChatService {
         }));
 
         llm.set_approval_memory(approval_memory);
-        // aish-llm caps a turn at 20 tool-call rounds and the CLI asks the
-        // user whether to continue through an iteration-limit callback. The
-        // desktop frontend has an explicit stop button but no CLI prompt, so
-        // hard-failing at round 20 is surprising. Continue the loop and let
-        // the user cancel; this is not a request/permission limit.
-        llm.set_iteration_limit_callback(Arc::new(|_| true));
+        // aish-llm evaluates a hard-coded 20-round window. Keep counting the
+        // continuing rounds against the user's session ceiling; 0 means no
+        // GUI ceiling, which preserves the no-limit default.
+        let iteration_count = Arc::new(AtomicU32::new(0));
+        let callback_iterations = iteration_count.clone();
+        let callback_limit = self.tool_loop_limit.clone();
+        llm.set_iteration_limit_callback(Arc::new(move |rounds| {
+            let limit = callback_limit.load(Ordering::Relaxed);
+            if limit == 0 {
+                return true;
+            }
+            let total = callback_iterations.fetch_add(rounds, Ordering::Relaxed) + rounds;
+            total < limit
+        }));
 
         // Match the CLI: tool calls and security decisions are written to the
         // shared audit table, with secrets redacted before they reach SQLite.
@@ -562,6 +578,7 @@ impl ChatService {
                 max_total_bytes: self.config.project_instructions.max_total_bytes,
             },
             output_language: self.config.output_language.clone(),
+            iteration_count,
         });
         session.persist_snapshot();
 
@@ -2047,6 +2064,35 @@ impl ChatService {
         })
     }
 
+    /// Current GUI tool-call ceiling. 0 means unlimited.
+    pub fn tool_loop_limit(&self) -> Value {
+        json!({
+            "ok": true,
+            "limit": self.tool_loop_limit.load(Ordering::Relaxed),
+        })
+    }
+
+    /// Persist the tool-call ceiling and apply it to live sessions.
+    pub fn save_tool_loop_limit(&self, limit: u32) -> Result<Value, String> {
+        if limit > 100_000 {
+            return Err("工具循环上限不能超过 100000".to_string());
+        }
+        let path = aish_config::ConfigLoader::default_config_path();
+        aish_config::ConfigLoader::update_raw(&path, |document| {
+            let map = document.as_mapping_mut().ok_or_else(|| {
+                AishError::Config(format!("config root is not a mapping: {}", path.display()))
+            })?;
+            map.insert(
+                serde_yaml::Value::String("max_tool_iterations".to_string()),
+                serde_yaml::Value::Number(serde_yaml::Number::from(limit as u64)),
+            );
+            Ok(())
+        })
+        .map_err(|error| format!("failed to save tool loop limit: {error}"))?;
+        self.tool_loop_limit.store(limit, Ordering::Relaxed);
+        Ok(json!({"ok": true, "limit": limit}))
+    }
+
     /// Update the three model fields in the shared aish YAML config.
     ///
     /// The raw-document editor preserves keys the typed config does not model.
@@ -2633,6 +2679,7 @@ struct ChatSession {
     cwd: Mutex<PathBuf>,
     project_instructions: ProjectInstructionsLimits,
     output_language: Option<String>,
+    iteration_count: Arc<AtomicU32>,
 }
 
 impl ChatSession {
@@ -2694,6 +2741,7 @@ impl ChatSession {
         turn_guard: tokio::sync::OwnedMutexGuard<()>,
     ) {
         let _turn_guard = turn_guard;
+        self.iteration_count.store(0, Ordering::Relaxed);
         if self.cancelled.swap(false, Ordering::SeqCst) {
             self.emit("cancelled", json!({"reason": "cancelled_before_start"}));
             self.running.store(false, Ordering::SeqCst);
@@ -2926,13 +2974,18 @@ fn provider_host_label(base: &str) -> String {
 /// OpenAI label.
 fn validate_provider_protocol(api_base: &str, protocol: &str) -> Result<(), String> {
     let protocol = protocol.trim().to_ascii_lowercase();
-    if protocol != "openai" {
-        return Err("第三方供应商仅支持 OpenAI 兼容协议".to_string());
+    if !matches!(protocol.as_str(), "openai" | "anthropic") {
+        return Err("协议必须是 openai 或 anthropic".to_string());
     }
-    if provider_host(api_base).as_deref() == Some("api.anthropic.com") {
-        return Err("第三方接入不支持 Anthropic；请使用 OpenAI 兼容端点".to_string());
+    let actual = provider_protocol(api_base);
+    if protocol == actual {
+        return Ok(());
     }
-    Ok(())
+    if actual == "anthropic" {
+        Err("Anthropic 内置供应商只支持 https://api.anthropic.com".to_string())
+    } else {
+        Err("自定义供应商只支持 OpenAI 兼容协议；Anthropic 请使用内置供应商".to_string())
+    }
 }
 
 fn unique_account_name(accounts: &[aish_config::ApiAccountConfig], label: &str) -> String {
@@ -2964,6 +3017,9 @@ async fn fetch_provider_models(
     if base.is_empty() {
         return Err("API 地址不能为空".to_string());
     }
+    if protocol.trim().eq_ignore_ascii_case("anthropic") {
+        return fetch_anthropic_models(base, api_key).await;
+    }
     let models = aish_llm::fetch_models_from_api(
         base,
         (!api_key.trim().is_empty()).then_some(api_key.trim()),
@@ -2990,6 +3046,85 @@ async fn fetch_provider_models(
     result.truncate(300);
     if result.is_empty() {
         return Err("端点返回了空模型列表".to_string());
+    }
+    Ok(result)
+}
+
+async fn fetch_anthropic_models(base: &str, api_key: &str) -> Result<Vec<Value>, String> {
+    if api_key.trim().is_empty() {
+        return Err("Anthropic 需要 API Key".to_string());
+    }
+    let base = base.trim_end_matches('/');
+    let base = base.strip_suffix("/v1/messages").unwrap_or(base);
+    let url = if base.ends_with("/v1") {
+        format!("{base}/models")
+    } else {
+        format!("{base}/v1/models")
+    };
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .build()
+        .map_err(|error| format!("failed to build HTTP client: {error}"))?;
+    let response = client
+        .get(&url)
+        .header("x-api-key", api_key.trim())
+        .header("anthropic-version", "2023-06-01")
+        .send()
+        .await
+        .map_err(|error| {
+            if error.is_timeout() {
+                "请求超时（12 秒）".to_string()
+            } else if error.is_connect() {
+                "连接失败，请检查 API 地址和网络".to_string()
+            } else {
+                format!("请求失败：{error}")
+            }
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        let body = aish_mcp::redact::sanitize_diagnostic_text(&body);
+        let mut preview: String = body.chars().take(300).collect();
+        if body.chars().count() > 300 {
+            preview.push_str("...");
+        }
+        return Err(format!(
+            "Anthropic 返回 HTTP {}：{preview}",
+            status.as_u16()
+        ));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| format!("无法解析模型列表：{error}"))?;
+    let mut result: Vec<Value> = body
+        .get("data")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let id = item.get("id").and_then(Value::as_str)?;
+                    Some(json!({
+                        "id": id,
+                        "owned_by": item
+                            .get("display_name")
+                            .and_then(Value::as_str)
+                            .unwrap_or("anthropic"),
+                    }))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    result.sort_by(|left, right| {
+        left["id"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(right["id"].as_str().unwrap_or_default())
+    });
+    result.truncate(300);
+    if result.is_empty() {
+        return Err("Anthropic 返回了空模型列表".to_string());
     }
     Ok(result)
 }

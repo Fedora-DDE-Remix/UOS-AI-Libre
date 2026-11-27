@@ -539,6 +539,11 @@ pub struct ConfigModel {
     /// reappears in the file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
+    /// Maximum tool-call rounds per chat turn. 0 means unlimited. aish-llm
+    /// still evaluates its internal 20-round windows; this value is the
+    /// cumulative ceiling used by the GUI callback.
+    #[serde(default)]
+    pub max_tool_iterations: u32,
     pub prompt_theme: String,
 
     // Per-tool argument preview settings
@@ -735,6 +740,7 @@ impl Default for ConfigModel {
             api_key: String::new(),
             temperature: 0.3,
             max_tokens: None,
+            max_tool_iterations: 0,
             prompt_theme: "default".to_string(),
             tool_arg_preview: ToolArgPreviewConfig::default(),
             tool_arg_preview_max_length: 200,

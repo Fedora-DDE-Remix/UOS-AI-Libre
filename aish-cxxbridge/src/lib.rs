@@ -103,6 +103,8 @@ mod ffi {
         fn delete_session(service: &mut BridgeService, session_id: &str) -> String;
         fn rename_session(service: &mut BridgeService, session_id: &str, title: &str) -> String;
         fn config_info(service: &mut BridgeService) -> String;
+        fn tool_loop_limit(service: &mut BridgeService) -> String;
+        fn save_tool_loop_limit(service: &mut BridgeService, limit: u32) -> String;
         fn save_model_config(
             service: &mut BridgeService,
             model: &str,
@@ -904,6 +906,37 @@ pub fn rename_session(service: &mut BridgeService, session_id: &str, title: &str
         Ok(Ok(())) => json!({"ok": true}).to_string(),
         Ok(Err(error)) => err(error),
         Err(_) => err("panic while renaming session"),
+    }
+}
+
+pub fn tool_loop_limit(service: &mut BridgeService) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.tool_loop_limit()
+    })) {
+        Ok(value) => value.to_string(),
+        Err(_) => err("panic while reading tool loop limit"),
+    }
+}
+
+pub fn save_tool_loop_limit(service: &mut BridgeService, limit: u32) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.save_tool_loop_limit(limit)
+    })) {
+        Ok(Ok(value)) => value.to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while saving tool loop limit"),
     }
 }
 

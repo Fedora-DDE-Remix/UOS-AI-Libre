@@ -11,6 +11,7 @@ SettingsScroll {
     property string sandboxOffAction: "allow"
     property string sandboxTimeout: "10"
     property bool inputGuardEnabled: true
+    property string toolLoopLimit: "0"
     property string previewCommand: ""
     property string previewText: ""
     property int pendingDeleteIndex: -1
@@ -30,6 +31,10 @@ SettingsScroll {
             if (!page.dirty)
                 page.load()
         }
+        function onToolLoopLimitChanged() {
+            if (!page.dirty)
+                page.toolLoopLimit = String(app.toolLoopLimit)
+        }
     }
 
     function load() {
@@ -42,6 +47,7 @@ SettingsScroll {
         sandboxTimeout = String(info.sandbox_timeout_seconds !== undefined
                                ? info.sandbox_timeout_seconds : 10)
         inputGuardEnabled = info.input_guard_enabled !== false
+        toolLoopLimit = String(app.toolLoopLimit)
         dirty = false
     }
 
@@ -361,7 +367,10 @@ SettingsScroll {
                     text: page.sandboxTimeout
                     placeholder: "10"
                     inputMethodHints: Qt.ImhFormattedNumbersOnly
-                    onTextChanged: page.markDirty()
+                    onTextEdited: (value) => {
+                        page.sandboxTimeout = value
+                        page.markDirty()
+                    }
                 }
             }
 
@@ -393,6 +402,41 @@ SettingsScroll {
                 }
             }
 
+            Item {
+                width: parent.width
+                height: 40
+                Column {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 3
+                    Text {
+                        text: "工具循环上限"
+                        color: Theme.textSecondary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
+                    Text {
+                        text: "0 表示不限制；上限按 20 轮工具窗口生效"
+                        color: Theme.textTertiary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSizeTiny
+                    }
+                }
+                AppTextField {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 90
+                    height: 32
+                    text: page.toolLoopLimit
+                    placeholder: "0"
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                    onTextEdited: (value) => {
+                        page.toolLoopLimit = value
+                        page.markDirty()
+                    }
+                }
+            }
+
             Row {
                 spacing: 8
                 AppButton {
@@ -400,6 +444,7 @@ SettingsScroll {
                     variant: "primary"
                     enabled: page.dirty
                     onClicked: {
+                        const loopLimit = Math.max(0, Number(page.toolLoopLimit) || 0)
                         const result = app.savePolicy({
                             default_risk_level: page.defaultRisk,
                             enable_sandbox: page.sandboxEnabled,
@@ -408,6 +453,11 @@ SettingsScroll {
                             input_guard_enabled: page.inputGuardEnabled
                         })
                         if (result && result.ok) {
+                            const loopResult = app.saveToolLoopLimit(loopLimit)
+                            if (!loopResult || loopResult.ok !== true) {
+                                page.markDirty()
+                                return
+                            }
                             page.dirty = false
                             page.load()
                         }

@@ -13,7 +13,33 @@ SettingsScroll {
     }
 
     function protocolLabel(value) {
-        return value === "anthropic" ? "Anthropic（不支持）" : "OpenAI 兼容"
+        return value === "anthropic" ? "Anthropic Messages" : "OpenAI 兼容"
+    }
+
+    function normalizeBase(value) {
+        return String(value || "").trim().replace(/\/+$/, "")
+    }
+
+    function builtinPresetFor(base) {
+        const providers = app.builtinProviders() || []
+        const wanted = normalizeBase(base)
+        for (let i = 0; i < providers.length; ++i) {
+            if (normalizeBase(providers[i].api_base) === wanted)
+                return providers[i]
+        }
+        return null
+    }
+
+    function providerTypeLabel(provider) {
+        return builtinPresetFor(provider.api_base) ? "内置" : "OpenAI-Compatible"
+    }
+
+    function editProvider(provider) {
+        const preset = builtinPresetFor(provider.api_base)
+        if (preset)
+            builtinProviderDialog.openFor(provider, preset)
+        else
+            providerDialog.openFor(provider)
     }
 
     function keyLabel(provider) {
@@ -31,13 +57,23 @@ SettingsScroll {
 
     function activate(provider) {
         if (String(provider.model || "").length === 0) {
-            providerDialog.openFor(provider)
+            editProvider(provider)
             return
         }
         const result = app.saveProvider(provider.name, provider.api_base, "",
-                                        provider.model, "openai", true)
+                                        provider.model, provider.protocol, true)
         if (!result.ok)
             app.showToast(result.error || "切换供应商失败")
+    }
+
+    function commitProvider(args, activate) {
+        const result = app.saveProvider(args.name, args.apiBase, args.apiKey,
+                                        args.model, args.protocol, activate)
+        if (result && result.ok === true) {
+            app.setProviderModels(args.apiBase, args.models || [args.model])
+            return true
+        }
+        return result || ({ ok: false, error: "供应商保存失败" })
     }
 
     Text {
@@ -49,7 +85,7 @@ SettingsScroll {
     }
     Text {
         width: parent.width
-        text: "供应商来自 aish 的主端点和 api_accounts。第三方接入仅支持 OpenAI 兼容协议；切换后会重写 aish config.yaml 并重建会话。"
+        text: "内置供应商使用 aish 预设地址，只需填写 API Key；OpenAI-Compatible 单独配置地址和模型目录。切换后会重写 aish config.yaml 并重建会话。"
         color: Theme.textSecondary
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeSmall
@@ -75,14 +111,14 @@ SettingsScroll {
             AppButton {
                 text: "添加供应商"
                 variant: "primary"
-                onClicked: providerDialog.openNew()
+                onClicked: providerPicker.open()
             }
         }
     }
 
     Text {
         width: parent.width
-        text: "只在此处配置 OpenAI 兼容端点（提供 /models 模型目录）。Anthropic 原生端点或 Anthropic 兼容代理请直接在 aish config.yaml 中维护，GUI 不会写入这类配置。"
+        text: "内置供应商的协议由 aish 预设决定（Anthropic 仅支持官方 api.anthropic.com）。自定义 OpenAI-Compatible 端点需要提供 /models 模型目录。"
         color: Theme.textTertiary
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeTiny
@@ -163,6 +199,13 @@ SettingsScroll {
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSizeTiny
                         }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: page.providerTypeLabel(modelData)
+                            color: Theme.textTertiary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSizeTiny
+                        }
                     }
                     Row {
                         id: providerActions
@@ -174,15 +217,13 @@ SettingsScroll {
                             text: "切换"
                             minWidth: 48
                             horizontalPadding: 9
-                            enabled: modelData.protocol !== "anthropic"
                             onClicked: page.activate(modelData)
                         }
                         AppButton {
                             text: "编辑"
                             minWidth: 48
                             horizontalPadding: 9
-                            enabled: modelData.protocol !== "anthropic"
-                            onClicked: providerDialog.openFor(modelData)
+                            onClicked: page.editProvider(modelData)
                         }
                         AppButton {
                             visible: modelData.account === true
@@ -284,18 +325,36 @@ SettingsScroll {
         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
     }
 
+    ProviderPickerDialog {
+        id: providerPicker
+        onBuiltinSelected: (preset) => {
+            providerPicker.close()
+            builtinProviderDialog.openNew(preset)
+        }
+        onCustomSelected: providerDialog.openNew()
+    }
+
     ProviderDialog {
         id: providerDialog
         onSaveRequested: (args, activate) => {
-            const result = app.saveProvider(args.name, args.apiBase, args.apiKey,
-                                            args.model, args.protocol, activate)
-            if (result && result.ok === true) {
-                app.setProviderModels(args.apiBase, args.models || [args.model])
+            const result = page.commitProvider(args, activate)
+            if (result && result.ok === true)
                 providerDialog.saveSucceeded()
-            }
             else
                 providerDialog.saveFailed(result && result.error
                                           ? result.error : "供应商保存失败")
+        }
+    }
+
+    BuiltinProviderDialog {
+        id: builtinProviderDialog
+        onSaveRequested: (args, activate) => {
+            const result = page.commitProvider(args, activate)
+            if (result && result.ok === true)
+                builtinProviderDialog.saveSucceeded()
+            else
+                builtinProviderDialog.saveFailed(result && result.error
+                                                 ? result.error : "供应商保存失败")
         }
     }
 

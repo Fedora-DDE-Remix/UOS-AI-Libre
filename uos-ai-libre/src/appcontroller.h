@@ -38,6 +38,7 @@ class AppController final : public QObject {
     Q_PROPERTY(int historyTotal READ historyTotal NOTIFY historyWindowChanged)
     Q_PROPERTY(int historyStart READ historyStart NOTIFY historyWindowChanged)
     Q_PROPERTY(bool historyLoading READ historyLoading NOTIFY historyWindowChanged)
+    Q_PROPERTY(int toolLoopLimit READ toolLoopLimit NOTIFY toolLoopLimitChanged)
     Q_PROPERTY(bool hasOlderHistory READ hasOlderHistory NOTIFY historyWindowChanged)
     Q_PROPERTY(QVariantMap pendingInteraction READ pendingInteraction NOTIFY pendingInteractionChanged)
     Q_PROPERTY(int pendingInteractionCount READ pendingInteractionCount NOTIFY pendingInteractionChanged)
@@ -89,6 +90,7 @@ public:
     int historyTotal() const;
     int historyStart() const;
     bool historyLoading() const;
+    int toolLoopLimit() const;
     bool hasOlderHistory() const;
     QVariantMap pendingInteraction() const;
     int pendingInteractionCount() const;
@@ -141,6 +143,7 @@ public:
     Q_INVOKABLE void deleteProvider(const QString &name);
     Q_INVOKABLE void setProviderModels(const QString &apiBase,
                                        const QVariantList &models);
+    Q_INVOKABLE QVariantList builtinProviders() const;
     Q_INVOKABLE QVariantList cachedProviderModels(const QString &apiBase) const;
     Q_INVOKABLE void cacheProviderModels(const QString &apiBase,
                                          const QVariantList &models);
@@ -154,6 +157,7 @@ public:
     Q_INVOKABLE void resolveInteraction(const QVariantMap &response);
     Q_INVOKABLE void refreshPolicy();
     Q_INVOKABLE QVariantMap savePolicy(const QVariantMap &fields);
+    Q_INVOKABLE QVariantMap saveToolLoopLimit(int limit);
     Q_INVOKABLE QVariantMap savePolicyRules(const QVariantList &rules);
     Q_INVOKABLE QVariantMap previewPolicy(const QString &command,
                                           const QVariantList &draftRules);
@@ -219,6 +223,7 @@ signals:
     void toastRequested(const QString &message);
     void pendingApprovalChanged();
     void historyWindowChanged();
+    void toolLoopLimitChanged();
     void historyOlderLoaded(int added);
     void pendingInteractionChanged();
     void policyInfoChanged();
@@ -280,6 +285,7 @@ private:
     int m_history_total = 0;
     int m_history_start = 0;
     bool m_history_loading = false;
+    int m_tool_loop_limit = 0;
     QList<QVariantMap> m_approval_queue;
     QTimer m_approval_timeout;
     QVariantMap m_pending_interaction;

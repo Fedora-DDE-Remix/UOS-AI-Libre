@@ -57,6 +57,8 @@ auto providers = provider_info(*service);            // primary + api_accounts, 
 auto fetched = model_fetch_start(*service, base, key, "openai"); // settings_job
 save_provider_config(*service, name, base, key, model, protocol, activate, current_name);
 delete_provider_account(*service, name);
+auto loop_limit = tool_loop_limit(*service);          // 0 = unlimited
+save_tool_loop_limit(*service, 50);                   // aish config.yaml
 auto tools = tool_names(*service, session);          // aish's registered tool pool
 auto catalog = tool_catalog(*service);               // names/descriptions/sources
 auto policy = policy_info(*service);                 // policy + raw rule_groups + builtin_rules
@@ -162,8 +164,9 @@ Important event kinds:
   `api_accounts` as switchable providers. Saving with `activate=true` mirrors
   the `/model` picker: the outgoing primary is preserved as a named account,
   the target is promoted to primary, and the service is recreated. Third-party
-  providers are restricted to OpenAI-compatible endpoints; Anthropic-native
-  endpoints are reported but rejected for save/fetch so the UI cannot write a
-  dialect aish selects only by host.
+  built-in Anthropic (`https://api.anthropic.com`) is accepted with the
+  `anthropic` protocol; custom endpoints are restricted to OpenAI-compatible
+  so the UI cannot write a dialect aish selects only by host. The model-fetch
+  job supports native Anthropic `/v1/models` as well as OpenAI `/models`.
 - `model_fetch_start` lists OpenAI-compatible `/models` catalogs; results
   arrive as a `model_fetch` settings job.
