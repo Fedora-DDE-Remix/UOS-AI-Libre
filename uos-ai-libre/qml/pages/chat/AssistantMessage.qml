@@ -9,6 +9,8 @@ Item {
     property int reasoningElapsed: 0
     property bool streaming: false
     property var tools: []
+    property var timeline: []
+    property string activeText: ""
     property int elapsedMs: 0
     property string model: ""
     property string error: ""
@@ -46,24 +48,40 @@ Item {
                 elapsedMs: root.reasoningElapsed
             }
 
-            ToolGroupCard {
-                visible: root.tools.length > 0
-                width: column.width
-                tools: root.tools
-                active: root.streaming
-                elapsedMs: root.elapsedMs
+            Repeater {
+                model: root.timeline
+                delegate: Loader {
+                    width: column.width
+                    height: item ? item.implicitHeight : 0
+                    sourceComponent: modelData.kind === "tools"
+                                     ? timelineToolsComponent : timelineTextComponent
+                    onLoaded: {
+                        item.width = Qt.binding(function () { return column.width })
+                        if (modelData.kind === "tools") {
+                            item.tools = Qt.binding(function () { return modelData.tools })
+                            item.active = Qt.binding(function () {
+                                return root.streaming && modelData.active === true
+                            })
+                            item.elapsedMs = Qt.binding(function () { return root.elapsedMs })
+                        } else {
+                            item.text = Qt.binding(function () { return modelData.text })
+                            item.streaming = false
+                        }
+                    }
+                }
             }
 
             MarkdownView {
                 id: markdown
+                visible: root.activeText.length > 0
                 width: column.width
-                text: root.text
+                text: root.activeText
                 streaming: root.streaming
             }
 
             LoadingDots {
-                visible: root.streaming && root.text.length === 0
-                         && !root.reasoningActive && root.tools.length === 0
+                visible: root.streaming && root.activeText.length === 0
+                         && root.timeline.length === 0 && !root.reasoningActive
                 width: 22
                 height: 14
             }
@@ -132,5 +150,15 @@ Item {
                 }
             }
         }
+    }
+
+    Component {
+        id: timelineTextComponent
+        MarkdownView {}
+    }
+
+    Component {
+        id: timelineToolsComponent
+        ToolGroupCard {}
     }
 }

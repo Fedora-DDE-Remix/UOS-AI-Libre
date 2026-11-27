@@ -79,6 +79,82 @@ int main(int argc, char *argv[]) {
     if (model.data(model.index(6), ChatModel::SourceIndexRole).toInt() != 100)
         return fail("live append source index");
 
+    ChatModel live;
+    live.beginAssistant(QStringLiteral("model"));
+    live.beginReasoning();
+    live.appendReasoning(QStringLiteral("think"));
+    live.endReasoning();
+    live.appendContent(QStringLiteral("before"));
+    QVariantMap toolStart;
+    toolStart.insert(QStringLiteral("tool_call_id"), QStringLiteral("t1"));
+    toolStart.insert(QStringLiteral("tool_name"), QStringLiteral("WebFetch"));
+    QVariantMap toolArgs;
+    toolArgs.insert(QStringLiteral("url"), QStringLiteral("https://example.com"));
+    toolStart.insert(QStringLiteral("tool_args"), toolArgs);
+    live.addToolStart(toolStart);
+    QVariantMap toolEnd;
+    toolEnd.insert(QStringLiteral("tool_call_id"), QStringLiteral("t1"));
+    toolEnd.insert(QStringLiteral("ok"), true);
+    toolEnd.insert(QStringLiteral("duration_ms"), 5);
+    live.addToolEnd(toolEnd);
+    live.appendContent(QStringLiteral("after"));
+    live.finishAssistant();
+
+    const QVariantList timeline =
+        live.data(live.index(0), ChatModel::TimelineRole).toList();
+    if (timeline.size() != 3)
+        return fail("timeline segment count");
+    if (timeline.at(0).toMap().value(QStringLiteral("kind")).toString()
+        != QStringLiteral("text"))
+        return fail("first timeline segment should be text");
+    if (timeline.at(1).toMap().value(QStringLiteral("kind")).toString()
+        != QStringLiteral("tools"))
+        return fail("second timeline segment should be tools");
+    if (timeline.at(2).toMap().value(QStringLiteral("kind")).toString()
+        != QStringLiteral("text"))
+        return fail("third timeline segment should be text");
+    if (live.data(live.index(0), ChatModel::TextRole).toString()
+        != QStringLiteral("beforeafter"))
+        return fail("timeline text accumulation");
+    if (!live.data(live.index(0), ChatModel::ActiveTextRole).toString().isEmpty())
+        return fail("active text should be flushed on finish");
+
+    QVariantMap toolAssistant;
+    toolAssistant.insert(QStringLiteral("role"), QStringLiteral("assistant"));
+    toolAssistant.insert(QStringLiteral("content"), QString());
+    toolAssistant.insert(QStringLiteral("reasoning_content"), QStringLiteral("think"));
+    QVariantList calls;
+    QVariantMap function;
+    function.insert(QStringLiteral("name"), QStringLiteral("WebFetch"));
+    function.insert(QStringLiteral("arguments"),
+                    QStringLiteral("{\"url\":\"https://example.com\"}"));
+    QVariantMap call;
+    call.insert(QStringLiteral("id"), QStringLiteral("t1"));
+    call.insert(QStringLiteral("type"), QStringLiteral("function"));
+    call.insert(QStringLiteral("function"), function);
+    calls.append(call);
+    toolAssistant.insert(QStringLiteral("tool_calls"), calls);
+    QVariantMap toolResult;
+    toolResult.insert(QStringLiteral("role"), QStringLiteral("tool"));
+    toolResult.insert(QStringLiteral("content"), QStringLiteral("page"));
+    toolResult.insert(QStringLiteral("tool_call_id"), QStringLiteral("t1"));
+    QVariantMap finalAssistant;
+    finalAssistant.insert(QStringLiteral("role"), QStringLiteral("assistant"));
+    finalAssistant.insert(QStringLiteral("content"), QStringLiteral("summary"));
+    ChatModel transcript;
+    transcript.loadTranscript({message(QStringLiteral("user"), QStringLiteral("fetch")),
+                               toolAssistant, toolResult, finalAssistant});
+    const QVariantList transcriptTimeline =
+        transcript.data(transcript.index(1), ChatModel::TimelineRole).toList();
+    if (transcriptTimeline.size() != 2)
+        return fail("transcript timeline segment count");
+    if (transcriptTimeline.at(0).toMap().value(QStringLiteral("kind")).toString()
+        != QStringLiteral("tools"))
+        return fail("transcript first segment should be tools");
+    if (transcriptTimeline.at(1).toMap().value(QStringLiteral("kind")).toString()
+        != QStringLiteral("text"))
+        return fail("transcript second segment should be text");
+
     std::cout << "chatmodel-test: ok\n";
     return 0;
 }

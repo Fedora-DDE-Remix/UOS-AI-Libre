@@ -610,13 +610,17 @@ impl LlmSession {
     ///
     /// Applies the same policy-epoch invalidation the tool preflight runs, so
     /// the UI never shows approvals that a policy edit has already revoked.
-    pub fn approval_entries(&self) -> (Vec<(String, String)>, Vec<(String, String)>) {
+    pub fn approval_entries(&self) -> (Vec<(String, String)>, Vec<(String, String)>, Vec<String>) {
         Self::maybe_invalidate_approvals_on_policy_change(&self.approval_memory);
         let Some(memory) = &self.approval_memory else {
-            return (Vec::new(), Vec::new());
+            return (Vec::new(), Vec::new(), Vec::new());
         };
         let guard = memory.lock();
-        (guard.command_entries(), guard.target_entries())
+        (
+            guard.command_entries(),
+            guard.target_entries(),
+            guard.tool_entries(),
+        )
     }
 
     /// Revoke one remembered approval. `kind` is `command` or `target`.
@@ -629,6 +633,7 @@ impl LlmSession {
         match kind {
             "command" => guard.revoke_command(first, second),
             "target" => guard.revoke_target(first, second),
+            "tool" => guard.revoke_tool(first),
             _ => false,
         }
     }

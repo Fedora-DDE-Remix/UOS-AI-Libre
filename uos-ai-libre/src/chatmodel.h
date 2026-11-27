@@ -33,6 +33,8 @@ public:
         AttachmentsRole,
         TimestampRole,
         SourceIndexRole,
+        TimelineRole,
+        ActiveTextRole,
     };
     Q_ENUM(Role)
 
@@ -93,6 +95,13 @@ private:
         bool ok = true;
     };
 
+    struct TimelineBlock {
+        QString kind; // text or tools
+        QString text;
+        int toolStart = 0;
+        int toolCount = 0;
+    };
+
     struct Message {
         QString kind; // user or assistant
         QString text;
@@ -110,6 +119,8 @@ private:
         int sourceIndex = -1;
         QVariantList attachments;
         QVector<Tool> tools;
+        QVector<TimelineBlock> timeline;
+        QString activeText;
     };
 
     static QString contentText(const QVariant &content);
@@ -120,6 +131,8 @@ private:
     static QVariantList toolsToVariant(const QVector<Tool> &tools);
     QVector<Message> parseTranscriptMessages(const QVariantList &messages,
                                              int startIndex) const;
+    static void flushActiveText(Message &message);
+    static void appendToolBlock(Message &message, int toolIndex);
 
     void emitRowChanged(int row, const QVector<int> &roles);
     void setToolStatus(const QString &id, const QString &status,

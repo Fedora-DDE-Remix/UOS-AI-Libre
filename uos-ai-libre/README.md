@@ -68,6 +68,13 @@ Rules that keep the UI maintainable:
   the list. The provider dialog caches the last fetched catalogue per endpoint,
   so editing a provider shows every model from that fetch with the enabled
   ones checked; long catalogues scroll inside the dialog.
+- Assistant turns render reasoning, text segments and tool groups in event
+  order: a text segment streamed before a tool call stays above that tool group,
+  and later text appears below it. Completed segments are immutable timeline
+  entries; only the currently streaming text segment is updated per delta.
+- "本会话允许" for WebFetch/WebSearch is tool-wide for the current session, so
+  a later fetch on another host does not prompt again. It is listed as a
+  `tool` entry on the security page and can be revoked independently.
 - The audit page supports free-text filtering across event type, tool, command,
   arguments, decision and rule fields, and a confirmed "清空" action that
   removes aish's `audit_events` rows.

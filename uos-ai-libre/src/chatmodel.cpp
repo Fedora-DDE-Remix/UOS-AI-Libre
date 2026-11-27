@@ -67,6 +67,8 @@ QHash<int, QByteArray> ChatModel::roleNames() const {
         {AttachmentsRole, "attachments"},
         {TimestampRole, "timestamp"},
         {SourceIndexRole, "sourceIndex"},
+        {TimelineRole, "timeline"},
+        {ActiveTextRole, "activeText"},
     };
 }
 
@@ -107,6 +109,34 @@ QVariant ChatModel::data(const QModelIndex &index, int role) const {
         return message.timestamp;
     case SourceIndexRole:
         return message.sourceIndex;
+    case TimelineRole: {
+        QVariantList blocks;
+        blocks.reserve(message.timeline.size());
+        for (const TimelineBlock &block : message.timeline) {
+            QVariantMap item;
+            if (block.kind == QStringLiteral("text")) {
+                item.insert(QStringLiteral("kind"), QStringLiteral("text"));
+                item.insert(QStringLiteral("text"), block.text);
+            } else {
+                bool active = false;
+                const QVector<Tool> tools =
+                    message.tools.mid(block.toolStart, block.toolCount);
+                for (const Tool &tool : tools) {
+                    if (tool.status == QStringLiteral("running")) {
+                        active = true;
+                        break;
+                    }
+                }
+                item.insert(QStringLiteral("kind"), QStringLiteral("tools"));
+                item.insert(QStringLiteral("tools"), toolsToVariant(tools));
+                item.insert(QStringLiteral("active"), active);
+            }
+            blocks.append(item);
+        }
+        return blocks;
+    }
+    case ActiveTextRole:
+        return message.activeText;
     default:
         return {};
     }
@@ -128,6 +158,34 @@ void ChatModel::clear() {
     emit countChanged();
     emit streamingChanged();
     emit contentChanged();
+}
+
+void ChatModel::flushActiveText(Message &message) {
+    if (message.activeText.isEmpty())
+        return;
+    TimelineBlock block;
+    block.kind = QStringLiteral("text");
+    block.text = message.activeText;
+    message.timeline.append(block);
+    message.activeText.clear();
+}
+
+void ChatModel::appendToolBlock(Message &message, int toolIndex) {
+    if (toolIndex < 0 || toolIndex >= message.tools.size())
+        return;
+    if (!message.timeline.isEmpty()) {
+        TimelineBlock &last = message.timeline.last();
+        if (last.kind == QStringLiteral("tools")
+            && last.toolStart + last.toolCount == toolIndex) {
+            ++last.toolCount;
+            return;
+        }
+    }
+    TimelineBlock block;
+    block.kind = QStringLiteral("tools");
+    block.toolStart = toolIndex;
+    block.toolCount = 1;
+    message.timeline.append(block);
 }
 
 void ChatModel::appendUser(const QString &text,
@@ -183,7 +241,10 @@ void ChatModel::appendContent(const QString &delta) {
     message.text += delta;
     if (message.text.size() > kMaxAssistantChars)
         message.text = bounded(message.text, kMaxAssistantChars);
-    emitRowChanged(m_streaming_index, {TextRole});
+    message.activeText += delta;
+    if (message.activeText.size() > kMaxAssistantChars)
+        message.activeText = bounded(message.activeText, kMaxAssistantChars);
+    emitRowChanged(m_streaming_index, {TextRole, ActiveTextRole});
     emit contentChanged();
 }
 
@@ -194,10 +255,12 @@ void ChatModel::setContent(const QString &text) {
         return;
     Message &message = m_messages[m_streaming_index];
     const QString bounded_text = bounded(text, kMaxAssistantChars);
-    if (message.text == bounded_text)
+    if (message.text == bounded_text && message.activeText == bounded_text)
         return;
     message.text = bounded_text;
-    emitRowChanged(m_streaming_index, {TextRole});
+    if (message.activeText.isEmpty() || bounded_text.startsWith(message.activeText))
+        message.activeText = bounded_text;
+    emitRowChanged(m_streaming_index, {TextRole, ActiveTextRole});
     emit contentChanged();
 }
 
@@ -317,6 +380,7 @@ void ChatModel::addToolStart(const QVariantMap &data) {
     tool.status = QStringLiteral("running");
 
     Message &message = m_messages[m_streaming_index];
+    flushActiveText(message);
     bool replaced = false;
     if (!tool.id.isEmpty()) {
         for (Tool &existing : message.tools) {
@@ -327,9 +391,12 @@ void ChatModel::addToolStart(const QVariantMap &data) {
             }
         }
     }
-    if (!replaced)
+    if (!replaced) {
         message.tools.append(tool);
-    emitRowChanged(m_streaming_index, {ToolsRole, ElapsedRole});
+        appendToolBlock(message, message.tools.size() - 1);
+    }
+    emitRowChanged(m_streaming_index,
+                   {ToolsRole, ElapsedRole, TimelineRole, ActiveTextRole});
     emit contentChanged();
 }
 
@@ -413,8 +480,9 @@ void ChatModel::addToolEnd(const QVariantMap &data) {
         tool.source = data.value(QStringLiteral("source")).toString();
         tool.depth = data.value(QStringLiteral("depth")).toInt();
         message.tools.append(tool);
+        appendToolBlock(message, message.tools.size() - 1);
     }
-    emitRowChanged(row, {ToolsRole});
+    emitRowChanged(row, {ToolsRole, TimelineRole});
     emit contentChanged();
 }
 
@@ -440,6 +508,7 @@ void ChatModel::finishAssistant() {
             message.reasoningElapsedMs =
                 QDateTime::currentMSecsSinceEpoch() - message.reasoningStartedAt;
     }
+    flushActiveText(message);
     message.streaming = false;
     if (message.turnStartedAt > 0)
         message.elapsedMs =
@@ -651,13 +720,39 @@ QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(
         if (text.trimmed().isEmpty() && tools.isEmpty() && reasoning.isEmpty())
             continue;
 
+        QVector<Tool> selected_tools;
         Message message;
         message.kind = QStringLiteral("assistant");
         message.text = text;
         message.reasoning = pending_reasoning + reasoning;
-        message.tools = pending_tools + tools;
+        if (!pending_tools.isEmpty()) {
+            selected_tools += pending_tools;
+        }
         pending_tools.clear();
         pending_reasoning.clear();
+        if (!selected_tools.isEmpty()) {
+            TimelineBlock block;
+            block.kind = QStringLiteral("tools");
+            block.toolStart = 0;
+            block.toolCount = selected_tools.size();
+            message.timeline.append(block);
+        }
+        if (!text.trimmed().isEmpty()) {
+            TimelineBlock block;
+            block.kind = QStringLiteral("text");
+            block.text = text;
+            message.timeline.append(block);
+        }
+        if (!tools.isEmpty()) {
+            const int start = selected_tools.size();
+            selected_tools += tools;
+            TimelineBlock block;
+            block.kind = QStringLiteral("tools");
+            block.toolStart = start;
+            block.toolCount = tools.size();
+            message.timeline.append(block);
+        }
+        message.tools = selected_tools;
         parsed.append(message);
     }
 
@@ -670,6 +765,11 @@ QVector<ChatModel::Message> ChatModel::parseTranscriptMessages(
         message.kind = QStringLiteral("assistant");
         message.reasoning = pending_reasoning;
         message.tools = pending_tools;
+        TimelineBlock block;
+        block.kind = QStringLiteral("tools");
+        block.toolStart = 0;
+        block.toolCount = pending_tools.size();
+        message.timeline.append(block);
         parsed.append(message);
     }
 

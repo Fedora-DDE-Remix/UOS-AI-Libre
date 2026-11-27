@@ -447,12 +447,19 @@ impl ChatService {
         let approval_events = self.events.clone();
         let approval_session_id = session_id.clone();
         let approval_seq = Arc::new(AtomicU64::new(0));
+        let approval_memory = Arc::new(parking_lot::Mutex::new(ApprovalMemory::new()));
+        let callback_memory = approval_memory.clone();
         llm.set_confirmation_callback(Arc::new(move |ctx: &PreflightSecurityContext| {
             let request_id = format!(
                 "{}-approval-{}",
                 approval_session_id,
                 approval_seq.fetch_add(1, Ordering::Relaxed)
             );
+            let tool_name = ctx.tool_name.clone();
+            let network_tool = matches!(tool_name.as_str(), "WebFetch" | "WebSearch");
+            if network_tool && callback_memory.lock().is_tool_allowed(&tool_name) {
+                return ApprovalChoice::RememberSession;
+            }
             let (sender, receiver) = std::sync::mpsc::channel();
             if let Ok(mut pending) = approvals.lock() {
                 pending.insert(request_id.clone(), sender);
@@ -492,7 +499,12 @@ impl ChatService {
                 }),
             ));
             match receiver.recv_timeout(Duration::from_secs(300)) {
-                Ok(choice) => choice,
+                Ok(choice) => {
+                    if choice == ApprovalChoice::RememberSession && network_tool {
+                        callback_memory.lock().remember_tool(&tool_name);
+                    }
+                    choice
+                }
                 Err(_) => {
                     if let Ok(mut pending) = approvals.lock() {
                         pending.remove(&request_id);
@@ -502,7 +514,7 @@ impl ChatService {
             }
         }));
 
-        llm.set_approval_memory(Arc::new(parking_lot::Mutex::new(ApprovalMemory::new())));
+        llm.set_approval_memory(approval_memory);
 
         // Match the CLI: tool calls and security decisions are written to the
         // shared audit table, with secrets redacted before they reach SQLite.
@@ -891,7 +903,7 @@ impl ChatService {
     /// Session-scoped approvals ("本会话允许"), as shown by the security page.
     pub fn session_approvals(&self, session_id: &str) -> Result<Value, String> {
         let session = self.session(session_id)?;
-        let (commands, targets) = session.llm.approval_entries();
+        let (commands, targets, tools) = session.llm.approval_entries();
         let items: Vec<Value> = commands
             .into_iter()
             .map(|(host, command)| json!({"kind": "command", "host": host, "value": command}))
@@ -900,11 +912,16 @@ impl ChatService {
                     .into_iter()
                     .map(|(tool, target)| json!({"kind": "target", "tool": tool, "value": target})),
             )
+            .chain(
+                tools
+                    .into_iter()
+                    .map(|tool| json!({"kind": "tool", "tool": tool, "value": "*"})),
+            )
             .collect();
         Ok(json!({"ok": true, "items": items}))
     }
 
-    /// Revoke one remembered approval. `kind` is `command` or `target`.
+    /// Revoke one remembered approval. `kind` is `command`, `target` or `tool`.
     pub fn revoke_session_approval(
         &self,
         session_id: &str,

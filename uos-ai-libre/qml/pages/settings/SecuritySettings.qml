@@ -834,6 +834,8 @@ SettingsScroll {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - 110
                     text: {
+                        if (modelData.kind === "tool")
+                            return modelData.tool + "  ·  本会话全部允许"
                         if (modelData.kind === "target")
                             return modelData.tool + "  ·  " + modelData.value
                         return (modelData.host || "localhost") + "  ·  " + modelData.value
@@ -851,7 +853,9 @@ SettingsScroll {
                     minWidth: 48
                     horizontalPadding: 9
                     onClicked: {
-                        if (modelData.kind === "target")
+                        if (modelData.kind === "tool")
+                            app.revokeSessionApproval("tool", modelData.tool, "")
+                        else if (modelData.kind === "target")
                             app.revokeSessionApproval("target", modelData.tool, modelData.value)
                         else
                             app.revokeSessionApproval("command", modelData.host || "localhost", modelData.value)
@@ -875,7 +879,7 @@ SettingsScroll {
 
     Text {
         width: parent.width
-        text: "aish 审批弹窗会在每次高风险操作前展示规则、命令和风险原因；“本会话允许”写入 aish 的会话审批记忆。"
+        text: "aish 审批弹窗会在每次高风险操作前展示规则、命令和风险原因。命令按 host+command 记住；WebFetch/WebSearch 的“本会话允许”按工具整体放行。"
         color: Theme.textTertiary
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeTiny

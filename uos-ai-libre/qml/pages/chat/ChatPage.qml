@@ -539,6 +539,8 @@ Item {
                         property int rowReasoningElapsed: reasoningElapsed
                         property bool rowStreaming: streaming
                         property var rowTools: tools
+                        property var rowTimeline: timeline
+                        property string rowActiveText: activeText
                         property int rowElapsed: elapsedMs
                         property string rowModel: modelName
                         property string rowError: error
@@ -566,6 +568,8 @@ Item {
                                 item.reasoningElapsed = Qt.binding(function() { return loader.rowReasoningElapsed })
                                 item.streaming = Qt.binding(function() { return loader.rowStreaming })
                                 item.tools = Qt.binding(function() { return loader.rowTools })
+                                item.timeline = Qt.binding(function() { return loader.rowTimeline })
+                                item.activeText = Qt.binding(function() { return loader.rowActiveText })
                                 item.elapsedMs = Qt.binding(function() { return loader.rowElapsed })
                                 item.model = Qt.binding(function() { return loader.rowModel })
                                 item.error = Qt.binding(function() { return loader.rowError })

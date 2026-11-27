@@ -42,6 +42,7 @@ pub struct ApprovalMemory {
     pub policy_fingerprint: Option<String>,
     allowed: HashSet<(String, String)>,
     allowed_targets: HashSet<(String, String)>,
+    allowed_tools: HashSet<String>,
 }
 
 impl ApprovalMemory {
@@ -95,10 +96,35 @@ impl ApprovalMemory {
             .insert((tool_name.to_string(), target.to_string()));
     }
 
+    /// Whether a whole tool was remembered for the session.
+    pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
+        self.allowed_tools.contains(tool_name)
+    }
+
+    /// Remember a whole read-only network tool (WebFetch/WebSearch) for the
+    /// session. This is intentionally broader than the host key used by the
+    /// normal target memory; the settings UI lists it separately.
+    pub fn remember_tool(&mut self, tool_name: &str) {
+        if !tool_name.trim().is_empty() {
+            self.allowed_tools.insert(tool_name.to_string());
+        }
+    }
+
+    /// Remembered whole-tool approvals.
+    pub fn tool_entries(&self) -> Vec<String> {
+        self.allowed_tools.iter().cloned().collect()
+    }
+
+    /// Revoke a whole-tool approval. Returns whether it existed.
+    pub fn revoke_tool(&mut self, tool_name: &str) -> bool {
+        self.allowed_tools.remove(tool_name)
+    }
+
     /// Forget all remembered approvals for this session.
     pub fn clear(&mut self) {
         self.allowed.clear();
         self.allowed_targets.clear();
+        self.allowed_tools.clear();
     }
 
     /// Remembered command approvals as `(host_key, normalized_command)`.
@@ -128,12 +154,12 @@ impl ApprovalMemory {
 
     /// Number of remembered approvals (mainly for diagnostics/tests).
     pub fn len(&self) -> usize {
-        self.allowed.len() + self.allowed_targets.len()
+        self.allowed.len() + self.allowed_targets.len() + self.allowed_tools.len()
     }
 
     /// Whether no approvals are currently remembered.
     pub fn is_empty(&self) -> bool {
-        self.allowed.is_empty() && self.allowed_targets.is_empty()
+        self.allowed.is_empty() && self.allowed_targets.is_empty() && self.allowed_tools.is_empty()
     }
 }
 
@@ -326,6 +352,23 @@ mod tests {
         mem.clear();
         assert!(mem.is_empty());
         assert!(!mem.is_allowed("systemctl restart nginx"));
+    }
+
+    #[test]
+    fn remembers_whole_network_tool_separately() {
+        let mut mem = ApprovalMemory::new();
+        mem.remember_tool("WebFetch");
+        assert!(mem.is_tool_allowed("WebFetch"));
+        assert!(!mem.is_tool_allowed("WebSearch"));
+        assert_eq!(mem.tool_entries(), vec!["WebFetch".to_string()]);
+        assert_eq!(mem.len(), 1);
+        assert!(mem.revoke_tool("WebFetch"));
+        assert!(!mem.is_tool_allowed("WebFetch"));
+
+        mem.remember_tool("WebFetch");
+        mem.clear();
+        assert!(!mem.is_tool_allowed("WebFetch"));
+        assert!(mem.is_empty());
     }
 
     #[test]
