@@ -30,10 +30,6 @@ SettingsScroll {
         return null
     }
 
-    function providerTypeLabel(provider) {
-        return builtinPresetFor(provider.api_base) ? "内置" : "OpenAI-Compatible"
-    }
-
     function editProvider(provider) {
         const preset = builtinPresetFor(provider.api_base)
         if (preset)
@@ -46,13 +42,8 @@ SettingsScroll {
         return provider.has_key === true ? "密钥已配置" : "未配置密钥"
     }
 
-    function modelLabel(provider) {
-        return provider.model !== undefined && String(provider.model).length > 0
-                ? provider.model : "未选择模型"
-    }
-
-    function providerKind(provider) {
-        return provider.account === true ? "备用账户" : "主供应商"
+    function modelCount(provider) {
+        return (provider.models || []).length
     }
 
     function activate(provider) {
@@ -154,28 +145,13 @@ SettingsScroll {
                         spacing: 8
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: Math.max(80, Math.min(implicitWidth, providerColumn.width - 390))
+                            width: Math.max(80, Math.min(implicitWidth, providerColumn.width - 260))
                             text: modelData.name || modelData.host || "供应商"
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSizeBody
                             font.weight: Font.Medium
                             elide: Text.ElideRight
-                        }
-                        Rectangle {
-                            visible: modelData.active === true
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 42
-                            height: 20
-                            radius: 4
-                            color: Theme.accentSoft
-                            Text {
-                                anchors.centerIn: parent
-                                text: "当前"
-                                color: Theme.accent
-                                font.family: Theme.fontFamily
-                                font.pixelSize: 9
-                            }
                         }
                         Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
@@ -191,20 +167,6 @@ SettingsScroll {
                                 font.family: "DejaVu Sans Mono"
                                 font.pixelSize: 9
                             }
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: page.providerKind(modelData)
-                            color: Theme.textTertiary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeTiny
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: page.providerTypeLabel(modelData)
-                            color: Theme.textTertiary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeTiny
                         }
                     }
                     Row {
@@ -253,31 +215,20 @@ SettingsScroll {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 220
-                        text: "当前模型  " + page.modelLabel(modelData)
-                        color: Theme.textSecondary
-                        font.family: "DejaVu Sans Mono"
-                        font.pixelSize: Theme.fontSizeTiny
-                        elide: Text.ElideRight
-                    }
-                    Text {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
                         text: page.keyLabel(modelData)
                         color: modelData.has_key === true ? Theme.success : Theme.warning
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSizeTiny
                     }
-                }
-                Text {
-                    width: parent.width
-                    visible: (modelData.models || []).length > 0
-                    text: "已启用 " + (modelData.models || []).length + " 个模型  ·  "
-                          + (modelData.models || []).join("  ·  ")
-                    color: Theme.textTertiary
-                    font.family: "DejaVu Sans Mono"
-                    font.pixelSize: Theme.fontSizeTiny
-                    elide: Text.ElideRight
+                    Text {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: page.modelCount(modelData) > 0
+                        text: page.modelCount(modelData) + " 个模型"
+                        color: Theme.textTertiary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSizeTiny
+                    }
                 }
             }
         }
@@ -362,7 +313,7 @@ SettingsScroll {
         id: deleteProviderDialog
         title: "删除供应商"
         message: "确定删除“" + page.pendingDeleteName + "”？"
-        detail: "只删除 api_accounts 中的备用账户，不会改动当前主供应商。"
+        detail: "只删除这个备用供应商；正在使用的供应商不受影响。"
         confirmText: "删除"
         danger: true
         confirmEnabled: !app.generating
