@@ -15,6 +15,7 @@ Item {
     property int historyAnchorIndex: 0
     property int pendingUndoIndex: -1
     property string pendingUndoText: ""
+    property string pendingUndoContent: ""
 
     signal toastRequested(string message)
     signal openSettings(int pageIndex)
@@ -148,6 +149,7 @@ Item {
         if (sourceIndex < 0 || app.generating)
             return
         pendingUndoIndex = sourceIndex
+        pendingUndoContent = messageText
         pendingUndoText = messageText.length > 180
                 ? messageText.slice(0, 180) + "…" : messageText
         undoDialog.open()
@@ -670,7 +672,21 @@ Item {
         confirmText: "撤回"
         danger: true
         confirmEnabled: !app.generating
-        onConfirmed: app.undoToMessage(page.pendingUndoIndex)
+        onConfirmed: {
+            const content = page.pendingUndoContent
+            const result = app.undoToMessage(page.pendingUndoIndex)
+            if (result && result.ok === true && content.length > 0) {
+                Qt.callLater(function () {
+                    page.draft = content
+                    chatComposer.text = content
+                    welcomeComposer.text = content
+                    if (page.hasConversation)
+                        chatComposer.focusInput()
+                    else
+                        welcomeComposer.focusInput()
+                })
+            }
+        }
     }
 
     Component { id: userComponent; UserMessage {} }

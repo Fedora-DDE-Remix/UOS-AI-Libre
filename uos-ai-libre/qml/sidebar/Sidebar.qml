@@ -11,12 +11,41 @@ Rectangle {
     property string renamingSessionId: ""
     property string renamingOriginal: ""
     property string renamingDraft: ""
+    property bool showAllWorkspaces: false
     signal newChatRequested()
     signal tasksRequested()
     signal knowledgeRequested()
     signal sessionActivated(string sessionId)
     signal collapseRequested()
     signal toastRequested(string message)
+
+    function workspaceKey(path) {
+        const value = String(path || "").trim()
+        if (value.length === 0)
+            return ""
+        const trimmed = value.replace(/\/+$/, "")
+        return trimmed.length === 0 ? "/" : trimmed
+    }
+
+    function filteredSessions() {
+        const source = app.sessions || []
+        const current = workspaceKey(app.workspace)
+        const visible = []
+        for (let i = 0; i < source.length; ++i) {
+            const item = source[i]
+            if (!sidebar.showAllWorkspaces && current.length > 0
+                && workspaceKey(item.cwd) !== current)
+                continue
+            visible.push(item)
+        }
+        visible.sort(function (left, right) {
+            return String(right.updated_at || "").localeCompare(
+                        String(left.updated_at || ""))
+        })
+        return visible
+    }
+
+    readonly property var visibleSessions: filteredSessions()
 
     width: Theme.sidebarWidth
     height: parent ? parent.height : 0
@@ -171,7 +200,7 @@ Rectangle {
         Text {
             x: 12
             anchors.verticalCenter: parent.verticalCenter
-            text: "历史对话"
+            text: sidebar.showAllWorkspaces ? "全部工作区对话" : "工作区对话"
             color: Theme.textTertiary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeSmall
@@ -180,10 +209,10 @@ Rectangle {
 
         IconButton {
             buttonSize: 26
-            icon: "history"
+            icon: "globe"
             iconSize: 14
             bordered: false
-            iconColor: Theme.iconSecondary
+            iconColor: sidebar.showAllWorkspaces ? Theme.accent : Theme.iconSecondary
             hoverBackground: Theme.sidebarHover
             pressedBackground: Theme.sidebarPressed
             anchors.right: parent.right
@@ -191,7 +220,10 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             onClicked: {
                 sidebar.finishRename()
-                sidebar.toastRequested("历史对话按最近更新时间排序")
+                sidebar.showAllWorkspaces = !sidebar.showAllWorkspaces
+                sidebar.toastRequested(sidebar.showAllWorkspaces
+                                       ? "已显示全部工作区的对话"
+                                       : "仅显示当前工作区的对话")
             }
         }
     }
@@ -200,16 +232,19 @@ Rectangle {
         id: historyList
         x: 8
         y: 198
-        width: sidebar.width - 16
-        height: Math.max(0, sidebar.height - y - 64)
+        width: sidebar.width - 8
+        height: Math.max(0, sidebar.height - y - 16)
         clip: true
-        model: app.sessions
+        model: sidebar.visibleSessions
         spacing: 2
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        ScrollBar.vertical: ScrollBar {
+            width: 6
+            policy: ScrollBar.AsNeeded
+        }
 
         delegate: HistoryRow {
-            width: historyList.width
+            width: historyList.width - 12
             title: modelData.summary
             cwd: modelData.cwd || ""
             selected: sidebar.chatActive
@@ -232,54 +267,10 @@ Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
             y: 20
             visible: historyList.count === 0
-            text: "暂无历史对话"
+            text: sidebar.showAllWorkspaces ? "暂无对话" : "当前工作区暂无对话"
             color: Theme.textTertiary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeSmall
-        }
-    }
-
-    Item {
-        id: accountRow
-        x: 10
-        y: sidebar.height - 48
-        width: sidebar.width - 20
-        height: 34
-        HoverHandler { id: accountHover }
-        Rectangle {
-            anchors.fill: parent
-            radius: Theme.radiusSmall
-            color: accountHover.hovered ? Theme.hover : "transparent"
-        }
-        Rectangle {
-            x: 10
-            anchors.verticalCenter: parent.verticalCenter
-            width: 24
-            height: 24
-            radius: 12
-            color: Theme.isDark ? "#3A3A42" : "#DADAE0"
-            AppIcon {
-                anchors.centerIn: parent
-                name: "user"
-                size: 14
-                color: Theme.iconSecondary
-            }
-        }
-        Text {
-            x: 42
-            anchors.verticalCenter: parent.verticalCenter
-            text: "请登录"
-            color: Theme.textSecondary
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSizeBase
-        }
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                sidebar.finishRename()
-                sidebar.toastRequested("本地模式无需登录，所有会话保存在本机")
-            }
         }
     }
 

@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
     QGuiApplication::setQuitOnLastWindowClosed(false);
     QGuiApplication::setApplicationName(QStringLiteral("UOS AI Libre"));
     QGuiApplication::setOrganizationName(QStringLiteral("UOS-AI-Libre"));
-    QGuiApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QGuiApplication::setApplicationVersion(QStringLiteral("1.0.0"));
     QGuiApplication::setDesktopFileName(QStringLiteral("uos-ai-libre"));
     QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/images/logo.png")));
 

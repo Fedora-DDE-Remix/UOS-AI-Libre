@@ -74,8 +74,8 @@ Rules that keep the UI maintainable:
 - Each user bubble exposes copy and undo actions on hover. Undo asks for
   confirmation, is disabled while a turn is running, and deletes that user
   message plus every later message from both the live history and
-  `ai_messages`. The composer sends on Enter and inserts a newline on
-  Shift+Enter or Ctrl+Enter.
+  `ai_messages`. The removed text is put back into the composer. The composer
+  sends on Enter and inserts a newline on Shift+Enter or Ctrl+Enter.
 - Long conversations load lazily: opening a session materialises only the
   newest transcript window, and "加载更早消息" pages older turns into the same
   model without re-reading the whole conversation into QML.
@@ -83,6 +83,10 @@ Rules that keep the UI maintainable:
   functions are linked into the executable through `qt_add_qml_module`. Both
   build scripts check that the QML cache loader was produced, so a packaged
   binary never falls back to parsing QML from the source tree at startup.
+- The sidebar history list defaults to sessions whose saved cwd matches the
+  current workspace. The globe button in the header switches to all workspaces,
+  sorted by `updated_at`; the list scrollbar sits at the sidebar edge with a
+  content inset so it does not touch history rows.
 - Session-scoped "本会话允许" approvals are listed on the security page and can
   be revoked or cleared. They are never persisted; a policy change invalidates
   them through aish's policy fingerprint.

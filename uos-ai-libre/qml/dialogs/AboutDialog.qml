@@ -57,7 +57,7 @@ Popup {
 
         Text {
             width: parent.width - 40
-            text: "本地优先的桌面 AI 助手\n基于 aish 与 Qt Quick 构建，不依赖 WebEngine"
+            text: "完全开源,完全可靠的桌面AI助手"
             color: Theme.textSecondary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeBase

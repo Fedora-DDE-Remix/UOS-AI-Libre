@@ -32,14 +32,15 @@ Item {
         id: bubble
         anchors.right: parent.right
         width: Math.max(root.attachmentWidth, root.desiredWidth)
-        height: contentColumn.implicitHeight + 14
+        height: contentColumn.implicitHeight
+                + (root.attachments.length > 0 ? 14 : 4)
         radius: 10
         color: Theme.userBubble
 
         Column {
             id: contentColumn
             x: 16
-            y: 8
+            y: root.attachments.length > 0 ? 8 : 3
             width: bubble.width - 32
             spacing: 8
 
@@ -79,7 +80,7 @@ Item {
                 color: Theme.userText
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeChat
-                lineHeight: 1.45
+                lineHeight: 1.4
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere
             }
         }

@@ -267,17 +267,19 @@ SettingsScroll {
 
             Rectangle { width: parent.width; height: 1; color: Theme.border }
 
-            Row {
+            Item {
                 width: parent.width
+                height: 34
                 Text {
+                    anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: "默认风险等级"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeSmall
                 }
-                Item { width: Math.max(0, parent.width - 250); height: 1 }
                 SettingChoice {
+                    anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     options: [{value: "low", label: "低"},
                               {value: "medium", label: "中"},
@@ -287,9 +289,12 @@ SettingsScroll {
                 }
             }
 
-            Row {
+            Item {
                 width: parent.width
+                height: 40
                 Column {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
                     spacing: 3
                     Text {
                         text: "沙箱预跑"
@@ -307,25 +312,27 @@ SettingsScroll {
                         font.pixelSize: Theme.fontSizeTiny
                     }
                 }
-                Item { width: Math.max(0, parent.width - 300); height: 1 }
                 ToggleSwitch {
+                    anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     checked: page.sandboxEnabled
                     onToggled: (value) => { page.sandboxEnabled = value; page.markDirty() }
                 }
             }
 
-            Row {
+            Item {
                 width: parent.width
+                height: 34
                 Text {
+                    anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: "沙箱不可用时"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeSmall
                 }
-                Item { width: Math.max(0, parent.width - 250); height: 1 }
                 SettingChoice {
+                    anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     options: [{value: "allow", label: "放行"},
                               {value: "confirm", label: "确认"},
@@ -335,17 +342,20 @@ SettingsScroll {
                 }
             }
 
-            Row {
+            Item {
                 width: parent.width
+                height: 34
                 Text {
+                    anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: "沙箱超时（秒）"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeSmall
                 }
-                Item { width: Math.max(0, parent.width - 170); height: 1 }
                 AppTextField {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
                     width: 90
                     height: 32
                     text: page.sandboxTimeout
@@ -355,9 +365,12 @@ SettingsScroll {
                 }
             }
 
-            Row {
+            Item {
                 width: parent.width
+                height: 40
                 Column {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
                     spacing: 3
                     Text {
                         text: "输入防护（InputGuard）"
@@ -372,8 +385,8 @@ SettingsScroll {
                         font.pixelSize: Theme.fontSizeTiny
                     }
                 }
-                Item { width: Math.max(0, parent.width - 300); height: 1 }
                 ToggleSwitch {
+                    anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     checked: page.inputGuardEnabled
                     onToggled: (value) => { page.inputGuardEnabled = value; page.markDirty() }

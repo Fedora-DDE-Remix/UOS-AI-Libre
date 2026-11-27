@@ -485,7 +485,7 @@ ApplicationWindow {
     ConfirmDialog {
         id: updateDialog
         title: "更新记录"
-        message: "0.1.0\n\n• 首个纯 QML 预览版，无 WebEngine\n• 共享 aish 配置、sessions.db、工具与安全策略\n• 流式文本、深度思考、工具执行与审批卡片\n• 亮色 / 深色 / 跟随系统主题"
+        message: "1.0.0\n\n• 首个纯 QML 预览版，无 WebEngine\n• 共享 aish 配置、sessions.db、工具与安全策略\n• 流式文本、深度思考、工具执行与审批卡片\n• 亮色 / 深色 / 跟随系统主题"
         confirmText: "知道了"
         cancelText: "关闭"
     }
@@ -493,7 +493,7 @@ ApplicationWindow {
     ConfirmDialog {
         id: helpDialog
         title: "帮助"
-        message: "Enter 发送消息，Shift+Enter 换行。\nCtrl+N 新建对话，Ctrl+, 打开设置，Ctrl+Q 退出。\n点击工具卡片可查看参数与结果；工具执行前会请求审批。"
+        message: "Enter 发送消息，Shift+Enter / Ctrl+Enter 换行。\nCtrl+N 新建对话，Ctrl+, 打开设置，Ctrl+Q 退出。\n点击工具卡片可查看参数与结果；工具执行前会请求审批。"
         confirmText: "知道了"
         cancelText: "关闭"
     }
