@@ -170,16 +170,36 @@ Rectangle {
                         root.text = text
                 }
 
-                Keys.onPressed: (event) => {
-                    if (input.inputMethodComposing)
+                Keys.onShortcutOverride: (event) => {
+                    if (event.key !== Qt.Key_Return
+                        && event.key !== Qt.Key_Enter)
                         return
-                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                        if (event.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))
-                            input.insert(input.cursorPosition, "\n")
-                        else
-                            root.sendRequested()
-                        event.accepted = true
-                    }
+                    // Claim the key before an active IME does. Without this,
+                    // fcitx can swallow Shift/Ctrl+Enter even when there is no
+                    // preedit, so the composer never sees the newline/send
+                    // decision. Real composition still belongs to the IME.
+                    if (input.inputMethodComposing
+                        && input.preeditText.length > 0)
+                        return
+                    event.accepted = true
+                }
+
+                Keys.onPressed: (event) => {
+                    if (event.key !== Qt.Key_Return
+                        && event.key !== Qt.Key_Enter)
+                        return
+                    // Let the input method consume Enter only while it owns a
+                    // real preedit. Some IMEs keep inputMethodComposing set
+                    // after the preedit is gone; treating that as composition
+                    // makes plain Enter silently do nothing.
+                    if (input.inputMethodComposing
+                        && input.preeditText.length > 0)
+                        return
+                    if (event.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))
+                        input.insert(input.cursorPosition, "\n")
+                    else
+                        root.sendRequested()
+                    event.accepted = true
                 }
             }
         }
