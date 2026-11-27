@@ -36,6 +36,7 @@ Item {
         to: 360
         duration: 900
         loops: Animation.Infinite
-        running: root.running
+        running: root.running && root.visible
+                 && (!root.window || root.window.visible)
     }
 }

@@ -72,6 +72,10 @@ WaylandDragTracker::~WaylandDragTracker() {
 bool WaylandDragTracker::begin() {
     end();
 #ifdef UOS_AI_LIBRE_HAVE_WAYLAND_DRAG
+    m_pendingDx = 0;
+    m_pendingDy = 0;
+#endif
+#ifdef UOS_AI_LIBRE_HAVE_WAYLAND_DRAG
 #if QT_CONFIG(wayland)
     createRelativePointer();
     if (!m_relative)
@@ -88,6 +92,10 @@ bool WaylandDragTracker::begin() {
 
 void WaylandDragTracker::end() {
     m_active = false;
+#ifdef UOS_AI_LIBRE_HAVE_WAYLAND_DRAG
+    m_pendingDx = 0;
+    m_pendingDy = 0;
+#endif
 }
 
 bool WaylandDragTracker::eventFilter(QObject *watched, QEvent *event) {
@@ -152,8 +160,38 @@ void WaylandDragTracker::relativeMotion(
 
     const qreal x = wl_fixed_to_double(dx);
     const qreal y = wl_fixed_to_double(dy);
-    if (x != 0.0 || y != 0.0)
-        emit self->moved(x, y);
+    if (x == 0.0 && y == 0.0)
+        return;
+
+    // High-polling mice can deliver hundreds of relative events per second.
+    // Coalesce them into one QML/margin update per event-loop turn instead of
+    // rebuilding the window position for every sample.
+    self->m_pendingDx += x;
+    self->m_pendingDy += y;
+    if (!self->m_flushScheduled) {
+        self->m_flushScheduled = true;
+        QMetaObject::invokeMethod(
+            self,
+            [self]() {
+                self->flushMotion();
+            },
+            Qt::QueuedConnection);
+    }
+}
+
+void WaylandDragTracker::flushMotion() {
+    m_flushScheduled = false;
+    if (!m_active) {
+        m_pendingDx = 0;
+        m_pendingDy = 0;
+        return;
+    }
+    const qreal dx = m_pendingDx;
+    const qreal dy = m_pendingDy;
+    m_pendingDx = 0;
+    m_pendingDy = 0;
+    if (dx != 0.0 || dy != 0.0)
+        emit moved(dx, dy);
 }
 
 void WaylandDragTracker::createRelativePointer() {

@@ -81,6 +81,7 @@ Window {
 
     function beginDrag(localX, localY) {
         resetDragState()
+        applyPosition()
         cursorLocalX = localX
         cursorLocalY = localY
     }
@@ -99,7 +100,11 @@ Window {
         // stops the window, the cursor eventually leaves the surface.
         cursorLocalX += dx - appliedX
         cursorLocalY += dy - appliedY
-        applyPosition()
+        // On Wayland the compositor places the surface from its margins; the
+        // QWindow x/y is only needed by the local-coordinate X11/fallback
+        // path. Skip the geometry churn for every relative-pointer sample.
+        if (!panel.relativeDrag)
+            applyPosition()
         if (cursorLocalX < 0 || cursorLocalX > width
             || cursorLocalY < 0 || cursorLocalY > height) {
             dragOutside = true

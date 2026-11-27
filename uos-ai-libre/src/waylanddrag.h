@@ -67,6 +67,13 @@ private:
     void createRelativePointer();
     void destroyRelativePointer();
     void updateAvailable();
+    void flushMotion();
+#endif
+
+#ifdef UOS_AI_LIBRE_HAVE_WAYLAND_DRAG
+    qreal m_pendingDx = 0;
+    qreal m_pendingDy = 0;
+    bool m_flushScheduled = false;
 #endif
 
     bool m_available = false;

@@ -39,7 +39,10 @@ Item {
     }
 
     Component.onCompleted: refresh()
-    onDragCancelEpochChanged: root.stopDrag()
+    onDragCancelEpochChanged: {
+        if (root.dragging)
+            root.stopDrag()
+    }
 
     Connections {
         target: app.chat
@@ -58,6 +61,10 @@ Item {
     }
 
     function stopDrag(resetMouse) {
+        if (!root.dragging && !root.relativeDrag) {
+            dragLeaveTimer.stop()
+            return
+        }
         if (root.relativeDrag)
             quickAiDrag.end()
         root.relativeDrag = false
@@ -295,13 +302,25 @@ Item {
             }
 
             Flickable {
+                id: quickFlick
                 width: parent.width
                 height: parent.height - y
                 contentWidth: width
                 contentHeight: resultColumn.implicitHeight + 8
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                // Reparent the attached scroll bar to the panel and anchor it
+                // in the 14px content margin, so it cannot overlap the answer
+                // text and sits closer to the rounded window edge.
+                ScrollBar.vertical: ScrollBar {
+                    parent: root
+                    z: 10
+                    y: quickFlick.mapToItem(root, 0, 0).y
+                    height: quickFlick.height
+                    width: 8
+                    x: root.width - width - 2
+                    policy: ScrollBar.AsNeeded
+                }
 
                 Column {
                     id: resultColumn
@@ -309,6 +328,7 @@ Item {
                     spacing: 8
 
                     Item {
+                        id: loadingState
                         width: parent.width
                         height: !root.hasAnswer && root.externalError.length === 0
                                 ? 54 : 0
@@ -321,6 +341,7 @@ Item {
                                 height: 14
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: Theme.accent
+                                running: loadingState.visible
                             }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter

@@ -4,6 +4,7 @@ import UosAiLibre
 Item {
     id: root
     property int count: 3
+    property bool running: true
     property color color: Theme.textTertiary
     width: 22
     height: 12
@@ -21,7 +22,8 @@ Item {
                 color: root.color
                 opacity: 0.35
                 SequentialAnimation {
-                    running: true
+                    running: root.running && root.visible
+                             && (!root.window || root.window.visible)
                     loops: Animation.Infinite
                     PauseAnimation { duration: index * 130 }
                     NumberAnimation { target: dot; property: "opacity"; to: 1; duration: 280; easing.type: Easing.InOutSine }
