@@ -964,6 +964,92 @@ void AishBridge::saveModelConfig(const QString &model,
     emit toastRequested(QStringLiteral("模型配置已保存，新对话将使用该模型"));
 }
 
+QVariantMap AishBridge::providersInfo() {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result =
+        parseObject(toQString(provider_info(**m_service)), &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::saveProvider(const QString &name,
+                                     const QString &apiBase,
+                                     const QString &apiKey,
+                                     const QString &model,
+                                     const QString &protocol,
+                                     bool activate,
+                                     const QString &currentName) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    if (m_generating) {
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("请先停止当前回答")}};
+    }
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(save_provider_config(**m_service, name.toStdString(),
+                                       apiBase.toStdString(), apiKey.toStdString(),
+                                       model.toStdString(), protocol.toStdString(),
+                                       activate, currentName.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    applyConfig(QJsonObject::fromVariantMap(
+        result.value(QStringLiteral("config")).toMap()));
+    m_session_id.clear();
+    setGenerating(false);
+    emit sessionChanged();
+    emit sessionCleared();
+    refreshSessions();
+    setLastError(QString());
+    emit toastRequested(activate
+                            ? QStringLiteral("供应商已保存并切换")
+                            : QStringLiteral("供应商已保存"));
+    return result;
+}
+
+QVariantMap AishBridge::deleteProvider(const QString &name) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(delete_provider_account(**m_service, name.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
+QVariantMap AishBridge::startModelFetch(const QString &apiBase,
+                                        const QString &apiKey,
+                                        const QString &protocol) {
+    if (!ensureService())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), lastError()}};
+    QString error;
+    const QVariantMap result = parseObject(
+        toQString(model_fetch_start(**m_service, apiBase.toStdString(),
+                                    apiKey.toStdString(), protocol.toStdString())),
+        &error);
+    if (!error.isEmpty()) {
+        setLastError(error);
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+    return result;
+}
+
 void AishBridge::openExternal(const QString &url) {
     const QUrl parsed(url);
     const QString scheme = parsed.scheme().toLower();

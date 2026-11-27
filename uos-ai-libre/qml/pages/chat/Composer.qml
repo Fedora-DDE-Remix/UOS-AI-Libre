@@ -242,7 +242,7 @@ Rectangle {
                             }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "aish · " + String(app.policyInfo.default_risk_level || "low").toUpperCase()
+                                text: String(app.policyInfo.default_risk_level || "low").toUpperCase()
                                 color: Theme.textSecondary
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSizeSmall
@@ -472,9 +472,30 @@ Rectangle {
 
     function openModelMenu() {
         const point = modelButton.mapToItem(Overlay.overlay, 0, 0)
+        modelMenu.width = Math.min(380, Overlay.overlay.width - 16)
+        const available = Overlay.overlay.height - (point.y + modelButton.height + 14)
+        modelMenu.height = Math.min(420, Math.max(190, available))
+        modelMenu.x = Math.max(8, Math.min(Overlay.overlay.width - modelMenu.width - 8,
+                                         point.x + modelButton.width - modelMenu.width))
+        let menuY = point.y + modelButton.height + 6
+        if (menuY + modelMenu.height > Overlay.overlay.height - 8)
+            menuY = Math.max(8, Overlay.overlay.height - modelMenu.height - 8)
+        modelMenu.y = menuY
+        modelMenu.query = ""
+        modelMenu.rebuild()
         modelMenu.open()
-        modelMenu.x = Math.max(8, Math.min(Overlay.overlay.width - modelMenu.width - 8, point.x))
-        modelMenu.y = Math.max(8, point.y - modelMenu.height - 6)
+        modelMenu.focusSearch()
+    }
+
+    function selectChatModel(item) {
+        if (!item)
+            return
+        modelMenu.close()
+        if (item.sessionOnly === true)
+            return
+        const result = app.activateModel(item.apiBase, item.provider, item.model)
+        if (!result || result.ok !== true)
+            root.toastRequested(result && result.error ? result.error : "切换模型失败")
     }
 
     function openWorkspaceMenu() {
@@ -603,20 +624,189 @@ Rectangle {
         }
     }
 
-    MenuPopup {
+    Popup {
         id: modelMenu
         parent: Overlay.overlay
-        menuWidth: 190
-        items: [
-            { label: root.modelName.length > 0 ? root.modelName : "当前模型",
-              icon: "cloud", checked: true },
-            { separator: true },
-            { label: "模型设置…", icon: "settings" }
-        ]
-        onItemClicked: (index) => {
-            modelMenu.close()
-            if (index === 2)
-                root.settingsRequested()
+        property string query: ""
+        property var entries: []
+        width: 380
+        height: 420
+        padding: 0
+        modal: false
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        function rebuild() {
+            const q = query.trim().toLowerCase()
+            const source = app.chatModels || []
+            const result = []
+            for (let i = 0; i < source.length; ++i) {
+                const item = source[i]
+                if (q.length > 0
+                    && String(item.model || "").toLowerCase().indexOf(q) < 0
+                    && String(item.provider || "").toLowerCase().indexOf(q) < 0)
+                    continue
+                result.push(item)
+            }
+            let hasCurrent = false
+            for (let i = 0; i < result.length; ++i) {
+                if (result[i].model === root.modelName)
+                    hasCurrent = true
+            }
+            if (!hasCurrent && root.modelName.length > 0) {
+                result.unshift({
+                    model: root.modelName,
+                    provider: "当前会话",
+                    apiBase: "",
+                    protocol: "",
+                    sessionOnly: true
+                })
+            }
+            entries = result
+        }
+
+        function focusSearch() {
+            Qt.callLater(function () { modelSearch.forceInputFocus() })
+        }
+
+        Connections {
+            target: app
+            function onChatModelsChanged() {
+                if (modelMenu.opened)
+                    modelMenu.rebuild()
+            }
+        }
+
+        background: Rectangle {
+            radius: Theme.radiusMedium
+            color: Theme.card
+            border.width: 1
+            border.color: Theme.border
+        }
+
+        contentItem: Column {
+            width: modelMenu.width
+            height: modelMenu.height
+            spacing: 0
+
+            Item {
+                width: parent.width
+                height: 46
+                AppTextField {
+                    id: modelSearch
+                    x: 10
+                    y: 8
+                    width: parent.width - 20
+                    height: 32
+                    placeholder: "搜索模型或供应商"
+                    onTextEdited: (value) => { modelMenu.query = value; modelMenu.rebuild() }
+                    onAccepted: {
+                        if (modelMenu.entries.length > 0)
+                            root.selectChatModel(modelMenu.entries[0])
+                    }
+                }
+            }
+
+            Rectangle { width: parent.width; height: 1; color: Theme.border }
+
+            Flickable {
+                width: parent.width
+                height: parent.height - 46 - 1 - 42
+                contentWidth: width
+                contentHeight: modelColumn.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                Column {
+                    id: modelColumn
+                    width: parent.width
+                    spacing: 2
+                    Repeater {
+                        model: modelMenu.entries
+                        delegate: Rectangle {
+                            width: parent.width
+                            height: 38
+                            color: root.modelName === modelData.model
+                                   ? Theme.accentSoft
+                                   : (modelRowHover.hovered ? Theme.hover : "transparent")
+                            HoverHandler { id: modelRowHover }
+
+                            Text {
+                                x: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 150
+                                text: modelData.model
+                                color: root.modelName === modelData.model
+                                       ? Theme.accent : Theme.textPrimary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeSmall
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 30
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 120
+                                horizontalAlignment: Text.AlignRight
+                                text: modelData.provider || ""
+                                color: Theme.textTertiary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeTiny
+                                elide: Text.ElideRight
+                            }
+                            AppIcon {
+                                visible: root.modelName === modelData.model
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "check"
+                                size: 12
+                                color: Theme.accent
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.selectChatModel(modelData)
+                            }
+                        }
+                    }
+                    Text {
+                        width: parent.width
+                        visible: modelMenu.entries.length === 0
+                        text: modelMenu.query.length > 0 ? "没有匹配的模型" : "尚未启用模型"
+                        color: Theme.textTertiary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSizeSmall
+                        horizontalAlignment: Text.AlignHCenter
+                        topPadding: 24
+                    }
+                }
+            }
+
+            Rectangle { width: parent.width; height: 1; color: Theme.border }
+
+            Item {
+                width: parent.width
+                height: 42
+                Text {
+                    x: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "管理模型与供应商…"
+                    color: Theme.accent
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSizeSmall
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            modelMenu.close()
+                            root.settingsRequested()
+                        }
+                    }
+                }
+            }
         }
     }
 

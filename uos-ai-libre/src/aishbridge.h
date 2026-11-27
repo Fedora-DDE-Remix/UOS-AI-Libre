@@ -105,6 +105,18 @@ public:
     Q_INVOKABLE void saveModelConfig(const QString &model,
                                      const QString &apiBase,
                                      const QString &apiKey);
+    Q_INVOKABLE QVariantMap providersInfo();
+    Q_INVOKABLE QVariantMap saveProvider(const QString &name,
+                                         const QString &apiBase,
+                                         const QString &apiKey,
+                                         const QString &model,
+                                         const QString &protocol,
+                                         bool activate,
+                                         const QString &currentName);
+    Q_INVOKABLE QVariantMap deleteProvider(const QString &name);
+    Q_INVOKABLE QVariantMap startModelFetch(const QString &apiBase,
+                                            const QString &apiKey,
+                                            const QString &protocol);
     Q_INVOKABLE void openExternal(const QString &url);
     Q_INVOKABLE void openConfigFile();
     Q_INVOKABLE void openWorkspace();

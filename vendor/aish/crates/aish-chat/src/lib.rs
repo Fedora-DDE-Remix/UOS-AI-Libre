@@ -1921,6 +1921,326 @@ impl ChatService {
     ///
     /// The raw-document editor preserves keys the typed config does not model.
     /// An empty `api_key` keeps the existing key instead of erasing it.
+    /// Provider/model endpoints known to aish: the active primary endpoint and
+    /// every `api_accounts` entry. Keys are never returned, only `has_key`.
+    pub fn provider_info(&self) -> Value {
+        let config = match aish_config::ConfigLoader::load(None) {
+            Ok(config) => config,
+            Err(error) => {
+                return json!({
+                    "ok": false,
+                    "error": format!("failed to load aish config: {error}"),
+                    "providers": [],
+                });
+            }
+        };
+        let mut providers = vec![json!({
+            "name": provider_host_label(&config.api_base),
+            "host": provider_host_label(&config.api_base),
+            "api_base": config.api_base,
+            "model": config.model,
+            "protocol": provider_protocol(&config.api_base),
+            "active": true,
+            "has_key": !config.api_key.trim().is_empty(),
+            "account": false,
+        })];
+        let mut seen = std::collections::HashSet::new();
+        seen.insert((config.api_base.clone(), config.api_key.clone()));
+        for account in &config.api_accounts {
+            let base = account
+                .api_base
+                .clone()
+                .unwrap_or_else(|| config.api_base.clone());
+            if !seen.insert((base.clone(), account.api_key.clone())) {
+                continue;
+            }
+            providers.push(json!({
+                "name": account.name,
+                "host": provider_host_label(&base),
+                "api_base": base,
+                "model": account.model.clone().unwrap_or_default(),
+                "protocol": provider_protocol(&base),
+                "active": false,
+                "has_key": !account.api_key.trim().is_empty(),
+                "account": true,
+                "disabled": account.disabled,
+            }));
+        }
+        json!({
+            "ok": true,
+            "config_path": aish_config::ConfigLoader::default_config_path().to_string_lossy(),
+            "providers": providers,
+        })
+    }
+
+    /// Add or update one provider, optionally switching the active endpoint.
+    ///
+    /// This mirrors the aish `/model` endpoint switcher: switching away from
+    /// the current primary preserves it as a named `api_accounts` entry, and
+    /// promoting an existing account removes it from the pool so the same
+    /// credential is never both primary and a pool entry. `current_name` is the
+    /// frontend's display label for the outgoing primary; when empty the host
+    /// is used.
+    #[allow(clippy::too_many_arguments)]
+    pub fn save_provider_settings(
+        name: &str,
+        api_base: &str,
+        api_key: &str,
+        model: &str,
+        protocol: &str,
+        activate: bool,
+        current_name: &str,
+    ) -> Result<String, String> {
+        let name = name.trim();
+        let api_base = api_base.trim();
+        let model = model.trim();
+        if name.is_empty() || name.chars().count() > 80 {
+            return Err("供应商名称不能为空，且不能超过 80 个字符".to_string());
+        }
+        if model.is_empty() || model.chars().count() > 200 {
+            return Err("模型名称不能为空，且不能超过 200 个字符".to_string());
+        }
+        for value in [name, api_base, model, protocol] {
+            if value.contains(['\n', '\r', '\0']) {
+                return Err("供应商配置包含非法字符".to_string());
+            }
+        }
+        if api_base.chars().count() > 2048 {
+            return Err("API 地址过长".to_string());
+        }
+        let parsed = reqwest::Url::parse(api_base)
+            .map_err(|error| format!("API 地址无效：{error}"))?;
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return Err("API 地址必须是 http(s) URL".to_string());
+        }
+        validate_provider_protocol(api_base, protocol)?;
+        if api_key.chars().count() > 4096 || api_key.contains(['\n', '\r', '\0']) {
+            return Err("API Key 过长或包含非法字符".to_string());
+        }
+
+        let path = aish_config::ConfigLoader::default_config_path();
+        let mut config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        let mut accounts = config.api_accounts.clone();
+        let existing_account = accounts
+            .iter()
+            .find(|account| {
+                account.name == name
+                    || account.api_base.as_deref() == Some(api_base)
+                        && (api_key.trim().is_empty() || account.api_key == api_key.trim())
+            })
+            .cloned();
+        let effective_key = if api_key.trim().is_empty() {
+            if api_base == config.api_base {
+                config.api_key.clone()
+            } else {
+                existing_account
+                    .as_ref()
+                    .map(|account| account.api_key.clone())
+                    .unwrap_or_default()
+            }
+        } else {
+            api_key.trim().to_string()
+        };
+        if effective_key.chars().count() > 4096 {
+            return Err("API Key 过长".to_string());
+        }
+
+        if activate {
+            let endpoint_changed =
+                api_base != config.api_base || effective_key != config.api_key;
+            if endpoint_changed && !config.api_key.trim().is_empty() {
+                let outgoing_name = if current_name.trim().is_empty() {
+                    provider_host_label(&config.api_base)
+                } else {
+                    current_name.trim().to_string()
+                };
+                let already_kept = accounts.iter().any(|account| {
+                    account.api_key == config.api_key
+                        && account.api_base.as_deref() == Some(config.api_base.as_str())
+                });
+                if !already_kept {
+                    let unique = unique_account_name(&accounts, &outgoing_name);
+                    accounts.push(aish_config::ApiAccountConfig {
+                        name: unique,
+                        api_key: config.api_key.clone(),
+                        api_base: Some(config.api_base.clone()),
+                        model: (!config.model.trim().is_empty()).then(|| config.model.clone()),
+                        weight: 1,
+                        disabled: false,
+                    });
+                }
+            }
+            // The target becomes primary; do not leave a duplicate pool entry.
+            accounts.retain(|account| {
+                !(account.api_base.as_deref() == Some(api_base)
+                    && account.api_key == effective_key)
+            });
+            config.model = model.to_string();
+            config.api_base = api_base.to_string();
+            config.api_key = effective_key;
+        } else {
+            if api_base == config.api_base && effective_key == config.api_key {
+                return Err(
+                    "该地址和密钥与当前主供应商相同，请直接在主供应商上切换模型".to_string(),
+                );
+            }
+            let existing_index = accounts
+                .iter()
+                .position(|account| account.name == name)
+                .or_else(|| {
+                    accounts.iter().position(|account| {
+                        account.api_base.as_deref() == Some(api_base)
+                            && account.api_key == effective_key
+                    })
+                });
+            if let Some(index) = existing_index {
+                let account = &mut accounts[index];
+                account.name = name.to_string();
+                account.api_key = effective_key;
+                account.api_base = Some(api_base.to_string());
+                account.model = Some(model.to_string());
+                account.disabled = false;
+            } else {
+                accounts.push(aish_config::ApiAccountConfig {
+                    name: name.to_string(),
+                    api_key: effective_key,
+                    api_base: Some(api_base.to_string()),
+                    model: Some(model.to_string()),
+                    weight: 1,
+                    disabled: false,
+                });
+            }
+        }
+
+        aish_config::ConfigLoader::update_raw(&path, |document| {
+            let map = document.as_mapping_mut().ok_or_else(|| {
+                AishError::Config(format!("config root is not a mapping: {}", path.display()))
+            })?;
+            if activate {
+                map.insert(
+                    serde_yaml::Value::String("model".to_string()),
+                    serde_yaml::Value::String(config.model.clone()),
+                );
+                map.insert(
+                    serde_yaml::Value::String("api_base".to_string()),
+                    serde_yaml::Value::String(config.api_base.clone()),
+                );
+                if !config.api_key.trim().is_empty() {
+                    map.insert(
+                        serde_yaml::Value::String("api_key".to_string()),
+                        serde_yaml::Value::String(config.api_key.clone()),
+                    );
+                }
+            }
+            let accounts_yaml = serde_yaml::to_value(&accounts)
+                .map_err(|error| AishError::Config(format!("failed to encode accounts: {error}")))?;
+            map.insert(
+                serde_yaml::Value::String("api_accounts".to_string()),
+                accounts_yaml,
+            );
+            Ok(())
+        })
+        .map_err(|error| format!("failed to save provider configuration: {error}"))?;
+        Ok(path.to_string_lossy().to_string())
+    }
+
+    /// Remove one named non-primary provider account.
+    pub fn delete_provider_account(name: &str) -> Result<String, String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("provider name must not be empty".to_string());
+        }
+        let path = aish_config::ConfigLoader::default_config_path();
+        let mut config = aish_config::ConfigLoader::load(None)
+            .map_err(|error| format!("failed to load aish config: {error}"))?;
+        let before = config.api_accounts.len();
+        config.api_accounts.retain(|account| account.name != name);
+        if config.api_accounts.len() == before {
+            return Err(format!("no provider account named `{name}` is configured"));
+        }
+        aish_config::ConfigLoader::update_raw(&path, |document| {
+            let map = document.as_mapping_mut().ok_or_else(|| {
+                AishError::Config(format!("config root is not a mapping: {}", path.display()))
+            })?;
+            map.insert(
+                serde_yaml::Value::String("api_accounts".to_string()),
+                serde_yaml::to_value(&config.api_accounts).map_err(|error| {
+                    AishError::Config(format!("failed to encode accounts: {error}"))
+                })?,
+            );
+            Ok(())
+        })
+        .map_err(|error| format!("failed to delete provider: {error}"))?;
+        Ok(path.to_string_lossy().to_string())
+    }
+
+    /// Fetch the model catalogue of an endpoint in the background. OpenAI
+    /// compatible endpoints use `{base}/models`; native Anthropic uses
+    /// `{base}/v1/models` with `x-api-key`.
+    pub fn start_model_fetch(&self, api_base: &str, api_key: &str, protocol: &str) -> Value {
+        let job_id = self.next_job_id();
+        let config = aish_config::ConfigLoader::load(None).ok();
+        let mut base = api_base.trim().to_string();
+        if base.is_empty() {
+            if let Some(config) = &config {
+                base = config.api_base.clone();
+            }
+        }
+        let mut key = api_key.trim().to_string();
+        if key.is_empty() {
+            if let Some(config) = &config {
+                if base == config.api_base {
+                    key = config.api_key.clone();
+                } else if let Some(account) = config
+                    .api_accounts
+                    .iter()
+                    .find(|account| account.api_base.as_deref() == Some(base.as_str()))
+                {
+                    key = account.api_key.clone();
+                }
+            }
+        }
+        let protocol = protocol.trim().to_ascii_lowercase();
+        let events = self.events.clone();
+        let job = job_id.clone();
+        self.runtime.spawn(async move {
+            let result = fetch_provider_models(&base, &key, &protocol).await;
+            match result {
+                Ok(models) => {
+                    events.push(ChatEvent::new(
+                        "settings",
+                        "settings_job",
+                        json!({
+                            "job_id": job,
+                            "job": "model_fetch",
+                            "ok": true,
+                            "data": {
+                                "base": base,
+                                "protocol": protocol,
+                                "models": models,
+                            },
+                        }),
+                    ));
+                }
+                Err(error) => {
+                    events.push(ChatEvent::new(
+                        "settings",
+                        "settings_job",
+                        json!({
+                            "job_id": job,
+                            "job": "model_fetch",
+                            "ok": false,
+                            "error": error,
+                            "data": {"base": base, "protocol": protocol},
+                        }),
+                    ));
+                }
+            }
+        });
+        json!({"ok": true, "job_id": job_id})
+    }
+
     pub fn save_model_settings(
         model: &str,
         api_base: &str,
@@ -2440,6 +2760,181 @@ fn json_pair_map(
         map.insert(key.to_string(), value.to_string());
     }
     Ok(map)
+}
+
+fn provider_host(base: &str) -> Option<String> {
+    reqwest::Url::parse(base.trim())
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
+}
+
+fn provider_protocol(base: &str) -> &'static str {
+    if provider_host(base).as_deref() == Some("api.anthropic.com") {
+        "anthropic"
+    } else {
+        "openai"
+    }
+}
+
+fn provider_host_label(base: &str) -> String {
+    match provider_host(base).as_deref() {
+        Some("api.anthropic.com") => "Anthropic".to_string(),
+        Some("api.openai.com") => "OpenAI".to_string(),
+        Some("api.deepseek.com") => "DeepSeek".to_string(),
+        Some(host) => host.to_string(),
+        None => base.trim().to_string(),
+    }
+}
+
+/// aish chooses the HTTP protocol from the endpoint host. Reject a GUI choice
+/// that would silently use a different protocol.
+fn validate_provider_protocol(api_base: &str, protocol: &str) -> Result<(), String> {
+    let protocol = protocol.trim().to_ascii_lowercase();
+    if !matches!(protocol.as_str(), "openai" | "anthropic") {
+        return Err("协议必须是 openai 或 anthropic".to_string());
+    }
+    let actual = provider_protocol(api_base);
+    if protocol == actual {
+        return Ok(());
+    }
+    if actual == "anthropic" {
+        Err("该地址会被 aish 识别为 Anthropic Messages；请选择 Anthropic 协议".to_string())
+    } else {
+        Err("aish 目前只对 https://api.anthropic.com 使用 Anthropic Messages；自定义端点请选择 OpenAI 兼容协议".to_string())
+    }
+}
+
+fn unique_account_name(accounts: &[aish_config::ApiAccountConfig], label: &str) -> String {
+    let label = label.trim();
+    let label = if label.is_empty() { "provider" } else { label };
+    if !accounts.iter().any(|account| account.name == label) {
+        return label.to_string();
+    }
+    let mut index = 2;
+    loop {
+        let candidate = format!("{label}-{index}");
+        if !accounts.iter().any(|account| account.name == candidate) {
+            return candidate;
+        }
+        index += 1;
+    }
+}
+
+/// Fetch models for one provider without touching the active chat session.
+async fn fetch_provider_models(
+    api_base: &str,
+    api_key: &str,
+    protocol: &str,
+) -> Result<Vec<Value>, String> {
+    validate_provider_protocol(api_base, protocol)?;
+    let base = api_base.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err("API 地址不能为空".to_string());
+    }
+    let protocol = protocol.trim().to_ascii_lowercase();
+    if protocol == "openai" {
+        let models = aish_llm::fetch_models_from_api(
+            base,
+            (!api_key.trim().is_empty()).then_some(api_key.trim()),
+        )
+        .await?;
+        let mut seen = HashSet::new();
+        let mut result: Vec<Value> = models
+            .iter()
+            .filter(|model| aish_llm::model_supports_tools(&model.id))
+            .filter(|model| seen.insert(model.id.clone()))
+            .map(|model| {
+                json!({
+                    "id": model.id,
+                    "owned_by": model.owned_by,
+                })
+            })
+            .collect();
+        result.sort_by(|left, right| {
+            left["id"]
+                .as_str()
+                .unwrap_or_default()
+                .cmp(right["id"].as_str().unwrap_or_default())
+        });
+        result.truncate(300);
+        if result.is_empty() {
+            return Err("端点返回了空模型列表".to_string());
+        }
+        return Ok(result);
+    }
+
+    if api_key.trim().is_empty() {
+        return Err("Anthropic 需要 API Key".to_string());
+    }
+    let base = base.strip_suffix("/v1/messages").unwrap_or(base);
+    let url = if base.ends_with("/v1") {
+        format!("{base}/models")
+    } else {
+        format!("{base}/v1/models")
+    };
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .build()
+        .map_err(|error| format!("failed to build HTTP client: {error}"))?;
+    let response = client
+        .get(&url)
+        .header("x-api-key", api_key.trim())
+        .header("anthropic-version", "2023-06-01")
+        .send()
+        .await
+        .map_err(|error| {
+            if error.is_timeout() {
+                "请求超时（12 秒）".to_string()
+            } else if error.is_connect() {
+                "连接失败，请检查 API 地址和网络".to_string()
+            } else {
+                format!("请求失败：{error}")
+            }
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        let body = aish_mcp::redact::sanitize_diagnostic_text(&body);
+        let mut preview: String = body.chars().take(300).collect();
+        if body.chars().count() > 300 {
+            preview.push_str("...");
+        }
+        return Err(format!("Anthropic 返回 HTTP {}：{preview}", status.as_u16()));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| format!("无法解析模型列表：{error}"))?;
+    let mut result: Vec<Value> = body
+        .get("data")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let id = item.get("id").and_then(Value::as_str)?;
+                    Some(json!({
+                        "id": id,
+                        "owned_by": item
+                            .get("display_name")
+                            .and_then(Value::as_str)
+                            .unwrap_or("anthropic"),
+                    }))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    result.sort_by(|left, right| {
+        left["id"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(right["id"].as_str().unwrap_or_default())
+    });
+    result.truncate(300);
+    if result.is_empty() {
+        return Err("Anthropic 返回了空模型列表".to_string());
+    }
+    Ok(result)
 }
 
 fn normalize_mcp_url(raw: &str) -> Option<String> {

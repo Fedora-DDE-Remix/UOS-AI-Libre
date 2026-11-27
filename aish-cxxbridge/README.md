@@ -50,6 +50,10 @@ auto resumed = resume_session(*service, session);    // model, transcript, cwd, 
 rename_session(*service, session, "New title");
 delete_session(*service, session);
 auto info = config_info(*service);                   // safe summary; no API key
+auto providers = provider_info(*service);            // primary + api_accounts, no keys
+auto fetched = model_fetch_start(*service, base, key, "openai"); // settings_job
+save_provider_config(*service, name, base, key, model, protocol, activate, current_name);
+delete_provider_account(*service, name);
 auto tools = tool_names(*service, session);          // aish's registered tool pool
 auto catalog = tool_catalog(*service);               // names/descriptions/sources
 auto policy = policy_info(*service);                 // policy + raw rule_groups + builtin_rules
@@ -150,3 +154,12 @@ Important event kinds:
   gateway tools on live sessions.
 - `settings_job` events are not tied to a chat session:
   `{"kind":"settings_job","data":{"job_id","job","ok","data"|"error"}}`.
+- `provider_info`/`save_provider_config` model aish's primary endpoint plus
+  `api_accounts` as switchable providers. Saving with `activate=true` mirrors
+  the `/model` picker: the outgoing primary is preserved as a named account,
+  the target is promoted to primary, and the service is recreated. Protocol is
+  validated against aish's host-based dialect selection: Anthropic is only
+  accepted for `api.anthropic.com`; other endpoints are OpenAI-compatible.
+- `model_fetch_start` lists OpenAI-compatible `/models` catalogs and native
+  Anthropic `/v1/models` with the right authentication; results arrive as a
+  `model_fetch` settings job.

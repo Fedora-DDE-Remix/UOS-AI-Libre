@@ -58,6 +58,12 @@ Rules that keep the UI maintainable:
   review/verify and trust/remove; the MCP page can enable/disable/trust/test,
   add/update/remove servers and edit server options. Connection-level MCP YAML
   and registry file settings remain aish-native.
+- The model page is provider-centric: providers come from aish's primary
+  endpoint and `api_accounts`, can be added with a custom display name, an
+  explicit OpenAI/Anthropic protocol check, live model discovery, and multiple
+  enabled models per provider. The chat composer lists every enabled model
+  across providers, with the model on the left and provider on the right and a
+  search box above the list.
 - Session-scoped "本会话允许" approvals are listed on the security page and can
   be revoked or cleared. They are never persisted; a policy change invalidates
   them through aish's policy fingerprint.

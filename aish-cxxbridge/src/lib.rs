@@ -92,6 +92,24 @@ mod ffi {
             api_base: &str,
             api_key: &str,
         ) -> String;
+        fn provider_info(service: &mut BridgeService) -> String;
+        fn save_provider_config(
+            service: &mut BridgeService,
+            name: &str,
+            api_base: &str,
+            api_key: &str,
+            model: &str,
+            protocol: &str,
+            activate: bool,
+            current_name: &str,
+        ) -> String;
+        fn delete_provider_account(service: &mut BridgeService, name: &str) -> String;
+        fn model_fetch_start(
+            service: &mut BridgeService,
+            api_base: &str,
+            api_key: &str,
+            protocol: &str,
+        ) -> String;
         fn set_workspace(service: &mut BridgeService, session_id: &str, path: &str) -> String;
         fn shutdown(service: &mut BridgeService);
     }
@@ -829,6 +847,101 @@ pub fn save_model_config(
             "configuration saved to {path}, but reloading it panicked"
         )),
     }
+}
+
+pub fn provider_info(service: &mut BridgeService) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner.provider_info().to_string()
+    }))
+    .unwrap_or_else(|_| err("panic while reading providers"))
+}
+
+pub fn save_provider_config(
+    service: &mut BridgeService,
+    name: &str,
+    api_base: &str,
+    api_key: &str,
+    model: &str,
+    protocol: &str,
+    activate: bool,
+    current_name: &str,
+) -> String {
+    let path = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        aish_chat::ChatService::save_provider_settings(
+            name, api_base, api_key, model, protocol, activate, current_name,
+        )
+    })) {
+        Ok(Ok(path)) => path,
+        Ok(Err(error)) => return err(error),
+        Err(_) => return err("panic while saving provider configuration"),
+    };
+    match std::panic::catch_unwind(|| aish_chat::ChatService::from_aish_config()) {
+        Ok(Ok(inner)) => {
+            let providers = inner.provider_info();
+            let config = inner.config_info();
+            service.inner = Some(inner);
+            service.error = None;
+            json!({
+                "ok": true,
+                "config_path": path,
+                "providers": providers["providers"].clone(),
+                "config": config,
+            })
+            .to_string()
+        }
+        Ok(Err(error)) => err(format!(
+            "provider saved to {path}, but reloading the service failed: {error}"
+        )),
+        Err(_) => err(format!(
+            "provider saved to {path}, but reloading the service panicked"
+        )),
+    }
+}
+
+pub fn delete_provider_account(service: &mut BridgeService, name: &str) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        aish_chat::ChatService::delete_provider_account(name)
+    })) {
+        Ok(Ok(_)) => json!({
+            "ok": true,
+            "providers": inner.provider_info()["providers"].clone(),
+        })
+        .to_string(),
+        Ok(Err(error)) => err(error),
+        Err(_) => err("panic while deleting provider"),
+    }
+}
+
+pub fn model_fetch_start(
+    service: &mut BridgeService,
+    api_base: &str,
+    api_key: &str,
+    protocol: &str,
+) -> String {
+    let Some(inner) = service.inner.as_ref() else {
+        return err(service
+            .error
+            .clone()
+            .unwrap_or_else(|| "service unavailable".into()));
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inner
+            .start_model_fetch(api_base, api_key, protocol)
+            .to_string()
+    }))
+    .unwrap_or_else(|_| err("panic while starting model fetch"))
 }
 
 pub fn set_workspace(service: &mut BridgeService, session_id: &str, path: &str) -> String {

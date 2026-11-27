@@ -51,6 +51,10 @@ class AppController final : public QObject {
     Q_PROPERTY(QVariantMap mcpTestResult READ mcpTestResult NOTIFY mcpTestResultChanged)
     Q_PROPERTY(QVariantList memoryEntries READ memoryEntries NOTIFY memoryEntriesChanged)
     Q_PROPERTY(QVariantList auditEvents READ auditEvents NOTIFY auditEventsChanged)
+    Q_PROPERTY(QVariantList providers READ providers NOTIFY providersChanged)
+    Q_PROPERTY(QVariantList chatModels READ chatModels NOTIFY chatModelsChanged)
+    Q_PROPERTY(bool modelFetchBusy READ modelFetchBusy NOTIFY modelFetchBusyChanged)
+    Q_PROPERTY(QVariantMap modelFetchResult READ modelFetchResult NOTIFY modelFetchResultChanged)
     Q_PROPERTY(QVariantList sessions READ sessions NOTIFY sessionsChanged)
     Q_PROPERTY(QString workspace READ workspace NOTIFY workspaceChanged)
     Q_PROPERTY(QString defaultWorkspace READ defaultWorkspace CONSTANT)
@@ -94,6 +98,10 @@ public:
     QVariantMap mcpTestResult() const;
     QVariantList memoryEntries() const;
     QVariantList auditEvents() const;
+    QVariantList providers() const;
+    QVariantList chatModels() const;
+    bool modelFetchBusy() const;
+    QVariantMap modelFetchResult() const;
     QVariantList sessions() const;
     QString workspace() const;
     QString defaultWorkspace() const;
@@ -113,6 +121,22 @@ public:
     Q_INVOKABLE void saveModelConfig(const QString &model,
                                      const QString &apiBase,
                                      const QString &apiKey);
+    Q_INVOKABLE void refreshProviders();
+    Q_INVOKABLE QVariantMap saveProvider(const QString &name,
+                                         const QString &apiBase,
+                                         const QString &apiKey,
+                                         const QString &model,
+                                         const QString &protocol,
+                                         bool activate);
+    Q_INVOKABLE void deleteProvider(const QString &name);
+    Q_INVOKABLE void setProviderModels(const QString &apiBase,
+                                       const QVariantList &models);
+    Q_INVOKABLE QVariantMap activateModel(const QString &apiBase,
+                                          const QString &providerName,
+                                          const QString &model);
+    Q_INVOKABLE void fetchModels(const QString &apiBase,
+                                 const QString &apiKey,
+                                 const QString &protocol);
     Q_INVOKABLE void resolveApproval(int decision);
     Q_INVOKABLE void resolveInteraction(const QVariantMap &response);
     Q_INVOKABLE void refreshPolicy();
@@ -172,6 +196,11 @@ signals:
     void modelChanged();
     void configChanged();
     void sessionsChanged();
+    void providersChanged();
+    void chatModelsChanged();
+    void modelFetchBusyChanged();
+    void modelFetchResultChanged();
+    void modelFetchFinished(const QVariantMap &result);
     void workspaceChanged();
     void toastRequested(const QString &message);
     void pendingApprovalChanged();
@@ -220,6 +249,10 @@ private:
     void onSessionsChanged();
     void onSettingsJobFinished(const QVariantMap &result);
     bool requireIdle(const QString &action);
+    QString providerLabel(const QString &apiBase) const;
+    void setProviderLabel(const QString &apiBase, const QString &label);
+    QVariantList providerModels(const QString &apiBase) const;
+    void setProviderModelsStore(const QString &apiBase, const QVariantList &models);
 
     AishBridge m_bridge;
     ChatModel m_chat;
@@ -244,6 +277,12 @@ private:
     bool m_skill_search_busy = false;
     bool m_skill_install_busy = false;
     bool m_mcp_busy = false;
+    QVariantList m_providers;
+    QVariantList m_chat_models;
+    QVariantMap m_provider_models;
+    QVariantMap m_model_fetch_result;
+    QVariantMap m_provider_labels;
+    bool m_model_fetch_busy = false;
     QVariantList m_memory_entries;
     QVariantList m_audit_events;
     int m_theme_mode = 2;

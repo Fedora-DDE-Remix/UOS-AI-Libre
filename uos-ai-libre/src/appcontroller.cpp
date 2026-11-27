@@ -14,6 +14,10 @@ AppController::AppController(QObject *parent)
     wire();
     m_model = m_bridge.model();
     m_title_cache = sessionTitle();
+    m_provider_labels =
+        QSettings().value(QStringLiteral("model/providerLabels")).toMap();
+    m_provider_models =
+        QSettings().value(QStringLiteral("model/providerModels")).toMap();
     m_theme_mode = QSettings().value(QStringLiteral("theme/mode"), 2).toInt();
     if (m_theme_mode < 0 || m_theme_mode > 2)
         m_theme_mode = 2;
@@ -153,6 +157,10 @@ QVariantMap AppController::mcpTestResult() const { return m_mcp_test_result; }
 QVariantList AppController::memoryEntries() const { return m_memory_entries; }
 QVariantList AppController::auditEvents() const { return m_audit_events; }
 
+QVariantList AppController::providers() const { return m_providers; }
+QVariantList AppController::chatModels() const { return m_chat_models; }
+bool AppController::modelFetchBusy() const { return m_model_fetch_busy; }
+QVariantMap AppController::modelFetchResult() const { return m_model_fetch_result; }
 QVariantList AppController::sessions() const { return m_bridge.sessions(); }
 QString AppController::workspace() const { return m_bridge.workspace(); }
 QString AppController::defaultWorkspace() const {
@@ -206,6 +214,7 @@ void AppController::initialize() {
     if (!m_bridge.lastError().isEmpty() && m_bridge.lastError() != before)
         emit errorOccurred(m_bridge.lastError());
     if (m_bridge.ready()) {
+        refreshProviders();
         refreshPolicy();
         refreshToolCatalog();
         refreshSkillCatalog();
@@ -277,6 +286,189 @@ void AppController::saveModelConfig(const QString &model,
     m_bridge.saveModelConfig(model, apiBase, apiKey);
     if (!m_bridge.lastError().isEmpty() && m_bridge.lastError() != before)
         emit toastRequested(m_bridge.lastError());
+}
+
+QString AppController::providerLabel(const QString &apiBase) const {
+    return m_provider_labels.value(apiBase).toString();
+}
+
+void AppController::setProviderLabel(const QString &apiBase, const QString &label) {
+    if (apiBase.isEmpty() || label.trimmed().isEmpty())
+        return;
+    m_provider_labels.insert(apiBase, label.trimmed());
+    QSettings().setValue(QStringLiteral("model/providerLabels"),
+                         m_provider_labels);
+}
+
+QVariantList AppController::providerModels(const QString &apiBase) const {
+    return m_provider_models.value(apiBase).toList();
+}
+
+void AppController::setProviderModelsStore(const QString &apiBase,
+                                           const QVariantList &models) {
+    if (apiBase.isEmpty())
+        return;
+    QStringList unique;
+    for (const QVariant &entry : models) {
+        const QString value = entry.toString().trimmed();
+        if (!value.isEmpty() && !unique.contains(value))
+            unique.append(value);
+        if (unique.size() >= 100)
+            break;
+    }
+    QVariantList stored;
+    for (const QString &value : unique)
+        stored.append(value);
+    m_provider_models.insert(apiBase, stored);
+    QSettings().setValue(QStringLiteral("model/providerModels"),
+                         m_provider_models);
+}
+
+void AppController::refreshProviders() {
+    const QVariantMap info = m_bridge.providersInfo();
+    if (info.isEmpty())
+        return;
+    QVariantList providers = info.value(QStringLiteral("providers")).toList();
+    QVariantList chatModels;
+    for (QVariant &entry : providers) {
+        QVariantMap provider = entry.toMap();
+        const QString base = provider.value(QStringLiteral("api_base")).toString();
+        const QString current =
+            provider.value(QStringLiteral("model")).toString().trimmed();
+        const QString custom = providerLabel(base);
+        if (provider.value(QStringLiteral("active")).toBool()
+            && !custom.isEmpty()) {
+            provider.insert(QStringLiteral("name"), custom);
+        }
+        QVariantList models = providerModels(base);
+        QStringList ids;
+        for (const QVariant &value : models) {
+            const QString id = value.toString().trimmed();
+            if (!id.isEmpty() && !ids.contains(id))
+                ids.append(id);
+        }
+        if (!current.isEmpty() && !ids.contains(current))
+            ids.prepend(current);
+        QVariantList visibleModels;
+        for (const QString &id : ids) {
+            visibleModels.append(id);
+            QVariantMap item;
+            item.insert(QStringLiteral("model"), id);
+            item.insert(QStringLiteral("provider"),
+                        provider.value(QStringLiteral("name")));
+            item.insert(QStringLiteral("apiBase"), base);
+            item.insert(QStringLiteral("protocol"),
+                        provider.value(QStringLiteral("protocol")));
+            item.insert(QStringLiteral("active"),
+                        provider.value(QStringLiteral("active")).toBool()
+                            && id == current);
+            item.insert(QStringLiteral("hasKey"),
+                        provider.value(QStringLiteral("has_key")));
+            chatModels.append(item);
+        }
+        provider.insert(QStringLiteral("models"), visibleModels);
+        entry = provider;
+    }
+    const bool providers_differ = providers != m_providers;
+    const bool models_differ = chatModels != m_chat_models;
+    m_providers = providers;
+    m_chat_models = chatModels;
+    if (providers_differ)
+        emit providersChanged();
+    if (models_differ)
+        emit chatModelsChanged();
+}
+
+void AppController::setProviderModels(const QString &apiBase,
+                                      const QVariantList &models) {
+    setProviderModelsStore(apiBase, models);
+    refreshProviders();
+}
+
+QVariantMap AppController::activateModel(const QString &apiBase,
+                                         const QString &providerName,
+                                         const QString &model) {
+    if (model.trimmed().isEmpty())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("模型名不能为空")}};
+    QString protocol;
+    for (const QVariant &entry : m_providers) {
+        const QVariantMap provider = entry.toMap();
+        if (provider.value(QStringLiteral("api_base")).toString() == apiBase) {
+            protocol = provider.value(QStringLiteral("protocol")).toString();
+            break;
+        }
+    }
+    if (protocol.isEmpty())
+        protocol = QStringLiteral("openai");
+    const QVariantMap result = saveProvider(providerName, apiBase, QString(),
+                                            model.trimmed(), protocol, true);
+    if (result.value(QStringLiteral("ok"), false).toBool()) {
+        refreshProviders();
+        emit toastRequested(QStringLiteral("已切换到 %1").arg(model.trimmed()));
+    }
+    return result;
+}
+
+QVariantMap AppController::saveProvider(const QString &name,
+                                        const QString &apiBase,
+                                        const QString &apiKey,
+                                        const QString &model,
+                                        const QString &protocol,
+                                        bool activate) {
+    if (!requireIdle(QStringLiteral("切换供应商")))
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("session is generating")}};
+    QString currentName;
+    for (const QVariant &entry : m_providers) {
+        const QVariantMap provider = entry.toMap();
+        if (provider.value(QStringLiteral("active")).toBool()) {
+            currentName = provider.value(QStringLiteral("name")).toString();
+            break;
+        }
+    }
+    const QVariantMap result =
+        m_bridge.saveProvider(name, apiBase, apiKey, model, protocol, activate,
+                              currentName);
+    if (result.value(QStringLiteral("ok"), false).toBool()) {
+        setProviderLabel(apiBase, name);
+        refreshProviders();
+        refreshSessionApprovals();
+    } else {
+        const QString error = result.value(QStringLiteral("error")).toString();
+        if (!error.isEmpty())
+            emit toastRequested(error);
+    }
+    return result;
+}
+
+void AppController::deleteProvider(const QString &name) {
+    const QVariantMap result = m_bridge.deleteProvider(name);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        emit toastRequested(result.value(QStringLiteral("error")).toString());
+        return;
+    }
+    refreshProviders();
+    emit toastRequested(QStringLiteral("供应商已删除"));
+}
+
+void AppController::fetchModels(const QString &apiBase,
+                                const QString &apiKey,
+                                const QString &protocol) {
+    if (m_model_fetch_busy)
+        return;
+    const QVariantMap result = m_bridge.startModelFetch(apiBase, apiKey, protocol);
+    if (!result.value(QStringLiteral("ok"), false).toBool()) {
+        m_model_fetch_result = result;
+        emit modelFetchResultChanged();
+        emit modelFetchFinished(result);
+        return;
+    }
+    m_model_fetch_busy = true;
+    m_model_fetch_result = {{QStringLiteral("base"), apiBase},
+                            {QStringLiteral("protocol"), protocol}};
+    emit modelFetchBusyChanged();
+    emit modelFetchResultChanged();
 }
 
 void AppController::resolveApproval(int decision) {
@@ -681,6 +873,14 @@ void AppController::onSettingsJobFinished(const QVariantMap &result) {
         m_skill_install_result = adjusted;
         emit skillInstallResultChanged();
         emit skillInstallFinished(m_skill_install_result);
+    } else if (job == QStringLiteral("model_fetch")) {
+        m_model_fetch_busy = false;
+        emit modelFetchBusyChanged();
+        m_model_fetch_result = result;
+        emit modelFetchResultChanged();
+        emit modelFetchFinished(result);
+        if (!ok)
+            emit toastRequested(result.value(QStringLiteral("error")).toString());
     } else if (job == QStringLiteral("mcp_apply")
                || job == QStringLiteral("mcp_reload")) {
         m_mcp_busy = false;
