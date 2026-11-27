@@ -515,6 +515,12 @@ impl ChatService {
         }));
 
         llm.set_approval_memory(approval_memory);
+        // aish-llm caps a turn at 20 tool-call rounds and the CLI asks the
+        // user whether to continue through an iteration-limit callback. The
+        // desktop frontend has an explicit stop button but no CLI prompt, so
+        // hard-failing at round 20 is surprising. Continue the loop and let
+        // the user cancel; this is not a request/permission limit.
+        llm.set_iteration_limit_callback(Arc::new(|_| true));
 
         // Match the CLI: tool calls and security decisions are written to the
         // shared audit table, with secrets redacted before they reach SQLite.

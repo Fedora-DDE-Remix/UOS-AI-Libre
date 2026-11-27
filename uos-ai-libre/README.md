@@ -68,6 +68,9 @@ Rules that keep the UI maintainable:
   the list. The provider dialog caches the last fetched catalogue per endpoint,
   so editing a provider shows every model from that fetch with the enabled
   ones checked; long catalogues scroll inside the dialog.
+- aish-llm's upstream 20-round tool-call guard is not treated as a request
+  limit in this frontend: the GUI continues the loop and relies on the explicit
+  stop button, so long tool tasks do not fail with an iteration-limit error.
 - Assistant turns render reasoning, text segments and tool groups in event
   order: a text segment streamed before a tool call stays above that tool group,
   and later text appears below it. Completed segments are immutable timeline
