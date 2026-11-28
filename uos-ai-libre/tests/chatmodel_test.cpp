@@ -223,13 +223,21 @@ int main(int argc, char *argv[]) {
     sequential.finishAssistant();
     const QVariantList sequentialTimeline =
         sequential.data(sequential.index(0), ChatModel::TimelineRole).toList();
-    if (sequentialTimeline.size() != 2)
-        return fail("sequential tools should keep separate steps");
-    for (const QVariant &entry : sequentialTimeline) {
-        if (entry.toMap().value(QStringLiteral("kind")).toString()
-            != QStringLiteral("tools"))
-            return fail("sequential tool block kind");
-    }
+    if (sequentialTimeline.size() != 1)
+        return fail("consecutive tools from one response should form one group");
+    const QVariantMap sequentialBlock = sequentialTimeline.at(0).toMap();
+    if (sequentialBlock.value(QStringLiteral("kind")).toString()
+        != QStringLiteral("tools"))
+        return fail("sequential tool block kind");
+    const QVariantList sequentialTools =
+        sequentialBlock.value(QStringLiteral("tools")).toList();
+    if (sequentialTools.size() != 2)
+        return fail("sequential tool group should contain both calls");
+    if (sequentialTools.at(0).toMap().value(QStringLiteral("name")).toString()
+            != QStringLiteral("read_file")
+        || sequentialTools.at(1).toMap().value(QStringLiteral("name")).toString()
+            != QStringLiteral("read_file"))
+        return fail("sequential tool group order");
 
     std::cout << "chatmodel-test: ok\n";
     return 0;

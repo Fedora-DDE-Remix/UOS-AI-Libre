@@ -21,12 +21,19 @@ Item {
     onRunningChanged: {
         if (running)
             expanded = true
-        else
+        else if (tools.length <= 1)
             expanded = false
     }
 
+    onToolsChanged: {
+        // Keep a multi-call step open so every sequentially executed tool is
+        // visible, not just the first summary row.
+        if (tools.length > 1)
+            expanded = true
+    }
+
     Component.onCompleted: {
-        if (running)
+        if (running || tools.length > 1)
             expanded = true
     }
 

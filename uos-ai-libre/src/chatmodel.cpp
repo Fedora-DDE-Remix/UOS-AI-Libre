@@ -185,15 +185,13 @@ void ChatModel::appendToolBlock(Message &message, int toolIndex) {
         TimelineBlock &last = message.timeline.last();
         if (last.kind == QStringLiteral("tools")
             && last.toolStart + last.toolCount == toolIndex) {
-            // Merge calls that were issued together and are still running.
-            // A completed call followed by a new one is a new step and gets
-            // its own card, which keeps the transcript chronological.
-            const int previous = toolIndex - 1;
-            if (previous >= 0 && previous < message.tools.size()
-                && message.tools.at(previous).status == QStringLiteral("running")) {
-                ++last.toolCount;
-                return;
-            }
+            // A single LLM response may contain several tool calls. aish
+            // executes them sequentially, but they still belong to one
+            // assistant step; keep consecutive calls in one expandable group.
+            // Text or reasoning between calls still starts a new block via
+            // flushActiveText/beginReasoning, so distinct steps stay separate.
+            ++last.toolCount;
+            return;
         }
     }
     TimelineBlock block;
