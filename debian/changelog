@@ -1,3 +1,13 @@
+uos-ai-libre (1.0.1) unstable; urgency=medium
+
+  * Keep the Treeland FollowAlong surface at a fixed footprint while the icon
+    expands and the more menu opens; reapply the visible-area input mask after
+    every show so transparent pixels never steal clicks.
+  * Keep the 200 ms chevron rotation visible now that the compositor no longer
+    re-places the surface mid-animation.
+
+ -- UOS AI Libre <noreply@example.invalid>  Sat, 28 Nov 2026 21:40:00 +0800
+
 uos-ai-libre (1.0.0) unstable; urgency=medium
 
   * Initial release.
