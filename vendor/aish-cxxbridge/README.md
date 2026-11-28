@@ -18,7 +18,7 @@ aish-cxxbridge/
 └── generated/            # generated at build time (gitignored)
 ```
 
-The Rust side depends on `../vendor/aish/crates/aish-chat`.
+The Rust side depends on `../aish/crates/aish-chat`.
 
 ## Build
 

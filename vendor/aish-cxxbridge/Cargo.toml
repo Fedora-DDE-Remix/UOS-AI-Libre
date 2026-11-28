@@ -10,7 +10,7 @@ name = "aish_cxxbridge"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-aish-chat = { path = "../vendor/aish/crates/aish-chat" }
+aish-chat = { path = "../aish/crates/aish-chat" }
 cxx = "1"
 serde_json = "1"
 

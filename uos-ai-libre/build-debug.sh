@@ -5,7 +5,7 @@ set -euo pipefail
 # Reuses build-debug/ and Cargo's target/debug cache; safe to run repeatedly.
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-bridge_root="${AISH_CXXBRIDGE_ROOT:-$here/../aish-cxxbridge}"
+bridge_root="${AISH_CXXBRIDGE_ROOT:-$here/../vendor/aish-cxxbridge}"
 build_dir="$here/build-debug"
 jobs="${JOBS:-$(nproc)}"
 

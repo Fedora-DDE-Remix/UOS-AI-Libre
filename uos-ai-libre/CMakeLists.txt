@@ -59,7 +59,7 @@ if(WAYLAND_CLIENT_FOUND AND WAYLAND_PROTOCOLS_FOUND
 endif()
 
 set(AISH_CXXBRIDGE_ROOT
-    "${CMAKE_CURRENT_SOURCE_DIR}/../aish-cxxbridge"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/aish-cxxbridge"
     CACHE PATH "Directory containing the aish-cxxbridge build")
 set(AISH_CXXBRIDGE_LIB
     "${AISH_CXXBRIDGE_ROOT}/target/release/libaish_cxxbridge.a"
@@ -71,12 +71,12 @@ set(AISH_CXXBRIDGE_INCLUDE
 if(NOT EXISTS "${AISH_CXXBRIDGE_LIB}")
     message(FATAL_ERROR
         "Missing aish-cxxbridge static library:\n  ${AISH_CXXBRIDGE_LIB}\n"
-        "Run ../aish-cxxbridge/build.sh first.")
+        "Run ../vendor/aish-cxxbridge/build.sh first.")
 endif()
 if(NOT EXISTS "${AISH_CXXBRIDGE_INCLUDE}/aish-cxxbridge.h")
     message(FATAL_ERROR
         "Missing generated cxx header:\n  ${AISH_CXXBRIDGE_INCLUDE}/aish-cxxbridge.h\n"
-        "Run ../aish-cxxbridge/build.sh first.")
+        "Run ../vendor/aish-cxxbridge/build.sh first.")
 endif()
 
 add_library(aish_cxxbridge STATIC IMPORTED GLOBAL)

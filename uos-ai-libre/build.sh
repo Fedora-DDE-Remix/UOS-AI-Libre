@@ -2,7 +2,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-bridge_root="${AISH_CXXBRIDGE_ROOT:-$here/../aish-cxxbridge}"
+bridge_root="${AISH_CXXBRIDGE_ROOT:-$here/../vendor/aish-cxxbridge}"
 
 resolve_cxxbridge() {
     if [[ -n "${CXXBRIDGE:-}" ]]; then

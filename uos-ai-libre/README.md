@@ -24,7 +24,7 @@ AppController (Qt application service)     src/appcontroller.cpp
 AishBridge (JSON/cxx boundary)             src/aishbridge.cpp
         │
         ▼
-aish-cxxbridge → aish-chat → aish crates  ../../aish-cxxbridge, ../../vendor/aish
+aish-cxxbridge → aish-chat → aish crates  ../../vendor/aish-cxxbridge, ../../vendor/aish
 ```
 
 The backend is deliberately **aish's frontend, not a second agent**. It
@@ -198,10 +198,10 @@ requirement.
 
 ## Build
 
-The frontend links the release static library produced by `aish-cxxbridge`.
+The frontend links the release static library produced by `vendor/aish-cxxbridge`.
 
 ```bash
-cd ../aish-cxxbridge
+cd ../vendor/aish-cxxbridge
 CXXBRIDGE=/path/to/cxxbridge ./build.sh
 
 cd ../uos-ai-libre

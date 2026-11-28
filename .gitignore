@@ -1,9 +1,15 @@
 target/
 vendor/aish/target/
-aish-cxxbridge/target/
-aish-cxxbridge/generated/
+vendor/aish-cxxbridge/target/
 build/
+debian/build/
 build-debug/
 *.o
 *.a
 *.so
+debian/tmp/
+debian/uos-ai-libre/
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars

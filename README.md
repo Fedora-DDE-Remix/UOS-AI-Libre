@@ -14,7 +14,7 @@ sessions, tools, MCP/skills and security policy.
   OpenGL, Vulkan and software RHI backends.
 - `vendor/aish/` — vendored `LFRon/aish-enhanced` source, including the new
   headless `aish-chat` crate and session-management additions.
-- `aish-cxxbridge/` — Rust `cxx` bridge exposing `ChatService` to C++/Qt.
+- `vendor/aish-cxxbridge/` — Rust `cxx` bridge exposing `ChatService` to C++/Qt.
 - `AI后端测试/` — AI-backend smoke tests and real-provider checks. This
   directory is intentionally outside the repository; it is not committed.
 
@@ -44,7 +44,7 @@ MCP, skills or security policy. QML pages never touch the Rust/cxx layer.
 ## Build and run
 
 ```bash
-cd aish-cxxbridge
+cd vendor/aish-cxxbridge
 ./build.sh
 
 cd ../uos-ai-libre
