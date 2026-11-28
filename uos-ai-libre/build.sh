@@ -31,7 +31,9 @@ CXXBRIDGE="$cxxbridge" PROFILE=release "$bridge_root/build.sh"
 
 cmake -S "$here" -B "$here/build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DAISH_CXXBRIDGE_ROOT="$bridge_root"
+    -DAISH_CXXBRIDGE_ROOT="$bridge_root" \
+    -DAISH_CXXBRIDGE_LIB="$bridge_root/target/release/libaish_cxxbridge.a" \
+    -DAISH_CXXBRIDGE_INCLUDE="$bridge_root/generated"
 cmake --build "$here/build" -j"$(nproc)"
 
 # qt_add_qml_module must have produced the build-time QML cache loader. If it
