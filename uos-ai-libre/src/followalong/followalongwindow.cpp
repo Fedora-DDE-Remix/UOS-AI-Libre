@@ -590,21 +590,24 @@ void FollowAlongWindowHost::onExpandedChanged()
     // applied before the new surface is mapped.
     m_rebuildPending = true;
     qInfo() << "FollowAlong: rebuilding Wayland overlay for expanded toolbar"
-            << "at" << m_anchor;
+            << "at" << m_anchor << "exact" << m_exactAnchor;
     const QString text = m_text;
     const QPoint anchor = m_anchor;
+    const bool exactAnchor = m_exactAnchor;
     const QVariantList actions = m_window->property("actions").toList();
     // Hide the still-icon-sized surface immediately; otherwise it would be
     // briefly visible with the expanded content clipped at the old top-left.
     hide();
-    QTimer::singleShot(0, this, [this, text, anchor, actions]() {
+    QTimer::singleShot(0, this, [this, text, anchor, exactAnchor, actions]() {
         m_rebuildPending = false;
         if (!m_window)
             return;
         destroyWindow();
-        // The anchor was resolved by the existing window; (0,0) is a valid
-        // corner and must not be re-interpreted as "unknown".
-        m_forceExplicitAnchor = true;
+        // Only force the stored anchor when the existing window actually had
+        // an exact global position. In the auto-placement fallback the stored
+        // anchor is only (0,0); forcing it would move the expanded pill to the
+        // top-left corner instead of the cursor.
+        m_forceExplicitAnchor = exactAnchor;
         show(text, anchor, actions, true);
     });
 }
