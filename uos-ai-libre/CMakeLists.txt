@@ -187,6 +187,7 @@ qt_add_resources(uos-ai-libre "app_assets"
 qt_add_qml_module(uos-ai-libre
     URI UosAiLibre
     VERSION 1.0
+    RESOURCE_PREFIX "/qt/qml"
     QML_FILES ${QML_SOURCES}
 )
 
