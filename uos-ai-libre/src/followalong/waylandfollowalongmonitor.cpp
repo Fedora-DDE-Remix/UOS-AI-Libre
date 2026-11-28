@@ -3,6 +3,7 @@
 
 #include "waylandfollowalongmonitor.h"
 
+#include <QDateTime>
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QWaylandClientExtension>
@@ -300,6 +301,7 @@ void WaylandFollowAlongMonitor::stop()
     m_mouseActive = false;
     m_mouseGesture = false;
     m_pendingText.clear();
+    m_pendingAtMs = 0;
 }
 
 void WaylandFollowAlongMonitor::resetSelectionState()
@@ -308,6 +310,7 @@ void WaylandFollowAlongMonitor::resetSelectionState()
     // asynchronous, and clearing m_mouseGesture here can leave the next
     // release without a pending selection to emit.
     m_pendingText.clear();
+    m_pendingAtMs = 0;
 }
 
 void WaylandFollowAlongMonitor::createActiveNotifier()
@@ -332,19 +335,35 @@ void WaylandFollowAlongMonitor::createActiveNotifier()
     qInfo() << "FollowAlong: treeland_active_notify ready";
     connect(m_activeNotify.get(), &WaylandActiveNotify::mousePressed, this,
             [this]() {
+                qInfo() << "FollowAlong: Wayland press, pending"
+                        << m_pendingText.size() << "active" << m_mouseActive
+                        << "gesture" << m_mouseGesture;
                 m_mouseActive = true;
                 m_mouseGesture = false;
-                m_pendingText.clear();
+                // wlr-data-control and treeland-active-notify are separate
+                // asynchronous channels. A fast drag can deliver the PRIMARY
+                // selection just before the press notification; do not throw
+                // away that fresh text. Older text is a previous selection and
+                // must not re-show the toolbar on a plain click.
+                const qint64 now = QDateTime::currentMSecsSinceEpoch();
+                if (m_pendingText.isEmpty() || m_pendingAtMs == 0
+                    || now - m_pendingAtMs > 400) {
+                    m_pendingText.clear();
+                    m_pendingAtMs = 0;
+                }
                 Q_EMIT pointerPressed(QPoint());
             });
     connect(m_activeNotify.get(), &WaylandActiveNotify::mouseReleased, this,
             [this]() {
+                qInfo() << "FollowAlong: Wayland release, pending"
+                        << m_pendingText.size();
                 m_mouseActive = false;
                 m_mouseGesture = true;
                 if (!m_pendingText.trimmed().isEmpty()) {
                     Q_EMIT selectionChanged(m_pendingText, QPoint());
                     m_pendingText.clear();
                 }
+                m_pendingAtMs = 0;
             });
 }
 
@@ -371,6 +390,10 @@ void WaylandFollowAlongMonitor::createDevice()
             [this](const QString &text) {
                 m_active = true;
                 m_pendingText = text;
+                m_pendingAtMs = QDateTime::currentMSecsSinceEpoch();
+                qInfo() << "FollowAlong: Wayland selection state" << text.size()
+                        << "hasActivity" << m_hasMouseActivity << "active"
+                        << m_mouseActive << "gesture" << m_mouseGesture;
                 // With the private activity notifier, wait for the left
                 // button release. Without it, selection notification is the
                 // only available trigger.
@@ -378,12 +401,14 @@ void WaylandFollowAlongMonitor::createDevice()
                     || (!m_mouseActive && m_mouseGesture)) {
                     Q_EMIT selectionChanged(m_pendingText, QPoint());
                     m_pendingText.clear();
+                    m_pendingAtMs = 0;
                 }
             });
     connect(m_device.get(), &WaylandDataControlDevice::selectionCleared, this,
             [this]() {
                 m_active = false;
                 m_pendingText.clear();
+                m_pendingAtMs = 0;
                 Q_EMIT selectionCleared();
             });
 }

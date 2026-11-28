@@ -65,6 +65,7 @@ private:
     QRect availableRect() const;
     QScreen *screenForAnchor() const;
     void updateWaylandPosition();
+    void releaseSwapchain();
     void destroyWindow();
 
     QQmlEngine *m_engine = nullptr;
@@ -79,6 +80,7 @@ private:
     bool m_showing = false;
     bool m_rebuildPending = false;
     bool m_forceExplicitAnchor = false;
+    bool m_swapchainReleased = false;
     quint64 m_generation = 0;
     qint64 m_lastLocalPressMs = 0;
     quint64 m_localPressSerial = 0;

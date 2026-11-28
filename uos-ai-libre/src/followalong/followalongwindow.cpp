@@ -8,13 +8,16 @@
 #endif
 
 #include <QCursor>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QEvent>
 #include <QGuiApplication>
+#include <QPlatformSurfaceEvent>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickWindow>
 #include <QScreen>
+#include <QSGRendererInterface>
 #include <QTimer>
 #include <QWindow>
 
@@ -40,6 +43,27 @@ namespace {
 
 constexpr int kEdgeMargin = 6;
 constexpr int kToolbarGap = 12;
+
+// Qt 6.8's Wayland plugin destroys the platform Vulkan surface before Qt
+// Quick releases the QRhi swapchain. Hiding the FollowAlong QQuickWindow then
+// makes Mesa abort with "queue ... destroyed while proxies still attached"
+// and "Tried to add event to destroyed queue". Give Quick the destruction
+// notification while the native surface is still alive, exactly as the main
+// window does in windowhost.cpp.
+bool releaseVulkanSwapchain(QQuickWindow *window)
+{
+    if (!window || !window->handle())
+        return false;
+    const QSGRendererInterface *renderer = window->rendererInterface();
+    if (!renderer
+        || renderer->graphicsApi() != QSGRendererInterface::Vulkan) {
+        return false;
+    }
+    QPlatformSurfaceEvent event(
+        QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed);
+    QCoreApplication::sendEvent(window, &event);
+    return true;
+}
 
 bool isWaylandPlatform()
 {
@@ -106,6 +130,11 @@ FollowAlongWindowHost::FollowAlongWindowHost(QQmlEngine *engine,
                                              QObject *parent)
     : QObject(parent), m_engine(engine)
 {
+    // The main window uses the same workaround in WindowHost. FollowAlong can
+    // be visible when the process exits, so release its Vulkan swapchain
+    // before Qt starts destroying Wayland platform surfaces.
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
+            this, [this]() { releaseSwapchain(); });
 }
 
 FollowAlongWindowHost::~FollowAlongWindowHost() { destroyWindow(); }
@@ -318,6 +347,8 @@ void FollowAlongWindowHost::ensureWindow()
     connect(window, SIGNAL(dismissed()), this, SLOT(onDismissed()));
     connect(window, SIGNAL(expandedChanged()), this,
             SLOT(onExpandedChanged()));
+    connect(window, &QQuickWindow::closing, this,
+            [this](QQuickCloseEvent *) { releaseSwapchain(); });
     connect(window, &QObject::destroyed, this, [this, window]() {
         if (m_window == window) {
             m_window = nullptr;
@@ -351,6 +382,10 @@ void FollowAlongWindowHost::show(const QString &text, const QPoint &globalPos,
     if (!m_window)
         return;
 
+    // A previous hide released the Vulkan swapchain while the Wayland
+    // surface was still valid. Qt Quick will create a fresh swapchain when
+    // the window is shown and rendered again.
+    m_swapchainReleased = false;
     const bool isWayland = isWaylandPlatform();
     std::optional<QPoint> waylandPosition;
     if (isWayland) {
@@ -489,10 +524,20 @@ void FollowAlongWindowHost::setExpanded(bool expanded)
         m_window->setProperty("expanded", expanded);
 }
 
+void FollowAlongWindowHost::releaseSwapchain()
+{
+    if (m_swapchainReleased || !m_window)
+        return;
+    if (releaseVulkanSwapchain(m_window))
+        m_swapchainReleased = true;
+}
+
 void FollowAlongWindowHost::destroyWindow()
 {
     if (!m_window)
         return;
+    if (!m_swapchainReleased)
+        releaseSwapchain();
     QQuickWindow *window = m_window;
     m_window = nullptr;
     ++m_generation;
@@ -511,8 +556,11 @@ void FollowAlongWindowHost::hide()
     if (auto *overlay = qobject_cast<TreelandOverlay *>(m_overlay))
         overlay->setKeyboardFocus(false);
 #endif
-    if (m_window)
+    if (m_window) {
+        if (m_window->isVisible())
+            releaseSwapchain();
         m_window->hide();
+    }
 }
 
 void FollowAlongWindowHost::onActionTriggered(int type, bool custom)
@@ -548,7 +596,7 @@ void FollowAlongWindowHost::onExpandedChanged()
     const QVariantList actions = m_window->property("actions").toList();
     // Hide the still-icon-sized surface immediately; otherwise it would be
     // briefly visible with the expanded content clipped at the old top-left.
-    m_window->hide();
+    hide();
     QTimer::singleShot(0, this, [this, text, anchor, actions]() {
         m_rebuildPending = false;
         if (!m_window)

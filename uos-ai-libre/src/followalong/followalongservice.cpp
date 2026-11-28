@@ -138,6 +138,21 @@ void FollowAlongService::showPreview()
     } else if (preview == 4) {
         QTimer::singleShot(700, m_window.get(),
                            [this]() { m_window->openMoreMenu(); });
+    } else if (preview == 5) {
+        // Exercise hide() with the real RHI backend; this catches Vulkan
+        // swapchain teardown regressions without pointer injection.
+        QTimer::singleShot(800, m_window.get(),
+                           [this]() { m_window->hide(); });
+    } else if (preview == 6) {
+        // Hide, re-show and hide again: the swapchain released on hide must
+        // be recreated correctly when the toolbar is shown again.
+        QTimer::singleShot(800, m_window.get(),
+                           [this]() { m_window->hide(); });
+        QTimer::singleShot(1600, m_window.get(), [this]() {
+            m_window->show(m_pendingText, m_pendingPos, m_actions);
+        });
+        QTimer::singleShot(2400, m_window.get(),
+                           [this]() { m_window->hide(); });
     }
 }
 

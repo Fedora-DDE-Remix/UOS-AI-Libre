@@ -38,6 +38,7 @@ private:
     std::unique_ptr<WaylandActiveNotifyManager> m_activeManager;
     std::unique_ptr<WaylandActiveNotify> m_activeNotify;
     QString m_pendingText;
+    qint64 m_pendingAtMs = 0;
     bool m_mouseActive = false;
     bool m_mouseGesture = false;
     bool m_hasMouseActivity = false;
