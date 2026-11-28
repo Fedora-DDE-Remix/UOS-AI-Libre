@@ -96,6 +96,14 @@ Item {
         askInput.text = ""
     }
 
+    // Clicking the transparent area created by an inline menu dismisses the
+    // toolbar instead of silently swallowing the click.
+    MouseArea {
+        anchors.fill: parent
+        enabled: root.inlineMenu && root.inlineMenuOpen
+        onClicked: root.dismissed()
+    }
+
     Rectangle {
         id: pill
         anchors.left: parent.left
