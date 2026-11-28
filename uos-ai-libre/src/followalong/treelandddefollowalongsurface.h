@@ -49,7 +49,7 @@ private:
         const FollowAlongContent &content, bool updateOnly);
     void wireRenderedFrame();
     void postMappedIfNeeded(quint64 requestId);
-    void placeBelowCursor(bool force = false);
+    void updateInputMask();
     void setKeyboardFocus(bool accepted);
     void emitPresented(quint64 requestId);
 

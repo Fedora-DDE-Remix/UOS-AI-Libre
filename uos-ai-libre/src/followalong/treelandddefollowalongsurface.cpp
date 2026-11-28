@@ -92,19 +92,6 @@ public:
         return m_surface != nullptr;
     }
 
-    void placeBelowCursor(bool force)
-    {
-        m_yOffset = 12;
-        if (!m_surface)
-            return;
-        // The compositor only re-runs placeUnderCursor when the y offset
-        // changes. Toggle through a different value to force a fresh placement
-        // after the toolbar/menu changes size.
-        if (force)
-            m_surface->set_auto_placement(13);
-        m_surface->set_auto_placement(m_yOffset);
-    }
-
     void setKeyboardFocus(bool accepted)
     {
         m_acceptFocus = accepted;
@@ -206,12 +193,16 @@ PresentationCommandResult TreelandDdeFollowAlongSurface::showSurface(
     m_swapchainReleased = false;
     m_backendName = QStringLiteral("Treeland dde-shell overlay");
     applyContent(content);
+    // Keep the input region in sync before the new wl_surface is created.
+    // QWaylandWindow::reset() clears its mask on hide; initWindow() reapplies
+    // QWindow::mask(), so set the final state here rather than after the first
+    // frame.
+    updateInputMask();
 
     // QWaylandWindow::setVisible(true) destroys and recreates the wl_surface
     // on every show. Attach the dde-shell role from the QWaylandWindow
     // surfaceCreated signal, which is emitted before the xdg-toplevel is
     // created, then show the already-connected window.
-    const bool wasVisible = window->isVisible();
     window->create();
     m_placement->ensureAttached(window);
     setKeyboardFocus(content.expanded);
@@ -222,13 +213,12 @@ PresentationCommandResult TreelandDdeFollowAlongSurface::showSurface(
                 QStringLiteral("treeland_dde_shell_manager_v1 unavailable")};
     }
     m_overlayAttached = true;
-    // Place only when the surface was not already visible. Re-running auto
-    // placement from an icon click uses the *current* cursor (now over the
-    // icon/pill), which made the toolbar jump down-right on every expansion.
-    // Keep the original top-left for icon->expanded/menu transitions and let
-    // the compositor's size-change layout clamp the surface to the output.
-    if (!updateOnly || !wasVisible)
-        placeBelowCursor();
+    // The surface keeps one fixed size for icon -> toolbar -> menu, so
+    // Treeland never re-runs Output::placeUnderCursor from widthChanged /
+    // heightChanged. Auto placement is applied once when the compositor
+    // creates the dde-shell surface (on every show). Transparent pixels are
+    // excluded from the input region instead of resizing the surface.
+    updateInputMask();
     wireRenderedFrame();
 
     FollowAlongPresentationState accepted;
@@ -240,12 +230,6 @@ PresentationCommandResult TreelandDdeFollowAlongSurface::showSurface(
 
     emitPresented(requestId);
     return {true, requestId, QString()};
-}
-
-
-void TreelandDdeFollowAlongSurface::placeBelowCursor(bool force)
-{
-    m_placement->placeBelowCursor(force);
 }
 
 
@@ -308,6 +292,9 @@ void TreelandDdeFollowAlongSurface::wireRenderedFrame()
         return;
     m_frameWired = true;
     connect(m_window, &QQuickWindow::frameSwapped, this, [this]() {
+        // QWaylandWindow::reset() drops the input region on hide; re-apply it
+        // after every show and whenever the QML pill/menu geometry changes.
+        updateInputMask();
         postMappedIfNeeded(m_lastRequestId);
     });
 }
@@ -340,6 +327,43 @@ void TreelandDdeFollowAlongSurface::dismiss()
     state.focused = false;
     state.geometry = geometry();
     postPresentation(PresentationEventType::Dismissed, m_lastRequestId, state);
+}
+
+void TreelandDdeFollowAlongSurface::updateInputMask()
+{
+    if (!m_window)
+        return;
+
+    QRegion region;
+    const QVariantList rects =
+        m_window->property("inputMaskRects").toList();
+    for (const QVariant &value : rects) {
+        QRect rect = value.toRectF().toAlignedRect();
+        if (!rect.isValid())
+            continue;
+        // Before the first QML layout pass the content width can still be 0;
+        // keep the clickable region inside the window instead of applying a
+        // negative offset.
+        if (rect.left() < 0)
+            rect.moveLeft((m_window->width() - rect.width()) / 2);
+        if (rect.top() < 0)
+            rect.moveTop(0);
+        region += rect;
+    }
+
+    if (region.isEmpty()) {
+        // QML not laid out yet: never leave the whole reserved surface
+        // clickable. The collapsed icon is 24x24, the expanded pill is 40 px
+        // high and spans the window.
+        const int pillWidth = m_content.expanded ? m_window->width() : 24;
+        const int pillHeight = m_content.expanded ? 40 : 24;
+        region = QRect((m_window->width() - pillWidth) / 2, 0,
+                       pillWidth, pillHeight);
+    }
+
+    if (m_window->mask() == region)
+        return;
+    m_window->setMask(region);
 }
 
 void TreelandDdeFollowAlongSurface::openMoreMenu()

@@ -18,6 +18,7 @@ Window {
     property alias moreActions: content.moreActions
     property alias expanded: content.expanded
     readonly property bool menuOpen: content.menuOpen
+    readonly property var inputMaskRects: content.inputMaskRects
     property alias menuAbove: content.menuAbove
     property alias menuHeight: content.menuHeight
     property int maxContentWidth: 1920
@@ -29,8 +30,8 @@ Window {
     signal settingsRequested()
     signal moreMenuRequested()
 
-    width: content.implicitWidth
-    height: content.implicitHeight
+    width: content.surfaceWidth
+    height: content.surfaceHeight
     visible: false
     color: "transparent"
     // Keyboard focus is rejected by Treeland's dde-shell
@@ -57,6 +58,7 @@ Window {
         id: content
         anchors.fill: parent
         inlineMenu: true
+        reserveMenuSpace: true
         maxContentWidth: root.maxContentWidth
         onActionTriggered: function(type, custom) {
             root.actionTriggered(type, custom)

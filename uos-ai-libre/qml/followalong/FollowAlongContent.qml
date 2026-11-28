@@ -24,6 +24,11 @@ Item {
     property bool inlineMenu: false
     property bool inlineMenuOpen: false
     property bool menuAbove: false
+    // When true the hosting window keeps the full expanded/menu footprint for
+    // the whole presentation. Treeland re-runs cursor placement whenever the
+    // surface size changes; a stable size is therefore required to keep the
+    // toolbar anchored while the icon expands or the menu opens.
+    property bool reserveMenuSpace: false
     readonly property bool menuOpen: inlineMenu ? inlineMenuOpen : moreMenu.opened
 
     signal actionTriggered(int type, bool custom)
@@ -35,8 +40,41 @@ Item {
 
     readonly property int pillHeight: 40
     readonly property int menuGap: 6
-    readonly property int menuHeight: menuColumn.implicitHeight + 10
+    // The Repeater delegates are polished after component completion. Use the
+    // known row metrics as a floor so the reserved surface never grows later
+    // (a post-show width/height change makes Treeland re-place the surface).
+    readonly property int menuHeight: Math.max(
+        menuColumn.implicitHeight + 10,
+        moreActions.length * 32 + 1 + 32 + 10)
     readonly property var hostWindow: Window.window
+
+    readonly property int collapsedPillSize: 24
+    readonly property int expandedPillWidth: toolbarWidth()
+    readonly property int reservedHeight: pillHeight + menuGap + menuHeight
+    readonly property int surfaceWidth: reserveMenuSpace
+        ? Math.max(collapsedPillSize, expandedPillWidth) : implicitWidth
+    readonly property int surfaceHeight: reserveMenuSpace
+        ? reservedHeight : implicitHeight
+    readonly property int pillWidthValue: expanded
+        ? Math.max(collapsedPillSize, expandedPillWidth) : collapsedPillSize
+    readonly property int pillHeightValue: expanded ? pillHeight : collapsedPillSize
+    readonly property int layoutWidth: hostWindow && hostWindow.width > 0
+        ? hostWindow.width : width
+    readonly property int pillX: Math.round((layoutWidth - pillWidthValue) / 2)
+    readonly property int pillY: inlineMenu && inlineMenuOpen && menuAbove
+        ? height - pillHeightValue : 0
+    readonly property int menuWidth: 180
+    readonly property int menuX: Math.max(8, pillX + pillWidthValue - menuWidth - 8)
+    readonly property int menuY: menuAbove ? 0 : pillY + pillHeightValue + menuGap
+    // Only the visible pill/menu must receive input. The rest of a reserved
+    // surface is transparent and must not steal clicks from the source app.
+    readonly property var inputMaskRects: {
+        const rects = []
+        rects.push(Qt.rect(pillX, pillY, pillWidthValue, pillHeightValue))
+        if (inlineMenu && inlineMenuOpen)
+            rects.push(Qt.rect(menuX, menuY, menuWidth, menuHeight))
+        return rects
+    }
 
     implicitWidth: expanded ? toolbarWidth() : 24
     implicitHeight: !expanded ? 24
@@ -106,11 +144,10 @@ Item {
 
     Rectangle {
         id: pill
-        anchors.left: parent.left
-        anchors.right: parent.right
-        y: root.inlineMenu && root.inlineMenuOpen && root.menuAbove
-            ? root.height - root.pillHeight : 0
-        height: root.expanded ? root.pillHeight : 24
+        x: root.pillX
+        y: root.pillY
+        width: root.pillWidthValue
+        height: root.pillHeightValue
         radius: root.expanded ? 10 : 12
         color: Theme.card
         border.width: 1
@@ -141,7 +178,12 @@ Item {
 
         Row {
             id: contentRow
-            visible: root.expanded
+            // Keep the expanded row laid out in reserved-surface mode even
+            // while collapsed: toolbarWidth() must not change when the icon
+            // expands, otherwise the compositor re-places the whole surface.
+            visible: root.expanded || root.reserveMenuSpace
+            opacity: root.expanded ? 1 : 0
+            enabled: root.expanded
             anchors.centerIn: parent
             spacing: 2
 
@@ -303,9 +345,9 @@ Item {
     Rectangle {
         id: inlineMoreMenu
         visible: root.inlineMenu && root.inlineMenuOpen
-        width: 180
-        x: Math.max(8, root.width - width - 8)
-        y: root.menuAbove ? 0 : root.pillHeight + root.menuGap
+        width: root.menuWidth
+        x: root.menuX
+        y: root.menuY
         height: root.menuHeight
         color: Theme.menuBackground
         radius: 8
