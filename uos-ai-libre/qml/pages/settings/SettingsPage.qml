@@ -19,6 +19,7 @@ Rectangle {
         { label: "工具与子代理", icon: "tool" },
         { label: "技能", icon: "skill" },
         { label: "MCP 连接器", icon: "connector" },
+        { label: "AI 随航", icon: "edit" },
         { label: "记忆", icon: "knowledge" },
         { label: "审计日志", icon: "report" },
         { label: "使用协议", icon: "file" }
@@ -176,6 +177,8 @@ Rectangle {
             SkillsSettings {}
 
             McpSettings {}
+
+            FollowAlongSettings {}
 
             MemorySettings {}
 

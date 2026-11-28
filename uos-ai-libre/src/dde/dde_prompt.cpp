@@ -71,4 +71,54 @@ QString translationPrompt(const QString &text) {
         .arg(target, text);
 }
 
+QString followAlongPrompt(int type, const QString &text,
+                          const QString &customPrompt) {
+    if (!customPrompt.trimmed().isEmpty()) {
+        QString prompt = customPrompt;
+        prompt.replace(QStringLiteral("${SELECTION}"), text);
+        if (!prompt.contains(text))
+            prompt += QStringLiteral("\n\n---\n") + text;
+        return prompt;
+    }
+
+    switch (type) {
+    case 1:
+        return QStringLiteral(
+                   "请解释下面的选中文本。说明它的含义、背景和关键点，"
+                   "直接给出结果。\n\n---\n%1\n---")
+            .arg(text);
+    case 2:
+        return QStringLiteral(
+                   "请总结下面的选中文本，提炼关键信息和结论，"
+                   "直接给出摘要。\n\n---\n%1\n---")
+            .arg(text);
+    case 3:
+        return translationPrompt(text);
+    case 4:
+        return QStringLiteral(
+                   "请接着下面的选中文本继续写作，保持原有语气和风格，"
+                   "只输出续写内容。\n\n---\n%1\n---")
+            .arg(text);
+    case 5:
+        return QStringLiteral(
+                   "请扩写下面的选中文本，补充必要的细节和论证，"
+                   "保持原意，直接给出扩写结果。\n\n---\n%1\n---")
+            .arg(text);
+    case 6:
+        return QStringLiteral(
+                   "请检查并纠正下面选中文本中的错别字、语法和表达问题，"
+                   "只输出修改后的文本。\n\n---\n%1\n---")
+            .arg(text);
+    case 7:
+        return QStringLiteral(
+                   "请润色下面的选中文本，使表达更自然、专业、简洁，"
+                   "只输出润色后的文本。\n\n---\n%1\n---")
+            .arg(text);
+    default:
+        return QStringLiteral(
+                   "请处理下面的选中文本，直接给出结果。\n\n---\n%1\n---")
+            .arg(text);
+    }
+}
+
 } // namespace DdePrompt

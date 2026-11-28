@@ -372,6 +372,22 @@ bool AppController::translateSelection() {
     return sendExternalPrompt(DdePrompt::translationPrompt(text), {});
 }
 
+bool AppController::startFollowAlongAction(
+    int type, const QString &text, bool custom,
+    const QString &customPrompt) {
+    if (text.trimmed().isEmpty()) {
+        emit toastRequested(QStringLiteral("没有可处理的选中文本"));
+        return false;
+    }
+    const QString prompt = DdePrompt::followAlongPrompt(
+        type, text, custom ? customPrompt : QString());
+    if (prompt.trimmed().isEmpty()) {
+        emit toastRequested(QStringLiteral("随航功能不可用"));
+        return false;
+    }
+    return sendExternalPrompt(prompt, {});
+}
+
 void AppController::queueAttachments(const QVariantList &paths) {
     QVariantList next = m_pending_attachments;
     for (const QVariant &entry : paths) {

@@ -129,6 +129,9 @@ public:
                                          const QString &file,
                                          const QString &defaultPrompt);
     Q_INVOKABLE bool translateSelection();
+    Q_INVOKABLE bool startFollowAlongAction(
+        int type, const QString &text, bool custom = false,
+        const QString &customPrompt = QString());
     Q_INVOKABLE void queueAttachments(const QVariantList &paths);
     Q_INVOKABLE QVariantList takePendingAttachments();
     Q_INVOKABLE void stop();

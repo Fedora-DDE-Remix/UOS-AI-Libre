@@ -2,5 +2,7 @@ uos-ai-libre (1.0.0) unstable; urgency=medium
 
   * Initial release.
   * Provide drop-in replacements for uos-ai, uos-ai-rag and uos-ai-agent.
+  * Include AI FollowAlong on X11 and Treeland, plus the native dde-shell
+    dock applet org.deepin.ds.dock.aibar.
 
  -- UOS AI Libre <noreply@example.invalid>  Sat, 28 Nov 2026 00:00:00 +0800

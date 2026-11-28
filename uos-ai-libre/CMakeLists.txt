@@ -154,6 +154,14 @@ qt_add_executable(uos-ai-libre
     src/dde/dde_prompt.h
     src/dde/dde_service.cpp
     src/dde/dde_service.h
+    src/followalong/followalongmonitor.cpp
+    src/followalong/followalongmonitor.h
+    src/followalong/followalongservice.cpp
+    src/followalong/followalongservice.h
+    src/followalong/followalongwindow.cpp
+    src/followalong/followalongwindow.h
+    src/followalong/x11followalongmonitor.cpp
+    src/followalong/x11followalongmonitor.h
     src/iconprovider.cpp
     src/iconprovider.h
     src/markdownmodel.cpp
@@ -192,11 +200,38 @@ if(UOS_AI_LIBRE_TREELAND_CAPTURE)
         UOS_AI_LIBRE_HAVE_TREELAND_CAPTURE=1)
     target_link_libraries(uos-ai-libre PRIVATE
         Qt6::WaylandClient Qt6::WaylandClientPrivate)
+
+    # FollowAlong needs three Wayland clients:
+    #  - wlr-data-control: global primary-selection monitoring
+    #  - treeland-active-notify: global left-button press/release activity
+    #  - treeland-dde-shell: overlay role + compositor-side cursor placement
+    target_sources(uos-ai-libre PRIVATE
+        src/followalong/waylandfollowalongmonitor.cpp
+        src/followalong/waylandfollowalongmonitor.h
+        src/followalong/treelandoverlay.cpp
+        src/followalong/treelandoverlay.h
+    )
+    qt6_generate_wayland_protocol_client_sources(uos-ai-libre
+        FILES
+            "${CMAKE_CURRENT_SOURCE_DIR}/protocols/treeland-dde-shell-v1.xml"
+            "${CMAKE_CURRENT_SOURCE_DIR}/protocols/treeland-active-notify-unstable-v1.xml"
+            "${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-data-control-unstable-v1.xml")
+    target_include_directories(uos-ai-libre PRIVATE
+        "${CMAKE_CURRENT_BINARY_DIR}" ${WAYLAND_CLIENT_INCLUDE_DIRS})
+    target_compile_definitions(uos-ai-libre PRIVATE
+        UOS_AI_LIBRE_FOLLOWALONG_WAYLAND=1)
+    target_link_libraries(uos-ai-libre PRIVATE
+        Qt6::WaylandClientPrivate ${WAYLAND_CLIENT_LIBRARIES})
 endif()
 if(UOS_AI_LIBRE_X11_SHORTCUT)
     target_compile_definitions(uos-ai-libre PRIVATE
         UOS_AI_LIBRE_HAVE_X11_SHORTCUT=1)
     target_link_libraries(uos-ai-libre PRIVATE X11::X11)
+    if(X11_XTest_FOUND)
+        target_compile_definitions(uos-ai-libre PRIVATE
+            UOS_AI_LIBRE_HAVE_X11_RECORD=1)
+        target_link_libraries(uos-ai-libre PRIVATE ${X11_XTest_LIB})
+    endif()
 endif()
 
 qt_add_resources(uos-ai-libre "app_assets"

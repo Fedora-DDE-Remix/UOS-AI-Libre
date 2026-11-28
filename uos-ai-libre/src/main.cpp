@@ -1,6 +1,7 @@
 #include "appcontroller.h"
 #include "backend/shortcuts/shortcutservice.h"
 #include "dde/dde_service.h"
+#include "followalong/followalongservice.h"
 #include "quickaiwindow.h"
 #include "singleinstance.h"
 #include "waylanddrag.h"
@@ -117,6 +118,23 @@ int main(int argc, char *argv[]) {
     WindowHost window_host(&engine, &app);
     engine.rootContext()->setContextProperty(QStringLiteral("windowHost"),
                                              &window_host);
+
+    // AI FollowAlong: monitor the system selection, show the compact
+    // near-cursor toolbar, and route its actions through the same ChatModel.
+    FollowAlongService follow_along(&engine, &app);
+    engine.rootContext()->setContextProperty(QStringLiteral("followAlong"),
+                                             &follow_along);
+    QObject::connect(&follow_along, &FollowAlongService::showChatRequested,
+                     &window_host, &WindowHost::showChatPage);
+    QObject::connect(&follow_along, &FollowAlongService::settingsRequested,
+                     &window_host, [&window_host]() {
+                         window_host.showSettingsPage(5);
+                     });
+    follow_along.start();
+    if (qEnvironmentVariableIsSet("UOS_AI_LIBRE_FOLLOWALONG_PREVIEW")) {
+        QTimer::singleShot(800, &follow_along,
+                           &FollowAlongService::showPreview);
+    }
 
     // The tray lives outside the main window so it can reopen the UI after the
     // QML window (and its QQuickWindow) has been destroyed.
