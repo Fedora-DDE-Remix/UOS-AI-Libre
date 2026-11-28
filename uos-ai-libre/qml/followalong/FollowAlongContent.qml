@@ -210,16 +210,29 @@ Item {
                 color: moreHover.hovered ? Theme.hover : "transparent"
 
                 AppIcon {
+                    id: moreChevron
                     anchors.centerIn: parent
                     width: 14
                     height: 14
                     name: "chevron-down"
                     color: Theme.icon
-                    rotation: root.menuOpen ? 180 : 0
-                    Behavior on rotation {
+                    transformOrigin: Item.Center
+                    rotation: 0
+
+                    states: State {
+                        name: "menuOpen"
+                        when: root.menuOpen
+                        PropertyChanges {
+                            target: moreChevron
+                            rotation: 180
+                        }
+                    }
+                    transitions: Transition {
                         NumberAnimation {
-                            duration: 160
-                            easing.type: Easing.OutCubic
+                            target: moreChevron
+                            property: "rotation"
+                            duration: 200
+                            easing.type: Easing.InOutQuad
                         }
                     }
                 }

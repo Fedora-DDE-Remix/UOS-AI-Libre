@@ -8,7 +8,6 @@
 #include <memory>
 
 class TreelandDdePlacement;
-class QTimer;
 
 /// Treeland dde-shell overlay backend.
 ///
@@ -52,13 +51,10 @@ private:
     void postMappedIfNeeded(quint64 requestId);
     void placeBelowCursor(bool force = false);
     void setKeyboardFocus(bool accepted);
-    void schedulePlacement();
     void emitPresented(quint64 requestId);
 
     std::unique_ptr<TreelandDdePlacement> m_placement;
-    QTimer *m_placeTimer = nullptr;
     quint64 m_mappedRequestId = 0;
     bool m_overlayAttached = false;
     bool m_frameWired = false;
-    bool m_sizeWired = false;
 };

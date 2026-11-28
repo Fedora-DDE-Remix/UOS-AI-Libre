@@ -154,11 +154,6 @@ TreelandDdeFollowAlongSurface::TreelandDdeFollowAlongSurface(
         m_overlayAttached = false;
         qInfo() << "FollowAlong: dde-shell surface destroyed; will reattach";
     });
-    m_placeTimer = new QTimer(this);
-    m_placeTimer->setSingleShot(true);
-    m_placeTimer->setInterval(0);
-    connect(m_placeTimer, &QTimer::timeout, this,
-            [this]() { placeBelowCursor(true); });
 }
 
 TreelandDdeFollowAlongSurface::~TreelandDdeFollowAlongSurface() = default;
@@ -216,6 +211,7 @@ PresentationCommandResult TreelandDdeFollowAlongSurface::showSurface(
     // on every show. Attach the dde-shell role from the QWaylandWindow
     // surfaceCreated signal, which is emitted before the xdg-toplevel is
     // created, then show the already-connected window.
+    const bool wasVisible = window->isVisible();
     window->create();
     m_placement->ensureAttached(window);
     setKeyboardFocus(content.expanded);
@@ -226,15 +222,14 @@ PresentationCommandResult TreelandDdeFollowAlongSurface::showSurface(
                 QStringLiteral("treeland_dde_shell_manager_v1 unavailable")};
     }
     m_overlayAttached = true;
-    placeBelowCursor();
+    // Place only when the surface was not already visible. Re-running auto
+    // placement from an icon click uses the *current* cursor (now over the
+    // icon/pill), which made the toolbar jump down-right on every expansion.
+    // Keep the original top-left for icon->expanded/menu transitions and let
+    // the compositor's size-change layout clamp the surface to the output.
+    if (!updateOnly || !wasVisible)
+        placeBelowCursor();
     wireRenderedFrame();
-    if (!m_sizeWired) {
-        m_sizeWired = true;
-        connect(window, &QQuickWindow::widthChanged, this,
-                [this]() { schedulePlacement(); });
-        connect(window, &QQuickWindow::heightChanged, this,
-                [this]() { schedulePlacement(); });
-    }
 
     FollowAlongPresentationState accepted;
     accepted.accepted = true;
@@ -253,11 +248,6 @@ void TreelandDdeFollowAlongSurface::placeBelowCursor(bool force)
     m_placement->placeBelowCursor(force);
 }
 
-void TreelandDdeFollowAlongSurface::schedulePlacement()
-{
-    if (m_placeTimer && m_window && m_window->isVisible())
-        m_placeTimer->start();
-}
 
 void TreelandDdeFollowAlongSurface::setKeyboardFocus(bool accepted)
 {
