@@ -29,6 +29,8 @@ ApplicationWindow {
     onThemeModeChanged: applyTheme()
     onSystemDarkChanged: applyTheme()
     onActiveChanged: {
+        // FollowAlong's click-away dismissal only hides its own overlay.
+        // Losing focus must never close this main window.
         if (!active)
             sidebar.finishRename()
     }

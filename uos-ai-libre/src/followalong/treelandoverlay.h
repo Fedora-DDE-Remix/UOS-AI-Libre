@@ -4,6 +4,9 @@
 #pragma once
 
 #include <QObject>
+#include <QPoint>
+
+#include <optional>
 
 class QWindow;
 
@@ -24,6 +27,14 @@ public:
     /// Ask AI field). The toolbar otherwise stays click-through for focus.
     void setKeyboardFocus(bool accepted);
 
+    /// Place the overlay at an explicit global position. Must be set before
+    /// the surface is first mapped for the compositor to honour it.
+    void setPosition(const QPoint &position);
+
+    /// Fallback for platforms where no global pointer position is available:
+    /// let the compositor center the surface below the cursor.
+    void setAutoPlacement(int yOffset);
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -33,4 +44,6 @@ private:
 
     QWindow *m_window = nullptr;
     void *m_surface = nullptr;
+    std::optional<QPoint> m_position;
+    std::optional<int> m_autoPlacement;
 };

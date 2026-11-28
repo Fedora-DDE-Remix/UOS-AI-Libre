@@ -119,9 +119,26 @@ void FollowAlongService::showPreview()
 {
     m_pendingText = QStringLiteral("这是一段用于验证 AI 随航工具栏的选中文本。");
     m_pendingPos = QCursor::pos();
-    m_window->show(m_pendingText, m_pendingPos, m_actions);
-    if (qEnvironmentVariableIntValue("UOS_AI_LIBRE_FOLLOWALONG_PREVIEW") >= 2)
-        m_window->setExpanded(true);
+    const QString anchor =
+        qEnvironmentVariable("UOS_AI_LIBRE_FOLLOWALONG_PREVIEW_ANCHOR");
+    if (!anchor.isEmpty()) {
+        const QStringList parts = anchor.split(QLatin1Char(','));
+        if (parts.size() == 2)
+            m_pendingPos = QPoint(parts.at(0).trimmed().toInt(),
+                                  parts.at(1).trimmed().toInt());
+    }
+    const int preview =
+        qEnvironmentVariableIntValue("UOS_AI_LIBRE_FOLLOWALONG_PREVIEW");
+    const bool expanded = preview == 2 || preview == 4;
+    m_window->show(m_pendingText, m_pendingPos, m_actions, expanded);
+    if (preview == 3) {
+        // Exercise the same icon -> expanded transition as a real click.
+        QTimer::singleShot(500, m_window.get(),
+                           [this]() { m_window->setExpanded(true); });
+    } else if (preview == 4) {
+        QTimer::singleShot(700, m_window.get(),
+                           [this]() { m_window->openMoreMenu(); });
+    }
 }
 
 void FollowAlongService::activateToolbar()
@@ -132,6 +149,11 @@ void FollowAlongService::activateToolbar()
 bool FollowAlongService::cursorPositionAvailable() const
 {
     return m_window->cursorPositionAvailable();
+}
+
+int FollowAlongService::maxToolbarWidth() const
+{
+    return m_window->maxToolbarWidth();
 }
 
 void FollowAlongService::setToolbarSize(int width, int height)
@@ -201,8 +223,14 @@ void FollowAlongService::onGlobalPointerPressed(const QPoint &globalPos)
     if (m_window->property("menuOpen").toBool())
         return;
 
-    if (m_window->cursorPositionAvailable()) {
-        if (m_window->geometry().contains(globalPos))
+    QPoint pressPos = globalPos;
+    bool exactPosition = m_window->cursorPositionAvailable();
+    if (!exactPosition && m_window->hasGlobalCursorPosition()) {
+        pressPos = m_window->globalCursorPosition();
+        exactPosition = true;
+    }
+    if (exactPosition) {
+        if (m_window->geometry().contains(pressPos))
             return;
         qInfo() << "FollowAlong: outside click, hiding";
         m_window->hide();
@@ -211,14 +239,17 @@ void FollowAlongService::onGlobalPointerPressed(const QPoint &globalPos)
         return;
     }
 
-    // Treeland active-notify has no global position. Correlate the global
-    // press with a local press on the toolbar window: the local event may be
+    // Without a global cursor position, correlate the active-notify press
+    // with a local press on the toolbar window: the local event may be
     // delivered slightly before or after the global notification.
     const qint64 pressedAt = QDateTime::currentMSecsSinceEpoch();
     const quint64 serial = m_window->localPressSerial();
-    QTimer::singleShot(80, this, [this, pressedAt, serial]() {
+    const quint64 generation = m_window->generation();
+    QTimer::singleShot(80, this, [this, pressedAt, serial, generation]() {
         if (!m_window || !m_window->visible())
             return;
+        if (m_window->generation() != generation)
+            return; // the window was rebuilt for the icon -> pill transition
         if (m_window->property("menuOpen").toBool())
             return;
         // The local press may arrive before or after the global notification.

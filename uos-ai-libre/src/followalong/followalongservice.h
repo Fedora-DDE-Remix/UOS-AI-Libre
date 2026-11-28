@@ -41,6 +41,7 @@ public:
     Q_INVOKABLE void showPreview();
     Q_INVOKABLE void activateToolbar();
     Q_INVOKABLE bool cursorPositionAvailable() const;
+    Q_INVOKABLE int maxToolbarWidth() const;
     Q_INVOKABLE void setToolbarSize(int width, int height);
 
     void start();

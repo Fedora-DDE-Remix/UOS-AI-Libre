@@ -12,6 +12,13 @@ sessions, tools, MCP/skills and security policy.
   runtime alive; relaunching is single-instance and reopens a fresh window.
   Native Wayland/treeland is supported through standard `xdg-shell`, with
   OpenGL, Vulkan and software RHI backends.
+- AI FollowAlong: select text to show a 24 px AI icon; click it to open the
+  non-draggable action pill (search, explain, summarize, translate, continue,
+  expand, correct, polish, Ask AI). The pill is clamped to the screen on all
+  edges, click-away hides only the pill, and every action reuses the main
+  window with a new aish session. X11 uses PRIMARY + XRecord; Treeland uses
+  `wlr-data-control`, `treeland-active-notify` and the `treeland-dde-shell-v1`
+  overlay with an explicit XWayland pointer position when available.
 - `vendor/aish/` — vendored `LFRon/aish-enhanced` source, including the new
   headless `aish-chat` crate and session-management additions.
 - `vendor/aish-cxxbridge/` — Rust `cxx` bridge exposing `ChatService` to C++/Qt.

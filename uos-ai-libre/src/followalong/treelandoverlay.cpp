@@ -120,15 +120,22 @@ void TreelandOverlay::attachSurface()
     auto *surface = new TreelandShellSurface(shellSurface);
     surface->set_role(
         QtWayland::treeland_dde_shell_surface_v1::role_overlay);
-    // Let the compositor place the toolbar just below the cursor and keep it
-    // inside the output. This is the same placement UOS AI uses.
-    surface->set_auto_placement(1);
+    // Placement is a one-shot hint in Treeland. Apply the explicit position
+    // when we know the real cursor position (through XWayland); otherwise
+    // let the compositor center the surface below the cursor.
+    if (m_position.has_value())
+        surface->set_surface_position(m_position->x(), m_position->y());
+    else if (m_autoPlacement.has_value())
+        surface->set_auto_placement(*m_autoPlacement);
     surface->set_skip_switcher(1);
     surface->set_skip_dock_preview(1);
     surface->set_skip_muti_task_view(1);
     surface->set_accept_keyboard_focus(0);
     m_surface = surface;
-    qCInfo(logFollowAlongTreeland) << "overlay attached with auto placement";
+    if (m_position.has_value())
+        qCInfo(logFollowAlongTreeland) << "overlay attached at" << *m_position;
+    else
+        qCInfo(logFollowAlongTreeland) << "overlay attached with auto placement";
 }
 
 void TreelandOverlay::setKeyboardFocus(bool accepted)
@@ -137,4 +144,22 @@ void TreelandOverlay::setKeyboardFocus(bool accepted)
     if (!surface)
         return;
     surface->set_accept_keyboard_focus(accepted ? 1 : 0);
+}
+
+void TreelandOverlay::setPosition(const QPoint &position)
+{
+    if (m_position == position)
+        return;
+    m_position = position;
+    if (auto *surface = static_cast<TreelandShellSurface *>(m_surface))
+        surface->set_surface_position(position.x(), position.y());
+}
+
+void TreelandOverlay::setAutoPlacement(int yOffset)
+{
+    if (m_autoPlacement == yOffset)
+        return;
+    m_autoPlacement = yOffset;
+    if (auto *surface = static_cast<TreelandShellSurface *>(m_surface))
+        surface->set_auto_placement(static_cast<uint32_t>(yOffset));
 }

@@ -9,7 +9,7 @@ import UosAiLibre
 ///
 /// It starts as the 24 px AI logo. Clicking the logo opens the full pill
 /// with four primary skills, more menu, Ask AI input and close button. The
-/// pill is not draggable and closes when it loses keyboard focus.
+/// pill is not draggable and closes when the user clicks outside it.
 Window {
     id: root
     property bool expanded: false
@@ -24,15 +24,20 @@ Window {
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     title: qsTr("UOS AI FollowAlong")
 
+    function toolbarWidth() {
+        let value = Math.max(425, Math.min(760, contentRow.implicitWidth + 18))
+        const limit = followAlong.maxToolbarWidth()
+        if (limit > 0)
+            value = Math.min(value, limit)
+        return Math.max(24, value)
+    }
+
     function resizeToContent() {
         if (followAlong.cursorPositionAvailable()) {
             // On X11 the host sets position and size atomically so a window
             // manager cannot clip a resize at the old screen edge.
             if (expanded)
-                followAlong.setToolbarSize(
-                            Math.max(425, Math.min(760,
-                                                   contentRow.implicitWidth + 18)),
-                            40)
+                followAlong.setToolbarSize(toolbarWidth(), 40)
             else
                 followAlong.setToolbarSize(24, 24)
             return
@@ -43,13 +48,17 @@ Window {
             return
         }
         height = 40
-        width = Math.max(425, Math.min(760, contentRow.implicitWidth + 18))
+        width = toolbarWidth()
     }
 
     onExpandedChanged: {
         resizeToContent()
-        // Row layout and Repeater items can settle one event-loop turn later.
-        Qt.callLater(resizeToContent)
+        // X11 can resize and reposition atomically after the row settles.
+        // On Wayland the dde-shell placement hint is one-shot, so changing
+        // the width after the surface is mapped would move the right edge
+        // outside the clamped rectangle.
+        if (followAlong.cursorPositionAvailable())
+            Qt.callLater(resizeToContent)
     }
     onActionsChanged: if (expanded) Qt.callLater(resizeToContent)
     onVisibleChanged: {
@@ -64,6 +73,11 @@ Window {
     signal actionTriggered(int type, bool custom)
     signal dismissed()
 
+    function openMoreMenu() {
+        if (root.expanded)
+            moreMenu.open()
+    }
+
     function submitAsk() {
         const question = askInput.text.trim()
         if (question.length === 0)
@@ -75,9 +89,10 @@ Window {
         root.dismissed()
     }
 
-    // Dismissal is driven by global pointer events (with an X11 position or
-    // the Wayland local-press correlation). Do not use window activation as a
-    // proxy for "clicked elsewhere" on the Treeland overlay role.
+    // Dismissal is driven by global pointer events (with an X11/XWayland
+    // position or the Wayland local-press correlation). Do not use window
+    // activation as a proxy for "clicked elsewhere" on the Treeland overlay
+    // role, and never hide the separate UOS AI main window from here.
 
     Rectangle {
         id: pill
@@ -117,8 +132,8 @@ Window {
             anchors.centerIn: parent
             spacing: 2
             onImplicitWidthChanged: {
-                if (root.expanded && !followAlong.cursorPositionAvailable())
-                    root.width = Math.min(760, implicitWidth + 18)
+                if (root.expanded && followAlong.cursorPositionAvailable())
+                    root.width = root.toolbarWidth()
             }
 
             Image {
@@ -261,7 +276,16 @@ Window {
         popupType: Popup.Window
         width: 180
         x: Math.max(8, root.width - width - 8)
-        y: root.height + 4
+        y: {
+            const menuHeight = moreMenu.implicitHeight > 0
+                    ? moreMenu.implicitHeight : 200
+            if (followAlong.cursorPositionAvailable() && root.screen) {
+                const screenBottom = root.screen.virtualY + root.screen.height
+                if (root.y + root.height + 4 + menuHeight > screenBottom)
+                    return -menuHeight - 4
+            }
+            return root.height + 4
+        }
         palette.window: Theme.menuBackground
         palette.windowText: Theme.textPrimary
         palette.text: Theme.textPrimary

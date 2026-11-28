@@ -4,5 +4,11 @@ uos-ai-libre (1.0.0) unstable; urgency=medium
   * Provide drop-in replacements for uos-ai, uos-ai-rag and uos-ai-agent.
   * Include AI FollowAlong on X11 and Treeland, plus the native dde-shell
     dock applet org.deepin.ds.dock.aibar.
+  * Clamp the FollowAlong toolbar to the available screen on every edge and
+    recreate the Treeland overlay at the expanded size so dde-shell's one-shot
+    placement hint cannot push the pill off screen.
+  * Keep the UOS AI main window independent from FollowAlong click-away
+    dismissal; FollowAlong actions reuse the existing window and add a new
+    aish session instead of opening another window.
 
  -- UOS AI Libre <noreply@example.invalid>  Sat, 28 Nov 2026 00:00:00 +0800
