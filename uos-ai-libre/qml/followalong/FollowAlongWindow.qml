@@ -7,11 +7,14 @@ import UosAiLibre
 
 /// Compact UOS AI-style FollowAlong pill.
 ///
-/// It starts as the 24 px AI logo and expands on hover into the AI icon,
-/// up to four primary skills, more menu, Ask AI input and close button.
+/// It starts as the 24 px AI logo. Clicking the logo opens the full pill
+/// with four primary skills, more menu, Ask AI input and close button. The
+/// pill is not draggable and closes when it loses keyboard focus.
 Window {
     id: root
     property bool expanded: false
+    property bool menuOpen: moreMenu.opened
+    property bool inputActive: askInput.activeFocus
     property string selectedText: ""
     property var actions: []
 
@@ -53,11 +56,17 @@ Window {
     onVisibleChanged: {
         if (visible)
             return
-        collapseTimer.stop()
+        focusLossTimer.stop()
         if (moreMenu.opened)
             moreMenu.close()
         expanded = false
         askInput.text = ""
+    }
+    onActiveChanged: {
+        if (active)
+            focusLossTimer.stop()
+        else if (visible && expanded && !moreMenu.opened)
+            focusLossTimer.start()
     }
 
     signal actionTriggered(int type, bool custom)
@@ -74,36 +83,15 @@ Window {
         root.dismissed()
     }
 
-    HoverHandler {
-        id: hoverHandler
-        onHoveredChanged: {
-            if (hovered) {
-                collapseTimer.stop()
-                root.expanded = true
-            } else if (!moreMenu.opened) {
-                // Moving/resizing the window can produce a short leave/enter
-                // pair even though the cursor stays inside. Delay collapsing
-                // so the expansion does not flicker at screen edges.
-                collapseTimer.start()
-            }
-        }
-    }
-
+    // Clicking elsewhere removes keyboard focus. Hide rather than collapsing,
+    // which matches UOS AI's follow-along window.
     Timer {
-        id: collapseTimer
-        interval: 220
+        id: focusLossTimer
+        interval: 160
         onTriggered: {
-            if (moreMenu.opened || !root.expanded)
-                return
-            // X11 can query the real cursor position. A window resize or move
-            // may deliver a transient leave event while the cursor is still
-            // inside, so trust the global position there.
-            if (followAlong.cursorPositionAvailable()) {
-                if (!followAlong.cursorInsideToolbar())
-                    root.expanded = false
-            } else if (!hoverHandler.hovered) {
-                root.expanded = false
-            }
+            if (!root.active && root.visible && root.expanded
+                && !moreMenu.opened && !askInput.activeFocus)
+                root.dismissed()
         }
     }
 
@@ -130,7 +118,12 @@ Window {
         MouseArea {
             anchors.fill: parent
             enabled: !root.expanded
-            onClicked: root.expanded = true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                // The icon must be clicked explicitly; hover never expands.
+                followAlong.activateToolbar()
+                root.expanded = true
+            }
         }
 
         Row {
@@ -299,8 +292,8 @@ Window {
             border.color: Theme.menuBorder
         }
         onClosed: {
-            if (!hoverHandler.hovered)
-                collapseTimer.start()
+            if (!root.active && root.visible && root.expanded)
+                focusLossTimer.start()
         }
         Repeater {
             model: followAlong.moreActions

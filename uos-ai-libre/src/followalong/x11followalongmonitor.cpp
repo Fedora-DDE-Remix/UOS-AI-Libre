@@ -13,6 +13,16 @@
 #include <X11/Xlib.h>
 #include <X11/Xlibint.h>
 #include <X11/extensions/record.h>
+// Xlib's unprefixed macros collide with Qt's enum names in moc output.
+#undef None
+#undef Bool
+#undef Status
+#undef CursorShape
+#undef KeyPress
+#undef KeyRelease
+#undef FocusIn
+#undef FocusOut
+#undef Expose
 #endif
 
 #ifdef UOS_AI_LIBRE_HAVE_X11_RECORD
@@ -41,8 +51,8 @@ public:
 Q_SIGNALS:
     void available();
     void unavailable();
-    void pressed(const QPoint &pos);
-    void released(const QPoint &pos);
+    void pressed(const QPoint &pos, bool left);
+    void released(const QPoint &pos, bool left);
 
 protected:
     void run() override
@@ -86,14 +96,17 @@ private:
         auto *self = reinterpret_cast<X11RecordWorker *>(ptr);
         if (data->category == XRecordFromServer) {
             auto *event = reinterpret_cast<xEvent *>(data->data);
+            const bool left = event->u.u.detail == Button1;
             if (event->u.u.type == ButtonPress) {
                 Q_EMIT self->pressed(
                     QPoint(event->u.keyButtonPointer.rootX,
-                           event->u.keyButtonPointer.rootY));
+                           event->u.keyButtonPointer.rootY),
+                    left);
             } else if (event->u.u.type == ButtonRelease) {
                 Q_EMIT self->released(
                     QPoint(event->u.keyButtonPointer.rootX,
-                           event->u.keyButtonPointer.rootY));
+                           event->u.keyButtonPointer.rootY),
+                    left);
             }
         }
         XRecordFreeData(data);
@@ -167,8 +180,11 @@ void X11FollowAlongMonitor::useSelectionFallback()
     m_released = true;
 }
 
-void X11FollowAlongMonitor::onMousePressed(const QPoint &pos)
+void X11FollowAlongMonitor::onMousePressed(const QPoint &pos, bool left)
 {
+    Q_EMIT pointerPressed(pos);
+    if (!left)
+        return;
     m_pressed = true;
     m_released = false;
     m_moved = false;
@@ -176,8 +192,10 @@ void X11FollowAlongMonitor::onMousePressed(const QPoint &pos)
     m_pendingText.clear();
 }
 
-void X11FollowAlongMonitor::onMouseReleased(const QPoint &pos)
+void X11FollowAlongMonitor::onMouseReleased(const QPoint &pos, bool left)
 {
+    if (!left)
+        return;
     m_pressed = false;
     m_releasePos = pos;
     // A plain click over an existing PRIMARY selection (for example on the

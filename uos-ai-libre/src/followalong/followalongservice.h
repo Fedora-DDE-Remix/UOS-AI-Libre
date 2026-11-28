@@ -40,7 +40,6 @@ public:
     Q_INVOKABLE void openSettings();
     Q_INVOKABLE void showPreview();
     Q_INVOKABLE void activateToolbar();
-    Q_INVOKABLE bool cursorInsideToolbar() const;
     Q_INVOKABLE bool cursorPositionAvailable() const;
     Q_INVOKABLE void setToolbarSize(int width, int height);
 
@@ -54,6 +53,7 @@ Q_SIGNALS:
 private:
     void onSelectionChanged(const QString &text, const QPoint &globalPos);
     void onSelectionCleared();
+    void onGlobalPointerPressed(const QPoint &globalPos);
     void onActionTriggered(int type, bool custom, const QString &text);
     void showPending();
 
@@ -63,6 +63,8 @@ private:
     QVariantList m_actions;
     QVariantList m_moreActions;
     QTimer m_showTimer;
+    QTimer m_outsideHideTimer;
+    QTimer m_expandedHideTimer;
     QString m_pendingText;
     QPoint m_pendingPos;
     bool m_enabled = true;

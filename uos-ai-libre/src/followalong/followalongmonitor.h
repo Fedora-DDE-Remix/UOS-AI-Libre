@@ -32,5 +32,6 @@ public:
 Q_SIGNALS:
     void selectionChanged(const QString &text, const QPoint &globalPos);
     void selectionCleared();
+    void pointerPressed(const QPoint &globalPos);
     void monitorError(const QString &message);
 };

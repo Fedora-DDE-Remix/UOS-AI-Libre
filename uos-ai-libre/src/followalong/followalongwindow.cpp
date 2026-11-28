@@ -7,7 +7,6 @@
 #include "treelandoverlay.h"
 #endif
 
-#include <QCursor>
 #include <QGuiApplication>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -42,18 +41,16 @@ bool FollowAlongWindowHost::visible() const
     return m_window && m_window->isVisible();
 }
 
+bool FollowAlongWindowHost::active() const
+{
+    return m_window && m_window->isActive();
+}
+
 QRect FollowAlongWindowHost::geometry() const
 {
     if (!m_window)
         return {};
     return QRect(m_window->position(), m_window->size());
-}
-
-bool FollowAlongWindowHost::cursorInside() const
-{
-    if (!m_window)
-        return false;
-    return geometry().contains(QCursor::pos());
 }
 
 bool FollowAlongWindowHost::cursorPositionAvailable() const

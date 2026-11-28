@@ -334,6 +334,7 @@ void WaylandFollowAlongMonitor::createActiveNotifier()
                 m_mouseActive = true;
                 m_mouseGesture = false;
                 m_pendingText.clear();
+                Q_EMIT pointerPressed(QPoint());
             });
     connect(m_activeNotify.get(), &WaylandActiveNotify::mouseReleased, this,
             [this]() {

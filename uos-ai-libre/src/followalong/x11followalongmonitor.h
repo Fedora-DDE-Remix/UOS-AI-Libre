@@ -29,8 +29,8 @@ public:
 
 private:
     void onSelectionChanged();
-    void onMousePressed(const QPoint &pos);
-    void onMouseReleased(const QPoint &pos);
+    void onMousePressed(const QPoint &pos, bool left);
+    void onMouseReleased(const QPoint &pos, bool left);
     void readSelection();
     void useSelectionFallback();
 

@@ -28,8 +28,8 @@ public:
               const QVariantList &actions);
     void hide();
     bool visible() const;
+    bool active() const;
     QRect geometry() const;
-    bool cursorInside() const;
     bool cursorPositionAvailable() const;
     void setSize(const QSize &size);
     void setExpanded(bool expanded);
