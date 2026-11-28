@@ -11,8 +11,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QPixmap>
-#include <QScreen>
 #include <QStandardPaths>
 #include <QUrl>
 
@@ -76,7 +74,7 @@ AishBridge::AishBridge(QObject *parent)
     m_flush_timer.setTimerType(Qt::CoarseTimer);
     connect(&m_flush_timer, &QTimer::timeout, this, &AishBridge::flushPending);
 
-    cleanupOldScreenshots();
+    ScreenshotService::cleanup();
 }
 
 AishBridge::~AishBridge() {
@@ -1191,61 +1189,11 @@ QString AishBridge::imageUrl(const QString &path) const {
 }
 
 QString AishBridge::takeScreenshot() {
-    QScreen *screen = QGuiApplication::primaryScreen();
-    if (!screen) {
-        setLastError(QStringLiteral("无法访问屏幕"));
-        return {};
-    }
-    const QPixmap pixmap = screen->grabWindow(0);
-    if (pixmap.isNull()) {
-        setLastError(QStringLiteral("屏幕截图失败（当前桌面环境可能不允许截图）"));
-        return {};
-    }
-
-    const QString base =
-        QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-        QStringLiteral("/uos-ai-libre");
-    QDir directory(base);
-    if (!directory.exists() && !QDir().mkpath(base)) {
-        setLastError(QStringLiteral("无法创建截图临时目录"));
-        return {};
-    }
-    QFile::setPermissions(base, QFileDevice::ReadOwner |
-                                   QFileDevice::WriteOwner |
-                                   QFileDevice::ExeOwner);
-    const QString path =
-        base + QStringLiteral("/screenshot-%1.png")
-                   .arg(QDateTime::currentMSecsSinceEpoch());
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        setLastError(QStringLiteral("无法保存截图"));
-        return {};
-    }
-    file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-    if (!pixmap.save(&file, "PNG")) {
-        file.close();
-        QFile::remove(path);
-        setLastError(QStringLiteral("无法编码截图"));
-        return {};
-    }
-    file.close();
+    QString error;
+    const QString path = m_screenshots.capture(&error);
+    if (path.isEmpty())
+        setLastError(error.isEmpty() ? QStringLiteral("截图失败") : error);
     return path;
-}
-
-void AishBridge::cleanupOldScreenshots() {
-    const QString base =
-        QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-        QStringLiteral("/uos-ai-libre");
-    QDir directory(base);
-    if (!directory.exists())
-        return;
-    const QDateTime cutoff = QDateTime::currentDateTime().addDays(-1);
-    QFileInfoList files = directory.entryInfoList(
-        {QStringLiteral("screenshot-*.png")}, QDir::Files, QDir::Time);
-    for (int i = 0; i < files.size(); ++i) {
-        if (i >= 8 || files.at(i).lastModified() < cutoff)
-            QFile::remove(files.at(i).filePath());
-    }
 }
 
 void AishBridge::pollEvents() {

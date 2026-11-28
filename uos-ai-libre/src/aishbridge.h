@@ -8,6 +8,7 @@
 #include <QVariantMap>
 
 #include "aish-cxxbridge.h"
+#include "backend/screenshot/screenshotservice.h"
 
 /// Qt-facing wrapper around the panic-safe Rust `aish-cxxbridge`.
 ///
@@ -177,9 +178,9 @@ private:
     void setLastError(const QString &message);
     void applyConfig(const QJsonObject &config);
     void refreshConfig();
-    void cleanupOldScreenshots();
 
     rust::Box<BridgeService> *m_service = nullptr;
+    ScreenshotService m_screenshots;
     QTimer m_poll_timer;
     QTimer m_flush_timer;
     QString m_pending_content;

@@ -10,6 +10,20 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Svg Network DBus)
 qt_standard_project_setup()
 
+# Treeland's native screenshot protocol is an optional Wayland client
+# dependency. The client uses QtWaylandClient's shm buffer helper; X11 builds
+# simply keep QScreen::grabWindow().
+find_package(Qt6 QUIET COMPONENTS WaylandClient)
+set(UOS_AI_LIBRE_TREELAND_CAPTURE OFF)
+if(TARGET Qt6::WaylandClient AND TARGET Qt6::WaylandClientPrivate)
+    set(UOS_AI_LIBRE_TREELAND_CAPTURE ON)
+endif()
+find_package(X11 QUIET)
+set(UOS_AI_LIBRE_X11_SHORTCUT OFF)
+if(X11_FOUND AND TARGET X11::X11)
+    set(UOS_AI_LIBRE_X11_SHORTCUT ON)
+endif()
+
 # Layer-shell surfaces have no client-side move request. On Wayland we use the
 # relative-pointer protocol for drag deltas; it is optional so X11-only and
 # minimal build environments still compile.
@@ -93,6 +107,20 @@ qt_add_executable(uos-ai-libre
     src/aishbridge.h
     src/appcontroller.cpp
     src/appcontroller.h
+    src/backend/screenshot/screenshotbackend.h
+    src/backend/screenshot/screenshotservice.cpp
+    src/backend/screenshot/screenshotservice.h
+    src/backend/screenshot/treelandscreenshotbackend.cpp
+    src/backend/screenshot/treelandscreenshotbackend.h
+    src/backend/screenshot/x11screenshotbackend.cpp
+    src/backend/screenshot/x11screenshotbackend.h
+    src/backend/shortcuts/ddeshortcutbackend.cpp
+    src/backend/shortcuts/ddeshortcutbackend.h
+    src/backend/shortcuts/shortcutbackend.h
+    src/backend/shortcuts/shortcutservice.cpp
+    src/backend/shortcuts/shortcutservice.h
+    src/backend/shortcuts/x11shortcutbackend.cpp
+    src/backend/shortcuts/x11shortcutbackend.h
     src/chatmodel.cpp
     src/chatmodel.h
     src/dde/dde_adaptors.cpp
@@ -132,6 +160,20 @@ if(UOS_AI_LIBRE_WAYLAND_DRAG)
     target_compile_definitions(uos-ai-libre PRIVATE
         UOS_AI_LIBRE_HAVE_WAYLAND_DRAG=1)
     target_link_libraries(uos-ai-libre PRIVATE ${WAYLAND_CLIENT_LIBRARIES})
+endif()
+if(UOS_AI_LIBRE_TREELAND_CAPTURE)
+    qt6_generate_wayland_protocol_client_sources(uos-ai-libre
+        FILES
+            "${CMAKE_CURRENT_SOURCE_DIR}/protocols/treeland-capture-unstable-v1.xml")
+    target_compile_definitions(uos-ai-libre PRIVATE
+        UOS_AI_LIBRE_HAVE_TREELAND_CAPTURE=1)
+    target_link_libraries(uos-ai-libre PRIVATE
+        Qt6::WaylandClient Qt6::WaylandClientPrivate)
+endif()
+if(UOS_AI_LIBRE_X11_SHORTCUT)
+    target_compile_definitions(uos-ai-libre PRIVATE
+        UOS_AI_LIBRE_HAVE_X11_SHORTCUT=1)
+    target_link_libraries(uos-ai-libre PRIVATE X11::X11)
 endif()
 
 qt_add_resources(uos-ai-libre "app_assets"

@@ -1,4 +1,5 @@
 #include "appcontroller.h"
+#include "backend/shortcuts/shortcutservice.h"
 #include "dde/dde_service.h"
 #include "quickaiwindow.h"
 #include "singleinstance.h"
@@ -60,6 +61,21 @@ int main(int argc, char *argv[]) {
     SingleInstance instance;
     if (!instance.isPrimary())
         return 0;
+
+    // Keep the DDE/Treeland/X11 global shortcut policy in one service. The
+    // DDE backend is idempotent and replaces the installer's helper entry.
+    ShortcutService shortcuts;
+    QString shortcut_error;
+    QString shortcut_exec = QCoreApplication::applicationFilePath();
+    shortcut_exec.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+    const QString shortcut_command =
+        QLatin1Char('"') + shortcut_exec + QStringLiteral("\" --chat");
+    if (!shortcuts.registerShortcut(QStringLiteral("UOS AI Libre"),
+                                    QStringLiteral("Meta+Space"),
+                                    shortcut_command, &shortcut_error)) {
+        qWarning().noquote() << "global shortcut:" << shortcut_error
+                             << "backend:" << shortcuts.backendName();
+    }
 
     // Pick the scene-graph backend once, before any QQuickWindow exists.
     QString rhiDetail;

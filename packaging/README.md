@@ -29,11 +29,13 @@ prefers the user service directory, so screen recorder and Grand Search start
 UOS AI Libre on demand. D-Bus activation was verified by killing the running
 process and calling com.deepin.copilot.version again.
 
-The helper also takes over the DDE keybinding: it disables UOS AI's
-`org.deepin.dde.keybinding.shortcut.app.uos-ai` entry and registers a custom
-`UOS AI Libre` shortcut for `Super+Space` that runs
-`~/.local/bin/uos-ai-libre --chat`. `--restore` deletes that custom shortcut and
-restores UOS AI's original hotkey.
+The application itself now owns the shortcut policy through
+`ShortcutService`: on startup it disables UOS AI's
+`org.deepin.dde.keybinding.shortcut.app.uos-ai` entry when necessary and
+registers a custom `UOS AI Libre` shortcut for `Super+Space` that runs the
+current binary with `--chat`. The installer only saves UOS AI's original
+hotkey before activation; `--restore` deletes the custom shortcut and restores
+that saved hotkey.
 
 ## System-wide takeover (sudo)
 

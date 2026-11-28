@@ -150,36 +150,17 @@ delete_custom_shortcuts() {
     done
 }
 
-install_keybinding() {
-    local exec_path="$1"
+prepare_keybinding() {
     if ! keybinding_available; then
-        say "keybinding service unavailable; Super+Space was left unchanged"
+        say "keybinding service unavailable; the app will retry at startup"
         return 0
     fi
     if (( DRY_RUN )); then
-        say "would point Super+Space at: $exec_path --chat"
+        say "would back up UOS AI's <Super>space for --restore"
         return 0
     fi
-
     backup_uos_hotkeys
-    delete_custom_shortcuts
-    keybinding_call Disable "$UOS_AI_SHORTCUT" >/dev/null 2>&1 || true
-
-    local out id command
-    out="$(keybinding_call AddCustomShortcut "$CUSTOM_SHORTCUT_NAME" \
-        "$exec_path --chat" "<Super>space" 2>/dev/null || true)"
-    id="$(printf '%s' "$out" \
-        | grep -oE 'org\.deepin\.dde\.keybinding\.shortcut\.custom\.[0-9a-f-]+' \
-        | head -1 || true)"
-    if [[ -z "$id" ]]; then
-        restore_uos_hotkeys
-        say "warning: could not register Super+Space; UOS AI shortcut restored"
-        return 0
-    fi
-    run mkdir -p "$BACKUP_DIR"
-    printf '%s\n' "$id" > "$CUSTOM_ID_FILE"
-    command="$(keybinding_call GetShortcutCommand "$id" 2>/dev/null || true)"
-    say "Super+Space -> $command"
+    say "the app will register Super+Space through ShortcutService on startup"
 }
 
 restore_keybinding() {
@@ -368,7 +349,7 @@ run install -Dm644 "$REPO_DIR/uos-ai-libre/resources/images/logo.png" \
 
 write_service_files "$EXEC_PATH"
 write_autostart_files "$EXEC_PATH"
-install_keybinding "$EXEC_PATH"
+prepare_keybinding
 reload_bus
 
 if (( ! DRY_RUN )); then
