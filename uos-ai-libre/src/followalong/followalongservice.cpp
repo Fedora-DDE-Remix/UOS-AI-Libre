@@ -119,10 +119,16 @@ void FollowAlongService::ask(const QString &question)
         return;
     if (m_controller)
         m_controller->dismiss();
-    if (m_app && m_app->startFollowAlongAction(
+    // Show the main window even when the action cannot start (for example
+    // while another answer is generating or before the model is ready).
+    // Otherwise the error toast is emitted into a hidden window and the
+    // toolbar simply disappears without any visible feedback.
+    Q_EMIT showChatRequested();
+    if (m_app) {
+        const bool started = m_app->startFollowAlongAction(
             -1, text, true,
-            question + QStringLiteral("\n\n选中内容：${SELECTION}"))) {
-        Q_EMIT showChatRequested();
+            question + QStringLiteral("\n\n选中内容：${SELECTION}"));
+        qInfo() << "FollowAlong: ask started" << started;
     }
 }
 
@@ -134,10 +140,16 @@ void FollowAlongService::onAskRequested(const QString &question,
         return;
     if (m_controller)
         m_controller->dismiss();
-    if (m_app && m_app->startFollowAlongAction(
+    // Show the main window even when the action cannot start (for example
+    // while another answer is generating or before the model is ready).
+    // Otherwise the error toast is emitted into a hidden window and the
+    // toolbar simply disappears without any visible feedback.
+    Q_EMIT showChatRequested();
+    if (m_app) {
+        const bool started = m_app->startFollowAlongAction(
             -1, text, true,
-            question + QStringLiteral("\n\n选中内容：${SELECTION}"))) {
-        Q_EMIT showChatRequested();
+            question + QStringLiteral("\n\n选中内容：${SELECTION}"));
+        qInfo() << "FollowAlong: ask started" << started;
     }
 }
 
@@ -291,13 +303,21 @@ void FollowAlongService::onActionTriggered(int type, bool custom,
     if (type == 8) {
         // The aish backend in this build intentionally has no knowledge-base
         // ingestion API. Keep the action honest instead of pretending to add
-        // a file to a knowledge base.
+        // a file to a knowledge base, and show the window so the toast is
+        // actually visible.
+        Q_EMIT showChatRequested();
         if (m_app)
             m_app->showToast(QStringLiteral("当前版本不支持知识库导入"));
         return;
     }
 
-    if (m_app && m_app->startFollowAlongAction(type, text, custom)) {
-        Q_EMIT showChatRequested();
+    // Show the chat window before starting the request. If the request is
+    // rejected (busy, model unavailable, bridge not ready), the toast emitted
+    // by AppController must have a visible window to land in.
+    Q_EMIT showChatRequested();
+    if (m_app) {
+        const bool started =
+            m_app->startFollowAlongAction(type, text, custom);
+        qInfo() << "FollowAlong: action started" << started;
     }
 }

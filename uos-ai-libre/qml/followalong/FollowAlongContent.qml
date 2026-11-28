@@ -64,6 +64,17 @@ Item {
     readonly property int pillY: inlineMenu && inlineMenuOpen && menuAbove
         ? height - pillHeightValue : 0
     readonly property int menuWidth: 180
+    // The X11 popup is a real Menu. Direct children (MenuSeparator/MenuItem)
+    // are inserted before a Repeater's dynamically created delegates, which
+    // put "settings" above the action rows. Keep every X11 row in one model
+    // so declaration order and click order match the inline Treeland menu.
+    readonly property var x11MenuActions: {
+        const items = []
+        for (let i = 0; i < moreActions.length; ++i)
+            items.push(moreActions[i])
+        items.push({name: "随航设置", type: -1, custom: false})
+        return items
+    }
     readonly property int menuX: Math.max(8, pillX + pillWidthValue - menuWidth - 8)
     readonly property int menuY: menuAbove ? 0 : pillY + pillHeightValue + menuGap
     // Only the visible pill/menu must receive input. The rest of a reserved
@@ -231,6 +242,7 @@ Item {
 
                     MouseArea {
                         anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
                         onClicked: root.actionTriggered(modelData.type,
                                                         modelData.custom)
                     }
@@ -282,6 +294,7 @@ Item {
                 HoverHandler { id: moreHover }
                 MouseArea {
                     anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         if (root.menuOpen)
                             root.closeMoreMenu()
@@ -336,6 +349,7 @@ Item {
                 HoverHandler { id: closeHover }
                 MouseArea {
                     anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: root.dismissed()
                 }
             }
@@ -389,6 +403,7 @@ Item {
                     HoverHandler { id: itemHover }
                     MouseArea {
                         anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             const type = modelData.type
                             const custom = modelData.custom
@@ -424,6 +439,7 @@ Item {
                 HoverHandler { id: settingsHover }
                 MouseArea {
                     anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         root.closeMoreMenu()
                         followAlong.openSettings()
@@ -469,25 +485,21 @@ Item {
             border.color: Theme.menuBorder
         }
         Repeater {
-            model: root.moreActions
+            model: root.x11MenuActions
             MenuItem {
                 height: 32
                 text: modelData.name
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeSmall
-                onTriggered: root.actionTriggered(modelData.type,
-                                                  modelData.custom)
-            }
-        }
-        MenuSeparator {}
-        MenuItem {
-            height: 32
-            text: "随航设置"
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSizeSmall
-            onTriggered: {
-                followAlong.openSettings()
-                root.dismissed()
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+                onTriggered: {
+                    if (modelData.type === -1) {
+                        followAlong.openSettings()
+                        root.dismissed()
+                    } else {
+                        root.actionTriggered(modelData.type, modelData.custom)
+                    }
+                }
             }
         }
     }

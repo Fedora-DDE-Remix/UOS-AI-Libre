@@ -94,6 +94,18 @@ int main(int argc, char *argv[]) {
         || !documentPrompt.contains(QStringLiteral("总结")))
         return fail("document prompt");
 
+    const QString selection = QStringLiteral("followalong-selection");
+    for (int type = 1; type <= 7; ++type) {
+        const QString prompt = DdePrompt::followAlongPrompt(type, selection);
+        if (prompt.trimmed().isEmpty() || !prompt.contains(selection))
+            return fail("followalong prompt");
+    }
+    const QString customFollowAlong = DdePrompt::followAlongPrompt(
+        -1, selection, QStringLiteral("Q: ${SELECTION}"));
+    if (!customFollowAlong.contains(selection)
+        || !customFollowAlong.startsWith(QStringLiteral("Q:")))
+        return fail("custom followalong prompt");
+
     DdePayload::cleanupCache();
     std::cout << "dde-payload-test: ok\n";
     return 0;
