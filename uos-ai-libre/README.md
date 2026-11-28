@@ -297,15 +297,15 @@ finishes. `UOS_AI_LIBRE_THEME=light|dark` and
 ## Window lifecycle
 
 Closing the window destroys only the QML window. `AppController`, the Rust
-agent runtime, SQLite sessions and the tray shell stay alive; a streaming turn
+agent runtime, SQLite sessions and the QML shell stay alive; a streaming turn
 can finish in the background. Relaunching the app is single-instance: the new
 process sends `show` over a per-user local socket and exits, and the existing
 process creates a fresh window bound to the existing `ChatModel`.
 
-Use the tray's **退出 UOS AI Libre** entry or `Ctrl+Q` to stop the agent
-explicitly. Session-manager shutdown (`commitDataRequest` /
-`saveStateRequest`) marks the session as ending and forces a clean process exit,
-which is allowed during logout/shutdown.
+Use `Ctrl+Q` or the application menu to stop the agent explicitly. On non-DDE
+desktops the tray menu also has a **退出 UOS AI Libre** entry. Session-manager
+shutdown (`commitDataRequest` / `saveStateRequest`) marks the session as ending
+and forces a clean process exit, which is allowed during logout/shutdown.
 
 ## Wayland, treeland and RHI
 
@@ -351,11 +351,13 @@ screen's available geometry while respecting the QML minimum size.
 
 The same build was also exercised on the actual DDE **treeland** session
 (`WAYLAND_DISPLAY=treeland.socket`) with the Vulkan RHI and with the OpenGL
-path. The tray exported `org.kde.StatusNotifierItem` and a working
-`com.canonical.dbusmenu` menu (verified through `busctl`), with the icon
-provided as a 22x22 `IconPixmap`; `org.kde.StatusNotifierWatcher` listed the
-application. Standard Qt Wayland/xdg-shell is sufficient; no treeland-private
+path. Standard Qt Wayland/xdg-shell is sufficient; no treeland-private
 protocol is required.
+
+On DDE the application deliberately does not create a
+`org.kde.StatusNotifierItem`: the package provides the native dde-shell
+`org.deepin.ds.dock.aibar` applet instead (dockOrder 26, between the tray and
+Show Desktop). Non-DDE desktops keep the Qt tray fallback.
 
 ## Security and limits
 
