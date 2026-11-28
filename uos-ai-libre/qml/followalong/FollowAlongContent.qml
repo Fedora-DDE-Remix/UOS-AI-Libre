@@ -3,79 +3,77 @@
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Window
 import UosAiLibre
 
-/// Compact UOS AI-style FollowAlong pill.
+/// Platform-neutral FollowAlong content.
 ///
-/// It starts as the 24 px AI logo. Clicking the logo opens the full pill
-/// with four primary skills, more menu, Ask AI input and close button. The
-/// pill is not draggable and closes when the user clicks outside it.
-Window {
+/// This file owns only the 24 px AI mark, the 425 px toolbar and the Ask AI
+/// field. The "more" menu is drawn inside the same surface instead of using a
+/// separate popup window: a layer-shell popup is a second surface that Treeland
+/// may refuse to focus, which would leave the menu visible but unable to
+/// receive clicks. The execution backend only sees a height change and keeps
+/// the pill anchored.
+Item {
     id: root
     property bool expanded: false
-    property bool menuOpen: moreMenu.opened
     property string selectedText: ""
     property var actions: []
-
-    width: 24
-    height: 24
-    visible: false
-    color: "transparent"
-    flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
-    title: qsTr("UOS AI FollowAlong")
-
-    function toolbarWidth() {
-        let value = Math.max(425, Math.min(760, contentRow.implicitWidth + 18))
-        const limit = followAlong.maxToolbarWidth()
-        if (limit > 0)
-            value = Math.min(value, limit)
-        return Math.max(24, value)
-    }
-
-    function resizeToContent() {
-        if (followAlong.cursorPositionAvailable()) {
-            // On X11 the host sets position and size atomically so a window
-            // manager cannot clip a resize at the old screen edge.
-            if (expanded)
-                followAlong.setToolbarSize(toolbarWidth(), 40)
-            else
-                followAlong.setToolbarSize(24, 24)
-            return
-        }
-        if (!expanded) {
-            width = 24
-            height = 24
-            return
-        }
-        height = 40
-        width = toolbarWidth()
-    }
-
-    onExpandedChanged: {
-        resizeToContent()
-        // X11 can resize and reposition atomically after the row settles.
-        // On Wayland the dde-shell placement hint is one-shot, so changing
-        // the width after the surface is mapped would move the right edge
-        // outside the clamped rectangle.
-        if (followAlong.cursorPositionAvailable())
-            Qt.callLater(resizeToContent)
-    }
-    onActionsChanged: if (expanded) Qt.callLater(resizeToContent)
-    onVisibleChanged: {
-        if (visible)
-            return
-        if (moreMenu.opened)
-            moreMenu.close()
-        expanded = false
-        askInput.text = ""
-    }
+    property var moreActions: []
+    property int maxContentWidth: 1920
+    property bool inlineMenu: false
+    property bool inlineMenuOpen: false
+    property bool menuAbove: false
+    readonly property bool menuOpen: inlineMenu ? inlineMenuOpen : moreMenu.opened
 
     signal actionTriggered(int type, bool custom)
     signal dismissed()
+    signal askRequested(string question)
+    signal settingsRequested()
+    signal expandRequested()
+    signal moreMenuRequested()
+
+    readonly property int pillHeight: 40
+    readonly property int menuGap: 6
+    readonly property int menuHeight: menuColumn.implicitHeight + 10
+    readonly property var hostWindow: Window.window
+
+    implicitWidth: expanded ? toolbarWidth() : 24
+    implicitHeight: !expanded ? 24
+        : inlineMenu && inlineMenuOpen
+            ? pillHeight + menuGap + menuHeight
+            : pillHeight
+
+    function toolbarWidth() {
+        let value = Math.max(425, Math.min(760, contentRow.implicitWidth + 18))
+        if (maxContentWidth > 0)
+            value = Math.min(value, maxContentWidth)
+        return Math.max(24, value)
+    }
 
     function openMoreMenu() {
-        if (root.expanded)
+        // The execution backend sets menuAbove from the real anchor/screen
+        // geometry before calling this function.
+        if (!root.expanded)
+            return
+        followAlong.activateToolbar()
+        if (inlineMenu)
+            inlineMenuOpen = true
+        else
             moreMenu.open()
+    }
+
+    function closeMoreMenu() {
+        inlineMenuOpen = false
+        if (moreMenu.opened)
+            moreMenu.close()
+    }
+
+    function closeMenuOrDismiss() {
+        if (menuOpen)
+            closeMoreMenu()
+        else
+            dismissed()
     }
 
     function submitAsk() {
@@ -85,18 +83,26 @@ Window {
         // onAccepted and the key handlers can both fire for one Return.
         // Clear first so the question is submitted exactly once.
         askInput.text = ""
-        followAlong.ask(question)
+        root.askRequested(question)
         root.dismissed()
     }
 
-    // Dismissal is driven by global pointer events (with an X11/XWayland
-    // position or the Wayland local-press correlation). Do not use window
-    // activation as a proxy for "clicked elsewhere" on the Treeland overlay
-    // role, and never hide the separate UOS AI main window from here.
+    function resetVisualState() {
+        inlineMenuOpen = false
+        menuAbove = false
+        if (moreMenu.opened)
+            moreMenu.close()
+        expanded = false
+        askInput.text = ""
+    }
 
     Rectangle {
         id: pill
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        y: root.inlineMenu && root.inlineMenuOpen && root.menuAbove
+            ? root.height - root.pillHeight : 0
+        height: root.expanded ? root.pillHeight : 24
         radius: root.expanded ? 10 : 12
         color: Theme.card
         border.width: 1
@@ -120,9 +126,8 @@ Window {
             cursorShape: Qt.PointingHandCursor
             onClicked: {
                 // The icon must be clicked explicitly; hover never expands.
-                // Do not focus the Treeland overlay here: opening it must not
-                // depend on the compositor granting keyboard focus.
-                root.expanded = true
+                expanded = true
+                root.expandRequested()
             }
         }
 
@@ -131,10 +136,6 @@ Window {
             visible: root.expanded
             anchors.centerIn: parent
             spacing: 2
-            onImplicitWidthChanged: {
-                if (root.expanded && followAlong.cursorPositionAvailable())
-                    root.width = root.toolbarWidth()
-            }
 
             Image {
                 anchors.verticalCenter: parent.verticalCenter
@@ -211,12 +212,7 @@ Window {
                 HoverHandler { id: moreHover }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: {
-                        // On Treeland the overlay normally refuses keyboard
-                        // focus; the menu needs it for arrow-key navigation.
-                        followAlong.activateToolbar()
-                        moreMenu.open()
-                    }
+                    onClicked: root.moreMenuRequested()
                 }
             }
 
@@ -271,6 +267,102 @@ Window {
         }
     }
 
+    Rectangle {
+        id: inlineMoreMenu
+        visible: root.inlineMenu && root.inlineMenuOpen
+        width: 180
+        x: Math.max(8, root.width - width - 8)
+        y: root.menuAbove ? 0 : root.pillHeight + root.menuGap
+        height: root.menuHeight
+        color: Theme.menuBackground
+        radius: 8
+        border.width: 1
+        border.color: Theme.menuBorder
+
+        // Swallow clicks on the panel background, and close on empty space.
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.closeMoreMenu()
+        }
+
+        Column {
+            id: menuColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 5
+            spacing: 0
+
+            Repeater {
+                model: root.moreActions
+                delegate: Rectangle {
+                    width: menuColumn.width
+                    height: 32
+                    radius: 5
+                    color: itemHover.hovered ? Theme.hover : "transparent"
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: 9
+                        text: modelData.name
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
+
+                    HoverHandler { id: itemHover }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            const type = modelData.type
+                            const custom = modelData.custom
+                            root.closeMoreMenu()
+                            root.actionTriggered(type, custom)
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: menuColumn.width
+                height: 1
+                color: Theme.border
+            }
+
+            Rectangle {
+                width: menuColumn.width
+                height: 32
+                radius: 5
+                color: settingsHover.hovered ? Theme.hover : "transparent"
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 9
+                    text: "随航设置"
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSizeSmall
+                }
+
+                HoverHandler { id: settingsHover }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        root.closeMoreMenu()
+                        followAlong.openSettings()
+                        root.dismissed()
+                    }
+                }
+            }
+        }
+    }
+
+    // X11 uses a real popup menu: it is a managed Qt popup and does not
+    // enlarge the FollowAlong window or cover the desktop with a transparent
+    // rectangle. Treeland uses the inline menu above because its layer-shell
+    // popup cannot be reliably focused by the compositor.
     Menu {
         id: moreMenu
         popupType: Popup.Window
@@ -279,9 +371,10 @@ Window {
         y: {
             const menuHeight = moreMenu.implicitHeight > 0
                     ? moreMenu.implicitHeight : 200
-            if (followAlong.cursorPositionAvailable() && root.screen) {
-                const screenBottom = root.screen.virtualY + root.screen.height
-                if (root.y + root.height + 4 + menuHeight > screenBottom)
+            const host = root.hostWindow
+            if (host && host.screen) {
+                const screenBottom = host.screen.virtualY + host.screen.height
+                if (host.y + host.height + 4 + menuHeight > screenBottom)
                     return -menuHeight - 4
             }
             return root.height + 4
@@ -301,7 +394,7 @@ Window {
             border.color: Theme.menuBorder
         }
         Repeater {
-            model: followAlong.moreActions
+            model: root.moreActions
             MenuItem {
                 height: 32
                 text: modelData.name
@@ -326,6 +419,6 @@ Window {
 
     Shortcut {
         sequence: "Esc"
-        onActivated: root.dismissed()
+        onActivated: root.closeMenuOrDismiss()
     }
 }

@@ -15,10 +15,14 @@ sessions, tools, MCP/skills and security policy.
 - AI FollowAlong: select text to show a 24 px AI icon; click it to open the
   non-draggable action pill (search, explain, summarize, translate, continue,
   expand, correct, polish, Ask AI). The pill is clamped to the screen on all
-  edges, click-away hides only the pill, and every action reuses the main
-  window with a new aish session. X11 uses PRIMARY + XRecord; Treeland uses
-  `wlr-data-control`, `treeland-active-notify` and the `treeland-dde-shell-v1`
-  overlay with an explicit XWayland pointer position when available.
+  edges, click-away hides only FollowAlong, and every action reuses the main
+  window with a new aish session. X11 uses PRIMARY + XRecord and a
+  no-focus `Qt::Tool` window. Treeland uses `wlr-data-control` +
+  `treeland-active-notify` for input and a real `wlr-layer-shell` overlay
+  (dde-shell `DLayerShellWindow`) for presentation: the layer role exists
+  before the first map, the icon uses `KeyboardInteractivityNone`, and
+  dde-shell never treats FollowAlong as an application window. XWayland
+  `XQueryPointer` supplies the anchor when its coordinate space matches.
 - `vendor/aish/` — vendored `LFRon/aish-enhanced` source, including the new
   headless `aish-chat` crate and session-management additions.
 - `vendor/aish-cxxbridge/` — Rust `cxx` bridge exposing `ChatService` to C++/Qt.
@@ -47,6 +51,16 @@ aish-chat (headless agent API)        [vendored]
 The bridge and service layer share aish configuration and the
 `sessions`/`ai_messages` schema. They do not reimplement model providers, tools,
 MCP, skills or security policy. QML pages never touch the Rust/cxx layer.
+
+AI FollowAlong has its own four-layer seam so X11 and Treeland never leak into
+logic: `FollowAlongEventSource` (PRIMARY/XRecord or wlr-data-control +
+treeland-active-notify), `FollowAlongEventBus` (queued semantic events),
+`FollowAlongController` (pure state machine), and `FollowAlongSurface`
+(X11 tool window or Treeland layer-shell). The surface reports real role, map,
+focus, geometry and failures back through `PresentationEvent`; the controller
+only enters `IconShown` after `RoleConfirmed + Mapped + FocusChanged(false)`.
+A backend that cannot provide a non-focus overlay fails explicitly instead of
+showing a normal window.
 
 ## Build and run
 

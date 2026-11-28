@@ -3,19 +3,22 @@
 
 #include "followalongservice.h"
 
-#include "followalongmonitor.h"
-#include "followalongwindow.h"
-
 #include "appcontroller.h"
+#include "followalongcontroller.h"
+#include "followalongeventbus.h"
+#include "followalongeventsource.h"
+#include "followalongview.h"
 
 #include <QCursor>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QDebug>
+#include <QQmlEngine>
 #include <QSettings>
+#include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QVariantMap>
-#include <QDebug>
 
 namespace {
 
@@ -41,9 +44,7 @@ QVariantMap action(const QString &name, const QString &icon, int type,
 
 FollowAlongService::FollowAlongService(QQmlEngine *engine, AppController *app,
                                        QObject *parent)
-    : QObject(parent)
-    , m_app(app)
-    , m_window(std::make_unique<FollowAlongWindowHost>(engine))
+    : QObject(parent), m_app(app), m_bus(std::make_unique<FollowAlongEventBus>())
 {
     QSettings config = settings();
     m_enabled = config.value(QStringLiteral("enabled"), true).toBool();
@@ -62,27 +63,46 @@ FollowAlongService::FollowAlongService(QQmlEngine *engine, AppController *app,
         action(QStringLiteral("加入知识库"), QStringLiteral("knowledge"), 8),
     };
 
-    connect(m_window.get(), &FollowAlongWindowHost::actionTriggered, this,
-            &FollowAlongService::onActionTriggered);
-    connect(m_window.get(), &FollowAlongWindowHost::dismissed, this,
-            [this]() {
-                m_window->hide();
-                if (m_monitor)
-                    m_monitor->resetSelectionState();
-            });
+    m_surface.reset(FollowAlongSurface::create(engine, m_bus.get()));
+    if (!m_surface) {
+        qWarning().noquote()
+            << "FollowAlong unavailable: no valid overlay backend for this "
+               "platform";
+        return;
+    }
 
-    // Wayland data-control events are dispatched from inside libwayland.
-    // Never destroy/create a QWindow synchronously from that callback.
-    m_showTimer.setSingleShot(true);
-    m_showTimer.setInterval(0);
-    connect(&m_showTimer, &QTimer::timeout, this,
-            &FollowAlongService::showPending);
+    m_source.reset(FollowAlongEventSource::create(m_bus.get()));
+    m_controller = std::make_unique<FollowAlongController>(
+        m_bus.get(), m_surface.get());
+    m_controller->setActions(m_actions, m_moreActions);
+    m_controller->setEnabled(m_enabled);
+
+    connect(m_source.get(), &FollowAlongEventSource::monitorError, this,
+            [](const QString &message) {
+                qWarning().noquote() << "FollowAlong event source:" << message;
+            });
+    connect(m_controller.get(),
+            &FollowAlongController::selectionResetRequested, this, [this]() {
+                if (m_source)
+                    m_source->resetSelectionState();
+            });
+    connect(m_controller.get(), &FollowAlongController::presentationFailed,
+            this, [](const QString &reason) {
+                qWarning().noquote()
+                    << "FollowAlong presentation contract:" << reason;
+            });
+    connect(m_surface.get(), &FollowAlongSurface::actionTriggered, this,
+            &FollowAlongService::onActionTriggered);
+    connect(m_surface.get(), &FollowAlongSurface::askRequested, this,
+            &FollowAlongService::onAskRequested);
+    connect(m_surface.get(), &FollowAlongSurface::settingsRequested, this,
+            &FollowAlongService::openSettings);
 }
 
 FollowAlongService::~FollowAlongService()
 {
-    if (m_monitor)
-        m_monitor->stop();
+    if (m_source)
+        m_source->stop();
 }
 
 bool FollowAlongService::enabled() const { return m_enabled; }
@@ -93,15 +113,29 @@ QVariantList FollowAlongService::moreActions() const { return m_moreActions; }
 
 void FollowAlongService::ask(const QString &question)
 {
-    qInfo() << "FollowAlong: ask" << question << "selection"
-            << m_pendingText.size();
-    if (question.trimmed().isEmpty() || m_pendingText.trimmed().isEmpty())
+    const QString text = m_controller ? m_controller->selectedText() : QString();
+    qInfo() << "FollowAlong: ask" << question << "selection" << text.size();
+    if (question.trimmed().isEmpty() || text.trimmed().isEmpty())
         return;
-    m_window->hide();
-    if (m_monitor)
-        m_monitor->resetSelectionState();
+    if (m_controller)
+        m_controller->dismiss();
     if (m_app && m_app->startFollowAlongAction(
-            -1, m_pendingText, true,
+            -1, text, true,
+            question + QStringLiteral("\n\n选中内容：${SELECTION}"))) {
+        Q_EMIT showChatRequested();
+    }
+}
+
+void FollowAlongService::onAskRequested(const QString &question,
+                                        const QString &text)
+{
+    qInfo() << "FollowAlong: ask" << question << "selection" << text.size();
+    if (question.trimmed().isEmpty() || text.trimmed().isEmpty())
+        return;
+    if (m_controller)
+        m_controller->dismiss();
+    if (m_app && m_app->startFollowAlongAction(
+            -1, text, true,
             question + QStringLiteral("\n\n选中内容：${SELECTION}"))) {
         Q_EMIT showChatRequested();
     }
@@ -109,71 +143,68 @@ void FollowAlongService::ask(const QString &question)
 
 void FollowAlongService::openSettings()
 {
-    m_window->hide();
-    if (m_monitor)
-        m_monitor->resetSelectionState();
+    if (m_controller)
+        m_controller->dismiss();
+    if (m_source)
+        m_source->resetSelectionState();
     Q_EMIT settingsRequested();
 }
 
 void FollowAlongService::showPreview()
 {
-    m_pendingText = QStringLiteral("这是一段用于验证 AI 随航工具栏的选中文本。");
-    m_pendingPos = QCursor::pos();
+    m_previewText = QStringLiteral("这是一段用于验证 AI 随航工具栏的选中文本。");
+    m_previewAnchor = QCursor::pos();
     const QString anchor =
         qEnvironmentVariable("UOS_AI_LIBRE_FOLLOWALONG_PREVIEW_ANCHOR");
     if (!anchor.isEmpty()) {
         const QStringList parts = anchor.split(QLatin1Char(','));
         if (parts.size() == 2)
-            m_pendingPos = QPoint(parts.at(0).trimmed().toInt(),
-                                  parts.at(1).trimmed().toInt());
+            m_previewAnchor = QPoint(parts.at(0).trimmed().toInt(),
+                                     parts.at(1).trimmed().toInt());
     }
+
     const int preview =
         qEnvironmentVariableIntValue("UOS_AI_LIBRE_FOLLOWALONG_PREVIEW");
-    const bool expanded = preview == 2 || preview == 4;
-    m_window->show(m_pendingText, m_pendingPos, m_actions, expanded);
+    m_previewExpanded = preview == 2 || preview == 4;
+    if (!m_controller)
+        return;
+    m_controller->preview(m_previewText, m_previewAnchor, m_previewExpanded);
+
     if (preview == 3) {
-        // Exercise the same icon -> expanded transition as a real click.
-        QTimer::singleShot(500, m_window.get(),
-                           [this]() { m_window->setExpanded(true); });
-    } else if (preview == 4) {
-        QTimer::singleShot(700, m_window.get(),
-                           [this]() { m_window->openMoreMenu(); });
-    } else if (preview == 5) {
-        // Exercise hide() with the real RHI backend; this catches Vulkan
-        // swapchain teardown regressions without pointer injection.
-        QTimer::singleShot(800, m_window.get(),
-                           [this]() { m_window->hide(); });
-    } else if (preview == 6) {
-        // Hide, re-show and hide again: the swapchain released on hide must
-        // be recreated correctly when the toolbar is shown again.
-        QTimer::singleShot(800, m_window.get(),
-                           [this]() { m_window->hide(); });
-        QTimer::singleShot(1600, m_window.get(), [this]() {
-            m_window->show(m_pendingText, m_pendingPos, m_actions);
+        QTimer::singleShot(500, this, [this]() {
+            if (m_controller)
+                m_controller->expand();
         });
-        QTimer::singleShot(2400, m_window.get(),
-                           [this]() { m_window->hide(); });
+    } else if (preview == 4) {
+        QTimer::singleShot(700, this, [this]() {
+            if (m_surface)
+                m_surface->openMoreMenu();
+        });
+    } else if (preview == 5) {
+        QTimer::singleShot(800, this, [this]() {
+            if (m_controller)
+                m_controller->dismiss();
+        });
+    } else if (preview == 6) {
+        QTimer::singleShot(800, this, [this]() {
+            if (m_controller)
+                m_controller->dismiss();
+        });
+        QTimer::singleShot(1600, this, [this]() {
+            if (m_controller)
+                m_controller->preview(m_previewText, m_previewAnchor, false);
+        });
+        QTimer::singleShot(2400, this, [this]() {
+            if (m_controller)
+                m_controller->dismiss();
+        });
     }
 }
 
 void FollowAlongService::activateToolbar()
 {
-    m_window->activateForInput();
-}
-
-bool FollowAlongService::cursorPositionAvailable() const
-{
-    return m_window->cursorPositionAvailable();
-}
-
-int FollowAlongService::maxToolbarWidth() const
-{
-    return m_window->maxToolbarWidth();
-}
-
-void FollowAlongService::setToolbarSize(int width, int height)
-{
-    m_window->setSize(QSize(width, height));
+    if (m_surface)
+        m_surface->requestTextInputFocus();
 }
 
 void FollowAlongService::setEnabled(bool enabled)
@@ -183,8 +214,21 @@ void FollowAlongService::setEnabled(bool enabled)
     m_enabled = enabled;
     QSettings config = settings();
     config.setValue(QStringLiteral("enabled"), enabled);
-    if (!enabled)
-        m_window->hide();
+    if (m_controller)
+        m_controller->setEnabled(enabled);
+    if (!enabled) {
+        if (m_sourceStarted && m_source) {
+            m_source->stop();
+            m_sourceStarted = false;
+        }
+    } else if (m_started && m_source && !m_sourceStarted) {
+        QString error;
+        if (m_source->start(&error)) {
+            m_sourceStarted = true;
+        } else {
+            qWarning().noquote() << "FollowAlong unavailable:" << error;
+        }
+    }
     Q_EMIT enabledChanged();
 }
 
@@ -194,114 +238,33 @@ void FollowAlongService::start()
         return;
     m_started = true;
 
-    m_monitor.reset(FollowAlongMonitor::create(this));
-    connect(m_monitor.get(), &FollowAlongMonitor::selectionChanged, this,
-            &FollowAlongService::onSelectionChanged);
-    connect(m_monitor.get(), &FollowAlongMonitor::selectionCleared, this,
-            &FollowAlongService::onSelectionCleared);
-    connect(m_monitor.get(), &FollowAlongMonitor::pointerPressed, this,
-            &FollowAlongService::onGlobalPointerPressed);
-    connect(m_monitor.get(), &FollowAlongMonitor::monitorError, this,
-            [](const QString &message) {
-                qWarning().noquote() << "FollowAlong monitor:" << message;
-            });
+    if (!m_source || !m_surface || !m_controller) {
+        qWarning().noquote() << "FollowAlong unavailable: backend missing";
+        return;
+    }
+    if (!m_enabled) {
+        qInfo() << "FollowAlong: disabled by settings";
+        return;
+    }
 
     QString error;
-    if (!m_monitor->start(&error))
+    if (!m_source->start(&error)) {
         qWarning().noquote() << "FollowAlong unavailable:" << error;
-}
-
-void FollowAlongService::onSelectionChanged(const QString &text,
-                                            const QPoint &globalPos)
-{
-    if (!m_enabled || text.trimmed().isEmpty())
-        return;
-    // Clicks on the toolbar itself must never move or re-show it. This also
-    // covers the Ask AI field and popup menus, whose release coordinates can
-    // be inside (or just outside) the pill.
-    if (m_window && m_window->visible()
-        && m_window->cursorPositionAvailable()
-        && m_window->geometry().contains(globalPos)) {
         return;
     }
-    m_pendingText = text;
-    m_pendingPos = globalPos;
-    m_showTimer.start();
-}
+    m_sourceStarted = true;
 
-void FollowAlongService::onGlobalPointerPressed(const QPoint &globalPos)
-{
-    if (!m_window || !m_window->visible())
-        return;
-    // Menu item clicks are outside the toolbar rectangle. Let the popup
-    // finish handling them before deciding whether the window should close.
-    if (m_window->property("menuOpen").toBool())
-        return;
-
-    QPoint pressPos = globalPos;
-    bool exactPosition = m_window->cursorPositionAvailable();
-    if (!exactPosition && m_window->hasGlobalCursorPosition()) {
-        pressPos = m_window->globalCursorPosition();
-        exactPosition = true;
-    }
-    if (exactPosition) {
-        if (m_window->geometry().contains(pressPos))
-            return;
-        qInfo() << "FollowAlong: outside click, hiding";
-        m_window->hide();
-        if (m_monitor)
-            m_monitor->resetSelectionState();
-        return;
-    }
-
-    // Without a global cursor position, correlate the active-notify press
-    // with a local press on the toolbar window: the local event may be
-    // delivered slightly before or after the global notification.
-    const qint64 pressedAt = QDateTime::currentMSecsSinceEpoch();
-    const quint64 serial = m_window->localPressSerial();
-    const quint64 generation = m_window->generation();
-    QTimer::singleShot(80, this, [this, pressedAt, serial, generation]() {
-        if (!m_window || !m_window->visible())
-            return;
-        if (m_window->generation() != generation)
-            return; // the window was rebuilt for the icon -> pill transition
-        if (m_window->property("menuOpen").toBool())
-            return;
-        // The local press may arrive before or after the global notification.
-        if (m_window->localPressSerial() != serial
-            || m_window->lastLocalPressMs() >= pressedAt - 200) {
-            return; // the press belongs to the toolbar
-        }
-        qInfo() << "FollowAlong: outside click, hiding";
-        m_window->hide();
-        if (m_monitor)
-            m_monitor->resetSelectionState();
-    });
-}
-
-void FollowAlongService::showPending()
-{
-    if (!m_enabled || m_pendingText.trimmed().isEmpty())
-        return;
-    qInfo() << "FollowAlong: showing for selection length"
-            << m_pendingText.size() << "at" << m_pendingPos;
-    m_window->show(m_pendingText, m_pendingPos, m_actions);
-}
-
-void FollowAlongService::onSelectionCleared()
-{
-    // Once the user has opened the toolbar, the selected text is already
-    // captured. Some applications clear their PRIMARY selection when they
-    // lose focus after the click; that must not close the opened toolbar.
-    if (m_window && m_window->visible()
-        && m_window->property("expanded").toBool()) {
-        return;
-    }
-    // Defer close for the same reason as show().
-    QTimer::singleShot(0, m_window.get(), [this]() {
-        if (m_window)
-            m_window->hide();
-    });
+    qInfo().noquote() << "FollowAlong backend:" << m_surface->backendName();
+    const FollowAlongCapabilities sourceCaps = m_source->capabilities();
+    const FollowAlongCapabilities surfaceCaps = m_surface->capabilities();
+    qInfo() << "FollowAlong capabilities:"
+            << "globalCursor" << (sourceCaps.globalCursorPosition
+                                  && surfaceCaps.globalCursorPosition)
+            << "releaseGating" << sourceCaps.releaseGating
+            << "overlayRole" << surfaceCaps.overlayRole
+            << "focusFreeShow" << surfaceCaps.focusFreeShow
+            << "globalHitTest" << (sourceCaps.globalHitTest
+                                   && surfaceCaps.globalHitTest);
 }
 
 void FollowAlongService::onActionTriggered(int type, bool custom,
@@ -312,8 +275,8 @@ void FollowAlongService::onActionTriggered(int type, bool custom,
 
     qInfo() << "FollowAlong: action" << type << "custom" << custom
             << "text" << text.size() << "chars";
-    if (m_monitor)
-        m_monitor->resetSelectionState();
+    if (m_controller)
+        m_controller->dismiss();
 
     if (type == 0) {
         // UOS AI's 搜索 action opens the system browser instead of sending a
@@ -334,7 +297,6 @@ void FollowAlongService::onActionTriggered(int type, bool custom,
         return;
     }
 
-    m_pendingText = text;
     if (m_app && m_app->startFollowAlongAction(type, text, custom)) {
         Q_EMIT showChatRequested();
     }

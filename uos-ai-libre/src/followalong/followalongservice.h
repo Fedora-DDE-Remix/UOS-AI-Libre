@@ -5,21 +5,23 @@
 
 #include <QObject>
 #include <QPoint>
-#include <QTimer>
 #include <QVariantList>
 
 #include <memory>
 
 class AppController;
-class FollowAlongMonitor;
-class FollowAlongWindowHost;
+class FollowAlongController;
+class FollowAlongEventBus;
+class FollowAlongEventSource;
+class FollowAlongSurface;
 class QQmlEngine;
 
 /// AI FollowAlong (划词随航) service.
 ///
-/// It observes the desktop PRIMARY selection, presents UOS AI's compact
-/// toolbar near the cursor, and sends the selected text through the existing
-/// AppController/ChatModel path.
+/// This class owns the event bus, the platform event source, the presentation
+/// backend and the pure controller. It also routes the toolbar's UI actions
+/// into the existing AppController/aish session path; that UI-to-aish glue is
+/// intentionally not abstracted.
 class FollowAlongService final : public QObject
 {
     Q_OBJECT
@@ -36,13 +38,11 @@ public:
     void setEnabled(bool enabled);
     QVariantList actions() const;
     QVariantList moreActions() const;
+
     Q_INVOKABLE void ask(const QString &question);
     Q_INVOKABLE void openSettings();
     Q_INVOKABLE void showPreview();
     Q_INVOKABLE void activateToolbar();
-    Q_INVOKABLE bool cursorPositionAvailable() const;
-    Q_INVOKABLE int maxToolbarWidth() const;
-    Q_INVOKABLE void setToolbarSize(int width, int height);
 
     void start();
 
@@ -52,20 +52,20 @@ Q_SIGNALS:
     void settingsRequested();
 
 private:
-    void onSelectionChanged(const QString &text, const QPoint &globalPos);
-    void onSelectionCleared();
-    void onGlobalPointerPressed(const QPoint &globalPos);
     void onActionTriggered(int type, bool custom, const QString &text);
-    void showPending();
+    void onAskRequested(const QString &question, const QString &text);
 
     AppController *m_app = nullptr;
-    std::unique_ptr<FollowAlongMonitor> m_monitor;
-    std::unique_ptr<FollowAlongWindowHost> m_window;
+    std::unique_ptr<FollowAlongEventBus> m_bus;
+    std::unique_ptr<FollowAlongEventSource> m_source;
+    std::unique_ptr<FollowAlongSurface> m_surface;
+    std::unique_ptr<FollowAlongController> m_controller;
     QVariantList m_actions;
     QVariantList m_moreActions;
-    QTimer m_showTimer;
-    QString m_pendingText;
-    QPoint m_pendingPos;
+    QString m_previewText;
+    QPoint m_previewAnchor;
+    bool m_previewExpanded = false;
     bool m_enabled = true;
     bool m_started = false;
+    bool m_sourceStarted = false;
 };

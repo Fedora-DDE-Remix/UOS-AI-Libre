@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 UOS AI Libre contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "waylandfollowalongmonitor.h"
+#include "treelandfollowalongeventsource.h"
+
+#include "followalongeventbus.h"
+#include "followalongxwayland.h"
 
 #include <QDateTime>
 #include <QGuiApplication>
@@ -209,8 +212,7 @@ class WaylandActiveNotify final
     Q_OBJECT
 
 public:
-    explicit WaylandActiveNotify(
-        struct ::treeland_active_notify_v1 *id)
+    explicit WaylandActiveNotify(struct ::treeland_active_notify_v1 *id)
         : QtWayland::treeland_active_notify_v1(id)
     {
     }
@@ -250,14 +252,15 @@ public:
     void instantiate() { initialize(); }
 };
 
-WaylandFollowAlongMonitor::WaylandFollowAlongMonitor(QObject *parent)
-    : FollowAlongMonitor(parent)
+TreelandFollowAlongEventSource::TreelandFollowAlongEventSource(
+    FollowAlongEventBus *bus, QObject *parent)
+    : FollowAlongEventSource(bus, parent)
 {
 }
 
-WaylandFollowAlongMonitor::~WaylandFollowAlongMonitor() = default;
+TreelandFollowAlongEventSource::~TreelandFollowAlongEventSource() = default;
 
-bool WaylandFollowAlongMonitor::start(QString *error)
+bool TreelandFollowAlongEventSource::start(QString *error)
 {
     m_manager = std::make_unique<WaylandDataControlManager>();
     connect(m_manager.get(), &QWaylandClientExtension::activeChanged, this,
@@ -290,7 +293,7 @@ bool WaylandFollowAlongMonitor::start(QString *error)
     return true;
 }
 
-void WaylandFollowAlongMonitor::stop()
+void TreelandFollowAlongEventSource::stop()
 {
     m_activeNotify.reset();
     m_activeManager.reset();
@@ -304,7 +307,7 @@ void WaylandFollowAlongMonitor::stop()
     m_pendingAtMs = 0;
 }
 
-void WaylandFollowAlongMonitor::resetSelectionState()
+void TreelandFollowAlongEventSource::resetSelectionState()
 {
     // Keep the gesture state: wlr-data-control and active-notify are
     // asynchronous, and clearing m_mouseGesture here can leave the next
@@ -313,7 +316,53 @@ void WaylandFollowAlongMonitor::resetSelectionState()
     m_pendingAtMs = 0;
 }
 
-void WaylandFollowAlongMonitor::createActiveNotifier()
+FollowAlongCapabilities TreelandFollowAlongEventSource::capabilities() const
+{
+    FollowAlongCapabilities caps;
+    caps.globalCursorPosition = followAlongXWaylandCoordinateSpaceReliable();
+    caps.releaseGating = m_hasMouseActivity;
+    caps.globalHitTest = caps.globalCursorPosition;
+    caps.backendName = QStringLiteral("Treeland wlr-data-control/active-notify");
+    return caps;
+}
+
+void TreelandFollowAlongEventSource::postPhase(
+    SelectionPhase phase, const QString &text,
+    const std::optional<QPoint> &anchor, bool fromDrag, qint64 timestampMs)
+{
+    SelectionEvent event;
+    event.phase = phase;
+    event.text = text;
+    event.globalAnchor = anchor;
+    event.button = phase == SelectionPhase::GestureBegan
+            || phase == SelectionPhase::TextPublished
+            || phase == SelectionPhase::GestureEnded
+        ? Qt::LeftButton
+        : Qt::NoButton;
+    event.fromDrag = fromDrag;
+    event.sequence = ++m_sequence;
+    event.timestampMs = timestampMs;
+    post(event);
+}
+
+void TreelandFollowAlongEventSource::publishPending(const QPoint *anchor)
+{
+    if (m_pendingText.trimmed().isEmpty()) {
+        m_pendingAtMs = 0;
+        return;
+    }
+    const QString text = m_pendingText;
+    m_pendingText.clear();
+    m_pendingAtMs = 0;
+    const std::optional<QPoint> position =
+        anchor ? std::optional<QPoint>(*anchor)
+               : followAlongXWaylandPointerPosition();
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    postPhase(SelectionPhase::TextPublished, text, position, true, now);
+    postPhase(SelectionPhase::GestureEnded, text, position, true, now);
+}
+
+void TreelandFollowAlongEventSource::createActiveNotifier()
 {
     if (!m_activeManager || !m_activeManager->isActive()
         || m_activeNotify)
@@ -335,6 +384,7 @@ void WaylandFollowAlongMonitor::createActiveNotifier()
     qInfo() << "FollowAlong: treeland_active_notify ready";
     connect(m_activeNotify.get(), &WaylandActiveNotify::mousePressed, this,
             [this]() {
+                const qint64 now = QDateTime::currentMSecsSinceEpoch();
                 qInfo() << "FollowAlong: Wayland press, pending"
                         << m_pendingText.size() << "active" << m_mouseActive
                         << "gesture" << m_mouseGesture;
@@ -345,29 +395,35 @@ void WaylandFollowAlongMonitor::createActiveNotifier()
                 // selection just before the press notification; do not throw
                 // away that fresh text. Older text is a previous selection and
                 // must not re-show the toolbar on a plain click.
-                const qint64 now = QDateTime::currentMSecsSinceEpoch();
                 if (m_pendingText.isEmpty() || m_pendingAtMs == 0
                     || now - m_pendingAtMs > 400) {
                     m_pendingText.clear();
                     m_pendingAtMs = 0;
                 }
-                Q_EMIT pointerPressed(QPoint());
+                postPhase(SelectionPhase::GestureBegan, QString(),
+                          followAlongXWaylandPointerPosition(), false, now);
             });
     connect(m_activeNotify.get(), &WaylandActiveNotify::mouseReleased, this,
             [this]() {
+                const qint64 now = QDateTime::currentMSecsSinceEpoch();
+                const std::optional<QPoint> anchor =
+                    followAlongXWaylandPointerPosition();
                 qInfo() << "FollowAlong: Wayland release, pending"
                         << m_pendingText.size();
                 m_mouseActive = false;
                 m_mouseGesture = true;
-                if (!m_pendingText.trimmed().isEmpty()) {
-                    Q_EMIT selectionChanged(m_pendingText, QPoint());
-                    m_pendingText.clear();
+                const bool hadPending = !m_pendingText.trimmed().isEmpty();
+                publishPending(anchor ? &*anchor : nullptr);
+                // Emit an explicit end even when no text was published. The
+                // controller uses it to leave the armed state.
+                if (!hadPending) {
+                    postPhase(SelectionPhase::GestureEnded, QString(), anchor,
+                              false, now);
                 }
-                m_pendingAtMs = 0;
             });
 }
 
-void WaylandFollowAlongMonitor::createDevice()
+void TreelandFollowAlongEventSource::createDevice()
 {
     if (!m_manager || !m_manager->isActive() || m_device)
         return;
@@ -388,20 +444,20 @@ void WaylandFollowAlongMonitor::createDevice()
     m_device = std::make_unique<WaylandDataControlDevice>(raw);
     connect(m_device.get(), &WaylandDataControlDevice::textSelected, this,
             [this](const QString &text) {
+                const qint64 now = QDateTime::currentMSecsSinceEpoch();
                 m_active = true;
                 m_pendingText = text;
-                m_pendingAtMs = QDateTime::currentMSecsSinceEpoch();
+                m_pendingAtMs = now;
                 qInfo() << "FollowAlong: Wayland selection state" << text.size()
                         << "hasActivity" << m_hasMouseActivity << "active"
                         << m_mouseActive << "gesture" << m_mouseGesture;
                 // With the private activity notifier, wait for the left
                 // button release. Without it, selection notification is the
-                // only available trigger.
+                // only available trigger. If the release already happened
+                // before the selection arrived, publish immediately too.
                 if (!m_hasMouseActivity
                     || (!m_mouseActive && m_mouseGesture)) {
-                    Q_EMIT selectionChanged(m_pendingText, QPoint());
-                    m_pendingText.clear();
-                    m_pendingAtMs = 0;
+                    publishPending(nullptr);
                 }
             });
     connect(m_device.get(), &WaylandDataControlDevice::selectionCleared, this,
@@ -409,8 +465,9 @@ void WaylandFollowAlongMonitor::createDevice()
                 m_active = false;
                 m_pendingText.clear();
                 m_pendingAtMs = 0;
-                Q_EMIT selectionCleared();
+                postPhase(SelectionPhase::Cleared, QString(), std::nullopt,
+                          false, QDateTime::currentMSecsSinceEpoch());
             });
 }
 
-#include "waylandfollowalongmonitor.moc"
+#include "treelandfollowalongeventsource.moc"

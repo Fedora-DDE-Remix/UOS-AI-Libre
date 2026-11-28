@@ -154,14 +154,23 @@ qt_add_executable(uos-ai-libre
     src/dde/dde_prompt.h
     src/dde/dde_service.cpp
     src/dde/dde_service.h
-    src/followalong/followalongmonitor.cpp
-    src/followalong/followalongmonitor.h
+    src/followalong/followalongcontroller.cpp
+    src/followalong/followalongcontroller.h
+    src/followalong/followalongeventbus.cpp
+    src/followalong/followalongeventbus.h
+    src/followalong/followalongeventsource.cpp
+    src/followalong/followalongeventsource.h
     src/followalong/followalongservice.cpp
     src/followalong/followalongservice.h
-    src/followalong/followalongwindow.cpp
-    src/followalong/followalongwindow.h
-    src/followalong/x11followalongmonitor.cpp
-    src/followalong/x11followalongmonitor.h
+    src/followalong/followalongtypes.h
+    src/followalong/followalongview.cpp
+    src/followalong/followalongview.h
+    src/followalong/followalongxwayland.cpp
+    src/followalong/followalongxwayland.h
+    src/followalong/x11followalongeventsource.cpp
+    src/followalong/x11followalongeventsource.h
+    src/followalong/x11followalongsurface.cpp
+    src/followalong/x11followalongsurface.h
     src/iconprovider.cpp
     src/iconprovider.h
     src/markdownmodel.cpp
@@ -201,19 +210,19 @@ if(UOS_AI_LIBRE_TREELAND_CAPTURE)
     target_link_libraries(uos-ai-libre PRIVATE
         Qt6::WaylandClient Qt6::WaylandClientPrivate)
 
-    # FollowAlong needs three Wayland clients:
+    # FollowAlong uses two Wayland clients for input:
     #  - wlr-data-control: global primary-selection monitoring
     #  - treeland-active-notify: global left-button press/release activity
-    #  - treeland-dde-shell: overlay role + compositor-side cursor placement
+    # Presentation uses wlr-layer-shell through dde-shell's DLayerShellWindow
+    # QML binding, so no private role protocol is generated here.
     target_sources(uos-ai-libre PRIVATE
-        src/followalong/waylandfollowalongmonitor.cpp
-        src/followalong/waylandfollowalongmonitor.h
-        src/followalong/treelandoverlay.cpp
-        src/followalong/treelandoverlay.h
+        src/followalong/treelandfollowalongeventsource.cpp
+        src/followalong/treelandfollowalongeventsource.h
+        src/followalong/treelandfollowalongsurface.cpp
+        src/followalong/treelandfollowalongsurface.h
     )
     qt6_generate_wayland_protocol_client_sources(uos-ai-libre
         FILES
-            "${CMAKE_CURRENT_SOURCE_DIR}/protocols/treeland-dde-shell-v1.xml"
             "${CMAKE_CURRENT_SOURCE_DIR}/protocols/treeland-active-notify-unstable-v1.xml"
             "${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-data-control-unstable-v1.xml")
     target_include_directories(uos-ai-libre PRIVATE
@@ -313,6 +322,34 @@ if(UOS_AI_LIBRE_BUILD_TESTS)
     target_compile_options(chatmodel-test PRIVATE -Wall -Wextra -Wpedantic)
     target_link_libraries(chatmodel-test PRIVATE Qt6::Core Qt6::Qml)
     add_test(NAME chatmodel-test COMMAND chatmodel-test)
+
+    add_executable(followalong-contract-test
+        tests/followalong_contract_test.cpp
+        src/followalong/followalongcontroller.cpp
+        src/followalong/followalongcontroller.h
+        src/followalong/followalongeventbus.cpp
+        src/followalong/followalongeventbus.h
+        src/followalong/followalongtypes.h
+        src/followalong/followalongview.cpp
+        src/followalong/followalongview.h
+        src/followalong/x11followalongsurface.cpp
+        src/followalong/x11followalongsurface.h
+    )
+    target_include_directories(followalong-contract-test PRIVATE
+        src src/followalong)
+    target_compile_options(followalong-contract-test PRIVATE
+        -Wall -Wextra -Wpedantic)
+    target_link_libraries(followalong-contract-test PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Quick)
+    if(X11_FOUND AND TARGET X11::X11)
+        target_link_libraries(followalong-contract-test PRIVATE X11::X11)
+        target_compile_definitions(followalong-contract-test PRIVATE
+            UOS_AI_LIBRE_HAVE_X11_SHORTCUT=1)
+    endif()
+    add_test(NAME followalong-contract-test
+             COMMAND followalong-contract-test)
+    set_tests_properties(followalong-contract-test PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_executable(dde-payload-test
         tests/dde_payload_test.cpp
