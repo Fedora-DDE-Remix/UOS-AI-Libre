@@ -46,11 +46,13 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
          qml6-module-qtqml-workerscript,
          libdde-shell,
          hicolor-icon-theme
-Conflicts: uos-ai
-Replaces: uos-ai
-Provides: uos-ai
+Conflicts: uos-ai, uos-ai-rag, uos-ai-agent
+Replaces: uos-ai, uos-ai-rag, uos-ai-agent
+Provides: uos-ai, uos-ai-rag, uos-ai-agent
 Description: Native aish-based UOS AI-compatible desktop assistant
  A Qt Quick frontend for the aish agent engine implementing the
  com.deepin.copilot and com.iflytek.aiassistant D-Bus contract used by DDE
  components. It provides screen-recorder quick OCR, Grand Search prompts,
  image upload, translation and the Super+Space shortcut.
+ .
+ It is a drop-in replacement for uos-ai, uos-ai-rag and uos-ai-agent.

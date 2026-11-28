@@ -68,9 +68,10 @@ dpkg-buildpackage -us -uc -b -j14
 The result is `../uos-ai-libre_1.0.0_amd64.deb`.  The build compiles
 `vendor/aish-cxxbridge` first, then the Qt/QML frontend, and installs the
 binary, desktop/icon files, D-Bus activation files and the XDG autostart entry.
-The package declares `Conflicts`/`Replaces`/`Provides: uos-ai`, so installing
-it removes the original package while keeping the `com.deepin.copilot` and
-`com.iflytek.aiassistant` contracts available.
+The package declares `Conflicts`/`Replaces`/`Provides` for `uos-ai`,
+`uos-ai-rag`, and `uos-ai-agent`, so installing it replaces all three while
+keeping the `com.deepin.copilot` and `com.iflytek.aiassistant` contracts
+available.
 
 Rust dependencies are pinned by `vendor/aish-cxxbridge/Cargo.lock`.  A clean
 build needs either network access to crates.io or a populated Cargo registry
