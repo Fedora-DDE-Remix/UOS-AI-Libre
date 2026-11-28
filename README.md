@@ -55,6 +55,28 @@ cd ../uos-ai-libre
 See `uos-ai-libre/README.md` for architecture, testing, snapshot mode and
 known limits.
 
+## Debian package
+
+Debian packaging lives in `debian/` at the repository root and builds a native
+`uos-ai-libre` 1.0.0 binary package:
+
+```bash
+sudo apt build-dep .
+dpkg-buildpackage -us -uc -b -j14
+```
+
+The result is `../uos-ai-libre_1.0.0_amd64.deb`.  The build compiles
+`vendor/aish-cxxbridge` first, then the Qt/QML frontend, and installs the
+binary, desktop/icon files, D-Bus activation files and the XDG autostart entry.
+The package declares `Conflicts`/`Replaces`/`Provides: uos-ai`, so installing
+it removes the original package while keeping the `com.deepin.copilot` and
+`com.iflytek.aiassistant` contracts available.
+
+Rust dependencies are pinned by `vendor/aish-cxxbridge/Cargo.lock`.  A clean
+build needs either network access to crates.io or a populated Cargo registry
+cache; the generated cxx headers are checked in, so the external `cxxbridge`
+executable is optional.
+
 ## Testing
 
 ```bash
