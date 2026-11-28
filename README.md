@@ -18,11 +18,14 @@ sessions, tools, MCP/skills and security policy.
   edges, click-away hides only FollowAlong, and every action reuses the main
   window with a new aish session. X11 uses PRIMARY + XRecord and a
   no-focus `Qt::Tool` window. Treeland uses `wlr-data-control` +
-  `treeland-active-notify` for input and a real `wlr-layer-shell` overlay
-  (dde-shell `DLayerShellWindow`) for presentation: the layer role exists
-  before the first map, the icon uses `KeyboardInteractivityNone`, and
-  dde-shell never treats FollowAlong as an application window. XWayland
-  `XQueryPointer` supplies the anchor when its coordinate space matches.
+  `treeland-active-notify` for input and Treeland's dde-shell overlay
+  metadata for presentation: overlay role, skip flags, keyboard-focus policy
+  and cursor auto placement. The metadata is attached from
+  `QWaylandWindow::surfaceCreated` before the xdg-toplevel is created, and is
+  reattached on every show because Qt Wayland recreates the wl_surface on
+  hide. The compositor therefore places the icon below the real pointer even
+  when XWayland's coordinates are stale over a native Wayland client, and
+  dde-shell does not treat FollowAlong as an application window.
 - `vendor/aish/` — vendored `LFRon/aish-enhanced` source, including the new
   headless `aish-chat` crate and session-management additions.
 - `vendor/aish-cxxbridge/` — Rust `cxx` bridge exposing `ChatService` to C++/Qt.
@@ -56,7 +59,7 @@ AI FollowAlong has its own four-layer seam so X11 and Treeland never leak into
 logic: `FollowAlongEventSource` (PRIMARY/XRecord or wlr-data-control +
 treeland-active-notify), `FollowAlongEventBus` (queued semantic events),
 `FollowAlongController` (pure state machine), and `FollowAlongSurface`
-(X11 tool window or Treeland layer-shell). The surface reports real role, map,
+(X11 tool window or Treeland dde-shell overlay). The surface reports real role, map,
 focus, geometry and failures back through `PresentationEvent`; the controller
 only enters `IconShown` after `RoleConfirmed + Mapped + FocusChanged(false)`.
 A backend that cannot provide a non-focus overlay fails explicitly instead of

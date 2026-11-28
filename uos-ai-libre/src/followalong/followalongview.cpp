@@ -7,7 +7,7 @@
 #include "x11followalongsurface.h"
 
 #ifdef UOS_AI_LIBRE_FOLLOWALONG_WAYLAND
-#include "treelandfollowalongsurface.h"
+#include "treelandddefollowalongsurface.h"
 #endif
 
 #include <QCoreApplication>
@@ -72,7 +72,7 @@ FollowAlongSurface *FollowAlongSurface::create(QQmlEngine *engine,
     if (platform.contains(QStringLiteral("wayland"))
         || platform.contains(QStringLiteral("treeland"))) {
 #ifdef UOS_AI_LIBRE_FOLLOWALONG_WAYLAND
-        return new TreelandFollowAlongSurface(engine, bus, parent);
+        return new TreelandDdeFollowAlongSurface(engine, bus, parent);
 #else
         // Never fall back to an xdg-toplevel on Wayland: that is exactly the
         // behaviour this architecture must prevent.
@@ -329,6 +329,12 @@ bool FollowAlongSurface::eventFilter(QObject *watched, QEvent *event)
             m_lastLocalPressMs = QDateTime::currentMSecsSinceEpoch();
             ++m_localPressSerial;
             noteOwnSurfaceInteraction();
+        } else if (event->type() == QEvent::PlatformSurface) {
+            auto *surfaceEvent = static_cast<QPlatformSurfaceEvent *>(event);
+            if (surfaceEvent->surfaceEventType()
+                == QPlatformSurfaceEvent::SurfaceCreated) {
+                windowSurfaceCreated();
+            }
         } else if (event->type() == QEvent::Expose) {
             const bool firstExpose = !m_exposeSeen;
             m_exposeSeen = true;

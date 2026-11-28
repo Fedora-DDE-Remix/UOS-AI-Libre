@@ -82,6 +82,10 @@ PresentationCommandResult X11FollowAlongSurface::showSurface(
     }
 
     m_lastRequestId = requestId;
+    // A previous hide released the Vulkan swapchain while the native surface
+    // was still alive. Qt Quick creates a fresh swapchain when this window is
+    // shown again, so the next hide must release it again.
+    m_swapchainReleased = false;
     m_backendName = QStringLiteral("X11 tool surface");
     m_anchor = spec.anchor.value_or(QCursor::pos());
     m_hasAnchor = true;

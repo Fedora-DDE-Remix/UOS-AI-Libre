@@ -55,7 +55,7 @@ public:
     int maxContentWidth() const;
     QString backendName() const;
     virtual bool usesInlineMenu() const { return false; }
-    void openMoreMenu();
+    virtual void openMoreMenu();
     void closeMoreMenu();
 
 Q_SIGNALS:
@@ -85,6 +85,7 @@ protected:
 
     bool eventFilter(QObject *watched, QEvent *event) override;
     virtual void windowExposed() {}
+    virtual void windowSurfaceCreated() {}
 
     QQmlEngine *m_engine = nullptr;
     FollowAlongEventBus *m_bus = nullptr;

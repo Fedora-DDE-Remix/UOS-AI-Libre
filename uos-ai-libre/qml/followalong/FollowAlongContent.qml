@@ -215,12 +215,24 @@ Item {
                     height: 14
                     name: "chevron-down"
                     color: Theme.icon
+                    rotation: root.menuOpen ? 180 : 0
+                    Behavior on rotation {
+                        NumberAnimation {
+                            duration: 160
+                            easing.type: Easing.OutCubic
+                        }
+                    }
                 }
 
                 HoverHandler { id: moreHover }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: root.moreMenuRequested()
+                    onClicked: {
+                        if (root.menuOpen)
+                            root.closeMoreMenu()
+                        else
+                            root.moreMenuRequested()
+                    }
                 }
             }
 

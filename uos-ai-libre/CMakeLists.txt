@@ -213,16 +213,19 @@ if(UOS_AI_LIBRE_TREELAND_CAPTURE)
     # FollowAlong uses two Wayland clients for input:
     #  - wlr-data-control: global primary-selection monitoring
     #  - treeland-active-notify: global left-button press/release activity
-    # Presentation uses wlr-layer-shell through dde-shell's DLayerShellWindow
-    # QML binding, so no private role protocol is generated here.
+    # Presentation uses Treeland's dde-shell overlay metadata: overlay role,
+    # skip flags, keyboard-focus policy and cursor auto placement. This is the
+    # same mechanism UOS AI 3.3 uses and gives correct placement over native
+    # Wayland clients, where XWayland's pointer position is stale.
     target_sources(uos-ai-libre PRIVATE
         src/followalong/treelandfollowalongeventsource.cpp
         src/followalong/treelandfollowalongeventsource.h
-        src/followalong/treelandfollowalongsurface.cpp
-        src/followalong/treelandfollowalongsurface.h
+        src/followalong/treelandddefollowalongsurface.cpp
+        src/followalong/treelandddefollowalongsurface.h
     )
     qt6_generate_wayland_protocol_client_sources(uos-ai-libre
         FILES
+            "${CMAKE_CURRENT_SOURCE_DIR}/protocols/treeland-dde-shell-v1.xml"
             "${CMAKE_CURRENT_SOURCE_DIR}/protocols/treeland-active-notify-unstable-v1.xml"
             "${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-data-control-unstable-v1.xml")
     target_include_directories(uos-ai-libre PRIVATE

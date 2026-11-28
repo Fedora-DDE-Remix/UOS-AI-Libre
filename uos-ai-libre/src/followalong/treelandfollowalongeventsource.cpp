@@ -391,12 +391,13 @@ void TreelandFollowAlongEventSource::createActiveNotifier()
                 m_mouseActive = true;
                 m_mouseGesture = false;
                 // wlr-data-control and treeland-active-notify are separate
-                // asynchronous channels. A fast drag can deliver the PRIMARY
-                // selection just before the press notification; do not throw
-                // away that fresh text. Older text is a previous selection and
-                // must not re-show the toolbar on a plain click.
+                // asynchronous channels. A slow drag can publish the PRIMARY
+                // selection well before the press notification (or a fast drag
+                // can publish it just before). Keep that text for the release
+                // instead of discarding it after an arbitrary short window.
+                // Only drop clearly stale selections from an earlier gesture.
                 if (m_pendingText.isEmpty() || m_pendingAtMs == 0
-                    || now - m_pendingAtMs > 400) {
+                    || now - m_pendingAtMs > 5000) {
                     m_pendingText.clear();
                     m_pendingAtMs = 0;
                 }
