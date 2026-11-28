@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
     QGuiApplication::setOrganizationName(QStringLiteral("UOS-AI-Libre"));
     QGuiApplication::setApplicationVersion(QStringLiteral("1.0.0"));
     QGuiApplication::setDesktopFileName(QStringLiteral("uos-ai-libre"));
-    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/images/logo.png")));
+    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/images/UosAiLibre.svg")));
 
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 

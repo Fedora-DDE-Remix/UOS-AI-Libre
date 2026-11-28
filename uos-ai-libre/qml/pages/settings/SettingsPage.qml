@@ -37,7 +37,7 @@ Rectangle {
             y: 20
             width: 26
             height: 26
-            source: "qrc:/images/logo.png"
+            source: "qrc:/images/UosAiLibre.svg"
             fillMode: Image.PreserveAspectFit
         }
 

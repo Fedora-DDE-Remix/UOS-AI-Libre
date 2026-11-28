@@ -186,7 +186,7 @@ qt_add_resources(uos-ai-libre "app_assets"
     BASE "resources"
     FILES
         ${ICON_FILES}
-        resources/images/logo.png
+        resources/images/UosAiLibre.svg
 )
 
 qt_add_qml_module(uos-ai-libre
@@ -220,9 +220,9 @@ install(FILES
 # absolute so a /usr-prefixed package and a /usr/local dev install both work.
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/uos-ai-libre-service.desktop"
     DESTINATION /etc/xdg/autostart)
-install(FILES resources/images/logo.png
-    DESTINATION share/icons/hicolor/256x256/apps
-    RENAME uos-ai-libre.png)
+install(FILES resources/images/UosAiLibre.svg
+    DESTINATION share/icons/hicolor/scalable/apps
+    RENAME uos-ai-libre.svg)
 
 option(UOS_AI_LIBRE_BUILD_TESTS "Build the Markdown parser tests" ON)
 if(UOS_AI_LIBRE_BUILD_TESTS)

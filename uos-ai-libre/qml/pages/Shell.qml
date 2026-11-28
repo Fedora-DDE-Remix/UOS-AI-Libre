@@ -15,7 +15,7 @@ Item {
     Platform.SystemTrayIcon {
         id: tray
         visible: false
-        icon.source: "qrc:/images/logo.png"
+        icon.source: "qrc:/images/UosAiLibre.svg"
         icon.name: "uos-ai-libre"
         tooltip: "UOS AI Libre"
         Component.onCompleted: visible = true

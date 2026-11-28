@@ -299,6 +299,13 @@ if (( DO_INSTALL )); then
     if [[ -e "$stale_autostart" ]]; then
         run rm -f "$stale_autostart"
     fi
+
+    # Older installs used a 256x256 PNG. The branding is now a scalable SVG;
+    # remove the old raster file so both icons cannot diverge.
+    stale_icon="$(root_path "$PREFIX/share/icons/hicolor/256x256/apps/uos-ai-libre.png")"
+    if [[ -e "$stale_icon" ]]; then
+        run rm -f "$stale_icon"
+    fi
 else
     say "skipping binary install (--no-install)"
 fi

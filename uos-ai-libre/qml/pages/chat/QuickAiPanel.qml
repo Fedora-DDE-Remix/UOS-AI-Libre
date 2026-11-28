@@ -142,7 +142,7 @@ Item {
                         id: logo
                         width: 24
                         height: 24
-                        source: "qrc:/images/logo.png"
+                        source: "qrc:/images/UosAiLibre.svg"
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                     }

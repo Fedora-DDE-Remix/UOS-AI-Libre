@@ -32,7 +32,7 @@ Popup {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 56
             height: 56
-            source: "qrc:/images/logo.png"
+            source: "qrc:/images/UosAiLibre.svg"
             fillMode: Image.PreserveAspectFit
         }
 

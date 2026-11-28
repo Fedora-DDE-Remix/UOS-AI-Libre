@@ -120,7 +120,7 @@ Rectangle {
         y: 18
         width: 28
         height: 28
-        source: "qrc:/images/logo.png"
+        source: "qrc:/images/UosAiLibre.svg"
         fillMode: Image.PreserveAspectFit
         smooth: true
     }

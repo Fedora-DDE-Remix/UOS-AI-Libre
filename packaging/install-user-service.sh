@@ -309,6 +309,7 @@ if (( RESTORE )); then
     run rm -f "$AUTOSTART_DIR/$OUR_AUTOSTART"
     run rm -f "$DATA_HOME/applications/uos-ai-libre.desktop"
     run rm -f "$DATA_HOME/icons/hicolor/256x256/apps/uos-ai-libre.png"
+    run rm -f "$DATA_HOME/icons/hicolor/scalable/apps/uos-ai-libre.svg"
 
     if [[ -e "$BACKUP_DIR/${AUTOSTART_DIR#/}/$UOS_AUTOSTART" ]]; then
         restore_file "$AUTOSTART_DIR/$UOS_AUTOSTART"
@@ -344,8 +345,9 @@ if (( COPY_BINARY )); then
 fi
 run install -Dm644 "$REPO_DIR/uos-ai-libre/resources/uos-ai-libre.desktop" \
     "$DATA_HOME/applications/uos-ai-libre.desktop"
-run install -Dm644 "$REPO_DIR/uos-ai-libre/resources/images/logo.png" \
-    "$DATA_HOME/icons/hicolor/256x256/apps/uos-ai-libre.png"
+run rm -f "$DATA_HOME/icons/hicolor/256x256/apps/uos-ai-libre.png"
+run install -Dm644 "$REPO_DIR/uos-ai-libre/resources/images/UosAiLibre.svg" \
+    "$DATA_HOME/icons/hicolor/scalable/apps/uos-ai-libre.svg"
 
 write_service_files "$EXEC_PATH"
 write_autostart_files "$EXEC_PATH"
