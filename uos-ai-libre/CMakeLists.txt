@@ -10,6 +10,11 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Svg Network DBus)
 qt_standard_project_setup()
 
+# Debian/Fedora expect position-independent executables. Ask CMake to verify
+# that the linker supports PIE and to add -pie when the target requests it.
+include(CheckPIESupported)
+check_pie_supported()
+
 # Treeland's native screenshot protocol is an optional Wayland client
 # dependency. The client uses QtWaylandClient's shm buffer helper; X11 builds
 # simply keep QScreen::grabWindow().
@@ -193,6 +198,7 @@ qt_add_qml_module(uos-ai-libre
 
 set_target_properties(uos-ai-libre PROPERTIES
     OUTPUT_NAME "uos-ai-libre"
+    POSITION_INDEPENDENT_CODE ON
     MACOSX_BUNDLE OFF
     WIN32_EXECUTABLE OFF)
 

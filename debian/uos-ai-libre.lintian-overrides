@@ -1,0 +1,3 @@
+# The Rust aish backend uses unsafe-libyaml, a pure-Rust port of libyaml.
+# It exports the same C-style symbols but is not the system libyaml library.
+uos-ai-libre: embedded-library libyaml [usr/bin/uos-ai-libre]

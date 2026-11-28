@@ -1,5 +1,11 @@
 #!/usr/bin/make -f
 
+# Use the distribution hardening flags. The CMake target requests PIE itself;
+# these flags add stack protector, fortify, relro/now and reproducible paths.
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
 # Build aish-cxxbridge first, then the QML frontend.
 BRIDGE_DIR := $(CURDIR)/vendor/aish-cxxbridge
 BUILD_DIR := $(CURDIR)/debian/build

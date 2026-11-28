@@ -1,0 +1,54 @@
+.TH UOS-AI-LIBRE 1 "November 2026" "uos-ai-libre 1.0.0" "User Commands"
+.SH NAME
+uos-ai-libre \- native aish-based UOS AI-compatible desktop assistant
+.SH SYNOPSIS
+.B uos-ai-libre
+[\fB\-\-chat\fR]
+.br
+.B uos-ai-libre
+\fB\-\-service\fR
+.SH DESCRIPTION
+.B uos-ai-libre
+is a Qt Quick frontend for the aish agent engine.  It implements the
+\fBcom.deepin.copilot\fR and \fBcom.iflytek.aiassistant\fR D-Bus interfaces used
+by DDE components and provides a chat window, a floating Quick AI panel, and
+the Super+Space shortcut.
+.PP
+Models, providers, permissions, tools, sessions, MCP servers and skills remain
+owned by the aish backend; the QML layer does not reimplement them.
+.SH OPTIONS
+.TP
+.B \-\-chat
+Show the chat window.  If an instance is already running, ask that instance to
+show the window instead of starting a second backend.
+.TP
+.B \-\-service
+Run without opening the main window and own the compatibility D-Bus names.
+This is the mode used by the D-Bus activation files and the XDG autostart
+entry.
+.TP
+.B \-\-dde-service
+Alias for \fB\-\-service\fR.
+.SH ENVIRONMENT
+.TP
+.B AISH_CONFIG_DIR
+Directory containing the aish configuration.  Defaults to the backend's
+standard per-user configuration location.
+.TP
+.B UOS_AI_LIBRE_THEME
+Set to \fBlight\fR or \fBdark\fR to override the detected theme.
+.SH FILES
+.TP
+.I /etc/xdg/autostart/uos-ai-libre-service.desktop
+Starts the D-Bus compatibility service at login.
+.TP
+.I /usr/share/dbus-1/services/com.deepin.copilot.service
+D-Bus activation entry for the copilot interface.
+.TP
+.I /usr/share/dbus-1/services/com.iflytek.aiassistant.service
+D-Bus activation entry for the iFlytek-compatible interface.
+.SH SEE ALSO
+.BR dbus-daemon (1),
+.BR systemd (1)
+.PP
+The upstream project is at https://github.com/AI-Shell-Team/aish.
