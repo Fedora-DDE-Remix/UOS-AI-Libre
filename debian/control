@@ -1,0 +1,56 @@
+Source: uos-ai-libre
+Section: utils
+Priority: optional
+Maintainer: UOS AI Libre <noreply@example.invalid>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.21),
+               ninja-build,
+               g++,
+               pkg-config,
+               qt6-base-dev,
+               qt6-base-private-dev,
+               qt6-declarative-dev,
+               qt6-declarative-private-dev,
+               qt6-svg-dev,
+               qt6-wayland-dev,
+               qt6-wayland-private-dev,
+               qt6-wayland-dev-tools,
+               libwayland-dev,
+               libwayland-bin,
+               wayland-protocols,
+               libx11-dev,
+               libxkbcommon-dev,
+               libgl1-mesa-dev,
+               libvulkan-dev,
+               libssl-dev,
+               libsqlite3-dev,
+               zlib1g-dev,
+               liblzma-dev,
+               libzstd-dev,
+               cargo,
+               rustc
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/AI-Shell-Team/aish
+
+Package: uos-ai-libre
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         qt6-qpa-plugins,
+         qt6-wayland,
+         qml6-module-qtquick-controls,
+         qml6-module-qtquick-layouts,
+         qml6-module-qtquick-window,
+         qml6-module-qtquick-dialogs,
+         qml6-module-qt-labs-platform,
+         qml6-module-qtqml-workerscript,
+         libdde-shell,
+         hicolor-icon-theme
+Conflicts: uos-ai
+Replaces: uos-ai
+Provides: uos-ai
+Description: Native aish-based UOS AI-compatible desktop assistant
+ A Qt Quick frontend for the aish agent engine implementing the
+ com.deepin.copilot and com.iflytek.aiassistant D-Bus contract used by DDE
+ components. It provides screen-recorder quick OCR, Grand Search prompts,
+ image upload, translation and the Super+Space shortcut.

@@ -1,0 +1,6 @@
+usr/bin/uos-ai-libre
+usr/share/applications/uos-ai-libre.desktop
+usr/share/icons/hicolor/256x256/apps/uos-ai-libre.png
+usr/share/dbus-1/services/com.deepin.copilot.service
+usr/share/dbus-1/services/com.iflytek.aiassistant.service
+etc/xdg/autostart/uos-ai-libre-service.desktop

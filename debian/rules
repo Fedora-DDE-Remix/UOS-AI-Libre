@@ -1,0 +1,49 @@
+#!/usr/bin/make -f
+
+# Build aish-cxxbridge first, then the QML frontend.
+BRIDGE_DIR := $(CURDIR)/vendor/aish-cxxbridge
+BUILD_DIR := $(CURDIR)/debian/build
+CXXBRIDGE := $(shell command -v cxxbridge 2>/dev/null || true)
+ifeq ($(CXXBRIDGE),)
+CXXBRIDGE := $(shell test -x "$$HOME/.cargo/bin/cxxbridge" && printf '%s' "$$HOME/.cargo/bin/cxxbridge")
+endif
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+JOBS := $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+else
+JOBS := $(shell nproc)
+endif
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	cd $(BRIDGE_DIR) && \
+		if test -n "$(CXXBRIDGE)"; then \
+			CXXBRIDGE="$(CXXBRIDGE)" PROFILE=release ./build.sh; \
+		else \
+			echo "cxxbridge not found; using committed generated headers"; \
+			cargo build --locked --profile release --manifest-path Cargo.toml; \
+		fi
+	cmake -S $(CURDIR)/uos-ai-libre -B $(BUILD_DIR) -G Ninja \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DAISH_CXXBRIDGE_ROOT=$(BRIDGE_DIR) \
+		-DAISH_CXXBRIDGE_LIB=$(BRIDGE_DIR)/target/release/libaish_cxxbridge.a \
+		-DAISH_CXXBRIDGE_INCLUDE=$(BRIDGE_DIR)/generated
+
+override_dh_auto_build:
+	cmake --build $(BUILD_DIR) --parallel $(JOBS)
+
+override_dh_auto_install:
+	DESTDIR=$(CURDIR)/debian/tmp cmake --install $(BUILD_DIR)
+
+override_dh_auto_test:
+	# The package's build-time tests are run explicitly with ctest during
+	# development; do not require a display during the Debian build.
+
+override_dh_auto_clean:
+	rm -rf $(BUILD_DIR)
+
+.PHONY: override_dh_auto_configure override_dh_auto_build \
+	override_dh_auto_install override_dh_auto_test override_dh_auto_clean
