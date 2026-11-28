@@ -63,6 +63,24 @@ if(WAYLAND_CLIENT_FOUND AND WAYLAND_PROTOCOLS_FOUND
     endif()
 endif()
 
+# UOS AI's right-side dock entry is a dde-shell DAppletDock (plugin id
+# org.deepin.ds.dock.aibar), not a StatusNotifierItem or a tray-loader plugin.
+# Build the same kind of applet and reuse its dock id so dockOrder 26 puts it
+# between the tray (25) and Show Desktop (30).
+option(UOS_AI_LIBRE_DDE_SHELL_PLUGIN
+    "Build the native dde-shell dock applet (org.deepin.ds.dock.aibar)" ON)
+set(UOS_AI_LIBRE_DDE_SHELL_AVAILABLE OFF)
+if(UOS_AI_LIBRE_DDE_SHELL_PLUGIN)
+    find_package(DDEShell QUIET)
+    find_package(DDEShellDock QUIET)
+    if(DDEShell_FOUND AND DDEShellDock_FOUND)
+        set(UOS_AI_LIBRE_DDE_SHELL_AVAILABLE ON)
+        message(STATUS "DDE shell applet: org.deepin.ds.dock.aibar")
+    else()
+        message(STATUS "DDE shell applet: disabled (libdde-shell-dev/libdde-shell-dock-dev not found)")
+    endif()
+endif()
+
 set(AISH_CXXBRIDGE_ROOT
     "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/aish-cxxbridge"
     CACHE PATH "Directory containing the aish-cxxbridge build")
@@ -223,6 +241,20 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/uos-ai-libre-service.desktop"
 install(FILES resources/images/UosAiLibre.svg
     DESTINATION share/icons/hicolor/scalable/apps
     RENAME uos-ai-libre.svg)
+
+if(UOS_AI_LIBRE_DDE_SHELL_AVAILABLE)
+    add_library(uos-ai-libre-aibar SHARED
+        src/dde/aibar/aibar.cpp
+        src/dde/aibar/aibar.h
+    )
+    target_link_libraries(uos-ai-libre-aibar PRIVATE
+        Dde::Shell Dde::ShellDock Qt6::DBus)
+    target_compile_definitions(uos-ai-libre-aibar PRIVATE QT_PLUGIN)
+    ds_install_package(
+        PACKAGE org.deepin.ds.dock.aibar
+        TARGET uos-ai-libre-aibar
+        PACKAGE_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/dde/aibar/package")
+endif()
 
 option(UOS_AI_LIBRE_BUILD_TESTS "Build the Markdown parser tests" ON)
 if(UOS_AI_LIBRE_BUILD_TESTS)

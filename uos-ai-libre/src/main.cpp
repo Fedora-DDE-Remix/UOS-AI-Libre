@@ -91,6 +91,23 @@ int main(int argc, char *argv[]) {
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("appicon"), new AppIconProvider);
+
+    // DDE has a native dock/tray plugin for this tile. Do not add a second
+    // StatusNotifierItem there; it would duplicate the entry and look unlike
+    // UOS AI. Other desktops keep the Qt tray fallback.
+    bool dde_session = false;
+    for (const QString &desktop :
+         {qEnvironmentVariable("XDG_CURRENT_DESKTOP"),
+          qEnvironmentVariable("XDG_SESSION_DESKTOP"),
+          qEnvironmentVariable("DESKTOP_SESSION")}) {
+        if (desktop.contains(QStringLiteral("deepin"), Qt::CaseInsensitive)
+            || desktop.contains(QStringLiteral("dde"), Qt::CaseInsensitive)) {
+            dde_session = true;
+            break;
+        }
+    }
+    engine.rootContext()->setContextProperty(QStringLiteral("isDdeSession"),
+                                             dde_session);
     engine.rootContext()->setContextProperty(QStringLiteral("quickAiDrag"),
                                              &quick_ai_drag);
     engine.rootContext()->setContextProperty(QStringLiteral("app"), &app);

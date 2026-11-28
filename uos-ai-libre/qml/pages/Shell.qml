@@ -14,11 +14,12 @@ Item {
 
     Platform.SystemTrayIcon {
         id: tray
-        visible: false
+        // On DDE the native dde-shell applet (org.deepin.ds.dock.aibar) owns
+        // the right-side entry. A StatusNotifierItem here would be a duplicate.
+        visible: !isDdeSession
         icon.source: "qrc:/images/UosAiLibre.svg"
         icon.name: "uos-ai-libre"
         tooltip: "UOS AI Libre"
-        Component.onCompleted: visible = true
 
         menu: Platform.Menu {
             Platform.MenuItem {

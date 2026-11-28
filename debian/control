@@ -20,6 +20,8 @@ Build-Depends: debhelper-compat (= 13),
                wayland-protocols,
                libx11-dev,
                libxkbcommon-dev,
+               libdde-shell-dev,
+               libdde-shell-dock-dev,
                libgl1-mesa-dev,
                libvulkan-dev,
                libssl-dev,
@@ -45,6 +47,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
          qml6-module-qt-labs-platform,
          qml6-module-qtqml-workerscript,
          libdde-shell,
+         libdde-shell-dock,
          hicolor-icon-theme
 Conflicts: uos-ai, uos-ai-rag, uos-ai-agent
 Replaces: uos-ai, uos-ai-rag, uos-ai-agent
@@ -54,5 +57,8 @@ Description: Native aish-based UOS AI-compatible desktop assistant
  com.deepin.copilot and com.iflytek.aiassistant D-Bus contract used by DDE
  components. It provides screen-recorder quick OCR, Grand Search prompts,
  image upload, translation and the Super+Space shortcut.
+ .
+ It includes the native dde-shell dock applet
+ (org.deepin.ds.dock.aibar) used for the right-side UOS AI-style entry.
  .
  It is a drop-in replacement for uos-ai, uos-ai-rag and uos-ai-agent.

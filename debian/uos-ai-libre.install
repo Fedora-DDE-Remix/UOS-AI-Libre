@@ -1,6 +1,8 @@
 usr/bin/uos-ai-libre
 usr/share/applications/uos-ai-libre.desktop
 usr/share/icons/hicolor/scalable/apps/uos-ai-libre.svg
+usr/lib/x86_64-linux-gnu/dde-shell/org.deepin.ds.dock.aibar.so
+usr/share/dde-shell/org.deepin.ds.dock.aibar/
 usr/share/dbus-1/services/com.deepin.copilot.service
 usr/share/dbus-1/services/com.iflytek.aiassistant.service
 etc/xdg/autostart/uos-ai-libre-service.desktop

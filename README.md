@@ -73,6 +73,24 @@ The package declares `Conflicts`/`Replaces`/`Provides` for `uos-ai`,
 keeping the `com.deepin.copilot` and `com.iflytek.aiassistant` contracts
 available.
 
+On Deepin/DDE the package installs a real dde-shell dock applet, matching UOS
+AI's original implementation:
+
+```text
+/usr/lib/x86_64-linux-gnu/dde-shell/org.deepin.ds.dock.aibar.so
+/usr/share/dde-shell/org.deepin.ds.dock.aibar/
+```
+
+It reuses UOS AI's `org.deepin.ds.dock.aibar` plugin id and
+`AppletDockItem.dockOrder: 26`, so it sits on the right side of the dock,
+between the tray (25) and Show Desktop (30). The application suppresses its
+StatusNotifierItem on DDE to avoid a duplicate entry. Restart dde-shell or log
+out/in after installing:
+
+```bash
+systemctl --user restart dde-shell@DDE.service
+```
+
 Rust dependencies are pinned by `vendor/aish-cxxbridge/Cargo.lock`.  A clean
 build needs either network access to crates.io or a populated Cargo registry
 cache; the generated cxx headers are checked in, so the external `cxxbridge`
