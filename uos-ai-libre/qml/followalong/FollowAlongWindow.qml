@@ -14,7 +14,6 @@ Window {
     id: root
     property bool expanded: false
     property bool menuOpen: moreMenu.opened
-    property bool inputActive: askInput.activeFocus
     property string selectedText: ""
     property var actions: []
 
@@ -56,17 +55,10 @@ Window {
     onVisibleChanged: {
         if (visible)
             return
-        focusLossTimer.stop()
         if (moreMenu.opened)
             moreMenu.close()
         expanded = false
         askInput.text = ""
-    }
-    onActiveChanged: {
-        if (active)
-            focusLossTimer.stop()
-        else if (visible && expanded && !moreMenu.opened)
-            focusLossTimer.start()
     }
 
     signal actionTriggered(int type, bool custom)
@@ -83,17 +75,9 @@ Window {
         root.dismissed()
     }
 
-    // Clicking elsewhere removes keyboard focus. Hide rather than collapsing,
-    // which matches UOS AI's follow-along window.
-    Timer {
-        id: focusLossTimer
-        interval: 160
-        onTriggered: {
-            if (!root.active && root.visible && root.expanded
-                && !moreMenu.opened && !askInput.activeFocus)
-                root.dismissed()
-        }
-    }
+    // Dismissal is driven by global pointer events (with an X11 position or
+    // the Wayland local-press correlation). Do not use window activation as a
+    // proxy for "clicked elsewhere" on the Treeland overlay role.
 
     Rectangle {
         id: pill
@@ -121,7 +105,8 @@ Window {
             cursorShape: Qt.PointingHandCursor
             onClicked: {
                 // The icon must be clicked explicitly; hover never expands.
-                followAlong.activateToolbar()
+                // Do not focus the Treeland overlay here: opening it must not
+                // depend on the compositor granting keyboard focus.
                 root.expanded = true
             }
         }
@@ -290,10 +275,6 @@ Window {
             radius: 8
             border.width: 1
             border.color: Theme.menuBorder
-        }
-        onClosed: {
-            if (!root.active && root.visible && root.expanded)
-                focusLossTimer.start()
         }
         Repeater {
             model: followAlong.moreActions

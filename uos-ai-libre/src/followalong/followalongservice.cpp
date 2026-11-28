@@ -9,6 +9,7 @@
 #include "appcontroller.h"
 
 #include <QCursor>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QSettings>
 #include <QUrl>
@@ -65,8 +66,6 @@ FollowAlongService::FollowAlongService(QQmlEngine *engine, AppController *app,
             &FollowAlongService::onActionTriggered);
     connect(m_window.get(), &FollowAlongWindowHost::dismissed, this,
             [this]() {
-                m_outsideHideTimer.stop();
-                m_expandedHideTimer.stop();
                 m_window->hide();
                 if (m_monitor)
                     m_monitor->resetSelectionState();
@@ -78,44 +77,6 @@ FollowAlongService::FollowAlongService(QQmlEngine *engine, AppController *app,
     m_showTimer.setInterval(0);
     connect(&m_showTimer, &QTimer::timeout, this,
             &FollowAlongService::showPending);
-
-    // Wayland cannot report a global cursor position. If the user clicks
-    // somewhere else while only the small icon is shown, give the click a
-    // moment to expand the toolbar first, then dismiss the icon.
-    m_outsideHideTimer.setSingleShot(true);
-    m_outsideHideTimer.setInterval(180);
-    connect(&m_outsideHideTimer, &QTimer::timeout, this, [this]() {
-        if (!m_window || !m_window->visible())
-            return;
-        if (m_window->property("expanded").toBool())
-            return;
-        if (m_window->property("menuOpen").toBool())
-            return;
-        m_window->hide();
-        if (m_monitor)
-            m_monitor->resetSelectionState();
-    });
-
-    // Wayland fallback for the expanded window: after a global click, give
-    // the compositor a moment to move keyboard focus. If the toolbar is no
-    // longer active, the click was outside it.
-    m_expandedHideTimer.setSingleShot(true);
-    m_expandedHideTimer.setInterval(240);
-    connect(&m_expandedHideTimer, &QTimer::timeout, this, [this]() {
-        if (!m_window || !m_window->visible())
-            return;
-        if (!m_window->property("expanded").toBool())
-            return;
-        if (m_window->property("menuOpen").toBool())
-            return;
-        if (m_window->property("inputActive").toBool())
-            return;
-        if (m_window->active())
-            return;
-        m_window->hide();
-        if (m_monitor)
-            m_monitor->resetSelectionState();
-    });
 }
 
 FollowAlongService::~FollowAlongService()
@@ -136,8 +97,6 @@ void FollowAlongService::ask(const QString &question)
             << m_pendingText.size();
     if (question.trimmed().isEmpty() || m_pendingText.trimmed().isEmpty())
         return;
-    m_outsideHideTimer.stop();
-    m_expandedHideTimer.stop();
     m_window->hide();
     if (m_monitor)
         m_monitor->resetSelectionState();
@@ -150,8 +109,6 @@ void FollowAlongService::ask(const QString &question)
 
 void FollowAlongService::openSettings()
 {
-    m_outsideHideTimer.stop();
-    m_expandedHideTimer.stop();
     m_window->hide();
     if (m_monitor)
         m_monitor->resetSelectionState();
@@ -230,8 +187,6 @@ void FollowAlongService::onSelectionChanged(const QString &text,
         && m_window->geometry().contains(globalPos)) {
         return;
     }
-    m_outsideHideTimer.stop();
-    m_expandedHideTimer.stop();
     m_pendingText = text;
     m_pendingPos = globalPos;
     m_showTimer.start();
@@ -249,30 +204,39 @@ void FollowAlongService::onGlobalPointerPressed(const QPoint &globalPos)
     if (m_window->cursorPositionAvailable()) {
         if (m_window->geometry().contains(globalPos))
             return;
-        m_outsideHideTimer.stop();
+        qInfo() << "FollowAlong: outside click, hiding";
         m_window->hide();
         if (m_monitor)
             m_monitor->resetSelectionState();
         return;
     }
 
-    // The active-notify protocol does not expose a global position.
-    if (m_window->property("expanded").toBool()) {
-        // The press may be an action inside the toolbar. It may also be an
-        // outside click that is about to move focus away; re-check shortly.
-        m_expandedHideTimer.start();
-    } else {
-        // A click on the icon expands it; a click elsewhere dismisses it.
-        m_outsideHideTimer.start();
-    }
+    // Treeland active-notify has no global position. Correlate the global
+    // press with a local press on the toolbar window: the local event may be
+    // delivered slightly before or after the global notification.
+    const qint64 pressedAt = QDateTime::currentMSecsSinceEpoch();
+    const quint64 serial = m_window->localPressSerial();
+    QTimer::singleShot(80, this, [this, pressedAt, serial]() {
+        if (!m_window || !m_window->visible())
+            return;
+        if (m_window->property("menuOpen").toBool())
+            return;
+        // The local press may arrive before or after the global notification.
+        if (m_window->localPressSerial() != serial
+            || m_window->lastLocalPressMs() >= pressedAt - 200) {
+            return; // the press belongs to the toolbar
+        }
+        qInfo() << "FollowAlong: outside click, hiding";
+        m_window->hide();
+        if (m_monitor)
+            m_monitor->resetSelectionState();
+    });
 }
 
 void FollowAlongService::showPending()
 {
     if (!m_enabled || m_pendingText.trimmed().isEmpty())
         return;
-    m_outsideHideTimer.stop();
-    m_expandedHideTimer.stop();
     qInfo() << "FollowAlong: showing for selection length"
             << m_pendingText.size() << "at" << m_pendingPos;
     m_window->show(m_pendingText, m_pendingPos, m_actions);
@@ -280,8 +244,13 @@ void FollowAlongService::showPending()
 
 void FollowAlongService::onSelectionCleared()
 {
-    m_outsideHideTimer.stop();
-    m_expandedHideTimer.stop();
+    // Once the user has opened the toolbar, the selected text is already
+    // captured. Some applications clear their PRIMARY selection when they
+    // lose focus after the click; that must not close the opened toolbar.
+    if (m_window && m_window->visible()
+        && m_window->property("expanded").toBool()) {
+        return;
+    }
     // Defer close for the same reason as show().
     QTimer::singleShot(0, m_window.get(), [this]() {
         if (m_window)

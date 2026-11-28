@@ -304,9 +304,10 @@ void WaylandFollowAlongMonitor::stop()
 
 void WaylandFollowAlongMonitor::resetSelectionState()
 {
+    // Keep the gesture state: wlr-data-control and active-notify are
+    // asynchronous, and clearing m_mouseGesture here can leave the next
+    // release without a pending selection to emit.
     m_pendingText.clear();
-    m_mouseGesture = false;
-    m_active = false;
 }
 
 void WaylandFollowAlongMonitor::createActiveNotifier()

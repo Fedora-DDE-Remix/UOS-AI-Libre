@@ -63,8 +63,6 @@ private:
     QVariantList m_actions;
     QVariantList m_moreActions;
     QTimer m_showTimer;
-    QTimer m_outsideHideTimer;
-    QTimer m_expandedHideTimer;
     QString m_pendingText;
     QPoint m_pendingPos;
     bool m_enabled = true;

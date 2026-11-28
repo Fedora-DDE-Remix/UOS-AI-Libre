@@ -7,6 +7,8 @@
 #include "treelandoverlay.h"
 #endif
 
+#include <QDateTime>
+#include <QEvent>
 #include <QGuiApplication>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -41,9 +43,14 @@ bool FollowAlongWindowHost::visible() const
     return m_window && m_window->isVisible();
 }
 
-bool FollowAlongWindowHost::active() const
+qint64 FollowAlongWindowHost::lastLocalPressMs() const
 {
-    return m_window && m_window->isActive();
+    return m_lastLocalPressMs;
+}
+
+quint64 FollowAlongWindowHost::localPressSerial() const
+{
+    return m_localPressSerial;
 }
 
 QRect FollowAlongWindowHost::geometry() const
@@ -58,6 +65,15 @@ bool FollowAlongWindowHost::cursorPositionAvailable() const
     // QCursor::pos() is not meaningful for Wayland clients.
     return !QGuiApplication::platformName().toLower()
                 .contains(QStringLiteral("wayland"));
+}
+
+bool FollowAlongWindowHost::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_window && event->type() == QEvent::MouseButtonPress) {
+        m_lastLocalPressMs = QDateTime::currentMSecsSinceEpoch();
+        ++m_localPressSerial;
+    }
+    return QObject::eventFilter(watched, event);
 }
 
 void FollowAlongWindowHost::activateForInput()
@@ -142,6 +158,7 @@ void FollowAlongWindowHost::ensureWindow()
                          | Qt::WindowStaysOnTopHint);
     }
 
+    window->installEventFilter(this);
     connect(window, SIGNAL(actionTriggered(int, bool)), this,
             SLOT(onActionTriggered(int, bool)));
     connect(window, SIGNAL(dismissed()), this, SLOT(onDismissed()));

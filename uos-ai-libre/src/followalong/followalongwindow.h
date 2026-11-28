@@ -28,16 +28,20 @@ public:
               const QVariantList &actions);
     void hide();
     bool visible() const;
-    bool active() const;
     QRect geometry() const;
     bool cursorPositionAvailable() const;
     void setSize(const QSize &size);
     void setExpanded(bool expanded);
     void activateForInput();
+    qint64 lastLocalPressMs() const;
+    quint64 localPressSerial() const;
 
 Q_SIGNALS:
     void actionTriggered(int type, bool custom, const QString &text);
     void dismissed();
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
     void onActionTriggered(int type, bool custom);
@@ -57,4 +61,6 @@ private:
     QObject *m_overlay = nullptr;
     QPoint m_anchor;
     QString m_text;
+    qint64 m_lastLocalPressMs = 0;
+    quint64 m_localPressSerial = 0;
 };
